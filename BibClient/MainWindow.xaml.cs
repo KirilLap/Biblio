@@ -197,21 +197,21 @@ namespace BibClient
             }
         }
 
-        private static (HorizontalAlignment h, VerticalAlignment v) ParsePosition(string pos) =>
+        private static (WpfHorizontalAlignment h, VerticalAlignment v) ParsePosition(string pos) =>
             pos switch
             {
-                "TopLeft"      => (HorizontalAlignment.Left,   VerticalAlignment.Top),
-                "TopCenter"    => (HorizontalAlignment.Center, VerticalAlignment.Top),
-                "TopRight"     => (HorizontalAlignment.Right,  VerticalAlignment.Top),
-                "MiddleLeft"   => (HorizontalAlignment.Left,   VerticalAlignment.Center),
-                "MiddleRight"  => (HorizontalAlignment.Right,  VerticalAlignment.Center),
-                "BottomLeft"   => (HorizontalAlignment.Left,   VerticalAlignment.Bottom),
-                "BottomCenter" => (HorizontalAlignment.Center, VerticalAlignment.Bottom),
-                "BottomRight"  => (HorizontalAlignment.Right,  VerticalAlignment.Bottom),
-                _              => (HorizontalAlignment.Center, VerticalAlignment.Center)
+                "TopLeft"      => (WpfHorizontalAlignment.Left,   VerticalAlignment.Top),
+                "TopCenter"    => (WpfHorizontalAlignment.Center, VerticalAlignment.Top),
+                "TopRight"     => (WpfHorizontalAlignment.Right,  VerticalAlignment.Top),
+                "MiddleLeft"   => (WpfHorizontalAlignment.Left,   VerticalAlignment.Center),
+                "MiddleRight"  => (WpfHorizontalAlignment.Right,  VerticalAlignment.Center),
+                "BottomLeft"   => (WpfHorizontalAlignment.Left,   VerticalAlignment.Bottom),
+                "BottomCenter" => (WpfHorizontalAlignment.Center, VerticalAlignment.Bottom),
+                "BottomRight"  => (WpfHorizontalAlignment.Right,  VerticalAlignment.Bottom),
+                _              => (WpfHorizontalAlignment.Center, VerticalAlignment.Center)
             };
 
-        private static void ApplyPosition(System.Windows.Controls.StackPanel panel, string position)
+        private void ApplyPosition(System.Windows.Controls.StackPanel panel, string position)
         {
             var (h, v) = ParsePosition(position);
             panel.HorizontalAlignment = h;
@@ -228,13 +228,13 @@ namespace BibClient
                 {
                     var s = SettingsManager.Current;
                     GroupPolicyEngine.SetCtrlAltDelBlock(s.TaskMgrDisabled);
-                    GroupPolicyEngine.SetRegeditBlock(s.BlockRegedit);
-                    GroupPolicyEngine.SetCmdBlock(s.BlockCmd);
-                    GroupPolicyEngine.SetPowerShellBlock(s.BlockPowerShell);
-                    GroupPolicyEngine.SetInstallBlock(s.BlockInstall);
+                    GroupPolicyEngine.SetRegeditBlock(s.RegeditBlocked);
+                    GroupPolicyEngine.SetCmdBlock(s.CmdBlocked);
+                    GroupPolicyEngine.SetPowerShellBlock(s.PowerShellBlocked);
+                    GroupPolicyEngine.SetInstallBlock(s.InstallBlocked);
                     GroupPolicyEngine.SetUsbBlock(s.UsbBlocked);
-                    GroupPolicyEngine.SetHideDriveC(s.HideDriveC);
-                    if (s.TaskMgrDisabled || s.BlockRegedit || s.BlockCmd || s.BlockPowerShell || s.BlockInstall)
+                    GroupPolicyEngine.SetHideDriveC(s.DriveCHidden);
+                    if (s.TaskMgrDisabled || s.RegeditBlocked || s.CmdBlocked || s.PowerShellBlocked || s.InstallBlocked)
                         GroupPolicyEngine.RunGpUpdate();
                     Logger.Info("✅ Ограничения восстановлены");
                 }
