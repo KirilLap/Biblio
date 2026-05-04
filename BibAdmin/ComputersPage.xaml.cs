@@ -5,7 +5,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Microsoft.AspNetCore.SignalR.Client;
 
@@ -362,32 +365,26 @@ namespace BibAdmin
 
         private ContextMenu BuildContextMenu(ClientState pc)
         {
-            var menuBg = new SolidColorBrush(Color.FromRgb(28, 28, 40));
-            var hoverBg = new SolidColorBrush(Color.FromRgb(55, 55, 100));
+            var menuBg      = new SolidColorBrush(Color.FromRgb(28, 28, 40));
+            var hoverBg     = new SolidColorBrush(Color.FromRgb(55, 55, 100));
             var separatorBg = new SolidColorBrush(Color.FromRgb(50, 50, 75));
-            var textColor = Brushes.White;
+            var textColor   = Brushes.White;
             var dangerColor = new SolidColorBrush(Color.FromRgb(226, 75, 74));
-            var iconColor = new SolidColorBrush(Color.FromRgb(170, 170, 204));
+            var iconColor   = new SolidColorBrush(Color.FromRgb(170, 170, 204));
 
             var global = GlobalSettings.Load();
 
+            // ── Root context menu template ────────────────────────────────────────
             var menuTemplate = new ControlTemplate(typeof(ContextMenu));
-            var menuBorder = new FrameworkElementFactory(typeof(Border));
+            var menuBorder   = new FrameworkElementFactory(typeof(Border));
             menuBorder.SetValue(Border.BackgroundProperty, menuBg);
             menuBorder.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(61, 61, 107)));
             menuBorder.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             menuBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
-            menuBorder.SetValue(Border.PaddingProperty, new Thickness(4, 4, 4, 4));
-            menuBorder.SetValue(Border.EffectProperty, new System.Windows.Media.Effects.DropShadowEffect
-            {
-                BlurRadius = 12,
-                ShadowDepth = 4,
-                Opacity = 0.4,
-                Color = Colors.Black
-            });
-
-            var itemsPresenter = new FrameworkElementFactory(typeof(ItemsPresenter));
-            menuBorder.AppendChild(itemsPresenter);
+            menuBorder.SetValue(Border.PaddingProperty, new Thickness(4));
+            menuBorder.SetValue(UIElement.EffectProperty, new DropShadowEffect
+                { BlurRadius = 12, ShadowDepth = 4, Opacity = 0.4, Color = Colors.Black });
+            menuBorder.AppendChild(new FrameworkElementFactory(typeof(ItemsPresenter)));
             menuTemplate.VisualTree = menuBorder;
 
             var menu = new ContextMenu
@@ -398,120 +395,192 @@ namespace BibAdmin
                 Padding = new Thickness(0)
             };
 
+            // ── Leaf item ─────────────────────────────────────────────────────────
             MenuItem MakeItem(string icon, string header, Action action, bool isDanger = false)
             {
-                var itemTemplate = new ControlTemplate(typeof(MenuItem));
-                var itemBorder = new FrameworkElementFactory(typeof(Border));
-                itemBorder.Name = "Bd";
-                itemBorder.SetValue(Border.BackgroundProperty, menuBg);
-                itemBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
-                itemBorder.SetValue(Border.MarginProperty, new Thickness(0, 1, 0, 1));
+                var t  = new ControlTemplate(typeof(MenuItem));
+                var bd = new FrameworkElementFactory(typeof(Border));
+                bd.Name = "Bd";
+                bd.SetValue(Border.BackgroundProperty, menuBg);
+                bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+                bd.SetValue(Border.MarginProperty, new Thickness(0, 1, 0, 1));
 
-                var panel = new FrameworkElementFactory(typeof(StackPanel));
-                panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-                panel.SetValue(StackPanel.MarginProperty, new Thickness(10, 6, 14, 6));
+                var sp = new FrameworkElementFactory(typeof(StackPanel));
+                sp.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+                sp.SetValue(StackPanel.MarginProperty, new Thickness(10, 6, 14, 6));
 
-                var iconText = new FrameworkElementFactory(typeof(TextBlock));
-                iconText.SetValue(TextBlock.TextProperty, icon);
-                iconText.SetValue(TextBlock.FontSizeProperty, 12.0);
-                iconText.SetValue(TextBlock.WidthProperty, 20.0);
-                iconText.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
-                iconText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-                iconText.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 10, 0));
-                iconText.SetValue(TextBlock.ForegroundProperty, isDanger ? dangerColor : iconColor);
+                var ico = new FrameworkElementFactory(typeof(TextBlock));
+                ico.SetValue(TextBlock.TextProperty, icon);
+                ico.SetValue(TextBlock.FontSizeProperty, 12.0);
+                ico.SetValue(TextBlock.WidthProperty, 20.0);
+                ico.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
+                ico.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+                ico.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 10, 0));
+                ico.SetValue(TextBlock.ForegroundProperty, isDanger ? dangerColor : iconColor);
 
-                var headerText = new FrameworkElementFactory(typeof(TextBlock));
-                headerText.SetValue(TextBlock.TextProperty, header);
-                headerText.SetValue(TextBlock.FontSizeProperty, 13.0);
-                headerText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-                headerText.SetValue(TextBlock.ForegroundProperty, isDanger ? dangerColor : textColor);
+                var txt = new FrameworkElementFactory(typeof(TextBlock));
+                txt.SetValue(TextBlock.TextProperty, header);
+                txt.SetValue(TextBlock.FontSizeProperty, 13.0);
+                txt.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+                txt.SetValue(TextBlock.ForegroundProperty, isDanger ? dangerColor : textColor);
 
-                panel.AppendChild(iconText);
-                panel.AppendChild(headerText);
-                itemBorder.AppendChild(panel);
-                itemTemplate.VisualTree = itemBorder;
+                sp.AppendChild(ico);
+                sp.AppendChild(txt);
+                bd.AppendChild(sp);
+                t.VisualTree = bd;
 
-                var trigger = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
-                trigger.Setters.Add(new Setter(Border.BackgroundProperty, hoverBg, "Bd"));
-                itemTemplate.Triggers.Add(trigger);
+                var tr = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+                tr.Setters.Add(new Setter(Border.BackgroundProperty, hoverBg, "Bd"));
+                t.Triggers.Add(tr);
 
-                var item = new MenuItem
-                {
-                    Template = itemTemplate,
-                    Background = menuBg,
-                    BorderThickness = new Thickness(0)
-                };
+                var item = new MenuItem { Template = t, Background = menuBg, BorderThickness = new Thickness(0) };
                 item.Click += (s, e) => action();
                 return item;
             }
 
+            // ── Separator ─────────────────────────────────────────────────────────
             UIElement MakeSep()
             {
-                var sepTemplate = new ControlTemplate(typeof(Separator));
-                var sepBorder = new FrameworkElementFactory(typeof(Border));
-                sepBorder.SetValue(Border.HeightProperty, 1.0);
-                sepBorder.SetValue(Border.BackgroundProperty, separatorBg);
-                sepBorder.SetValue(Border.MarginProperty, new Thickness(10, 4, 10, 4));
-                sepTemplate.VisualTree = sepBorder;
-
-                return new Separator { Template = sepTemplate, Background = menuBg };
+                var st = new ControlTemplate(typeof(Separator));
+                var sb = new FrameworkElementFactory(typeof(Border));
+                sb.SetValue(Border.HeightProperty, 1.0);
+                sb.SetValue(Border.BackgroundProperty, separatorBg);
+                sb.SetValue(Border.MarginProperty, new Thickness(10, 4, 10, 4));
+                st.VisualTree = sb;
+                return new Separator { Template = st, Background = menuBg };
             }
 
-            string GetPcNumberToggleText()
+            // ── Submenu parent (dark popup matching the root menu) ────────────────
+            MenuItem MakeSubMenu(string icon, string header, IEnumerable<object> children)
             {
-                bool currentValue = pc.IsIndividual("SHOW_PC_NUMBER") ? pc.ShowPcNumber : global.ShowPcNumber;
-                return currentValue ? "Скрыть номер ПК" : "Показать номер ПК";
+                var t       = new ControlTemplate(typeof(MenuItem));
+                var rootGrd = new FrameworkElementFactory(typeof(Grid));
+
+                // Header row
+                var bd = new FrameworkElementFactory(typeof(Border));
+                bd.Name = "Bd";
+                bd.SetValue(Border.BackgroundProperty, menuBg);
+                bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+                bd.SetValue(Border.MarginProperty, new Thickness(0, 1, 0, 1));
+
+                var sp = new FrameworkElementFactory(typeof(StackPanel));
+                sp.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+                sp.SetValue(StackPanel.MarginProperty, new Thickness(10, 6, 14, 6));
+
+                var ico = new FrameworkElementFactory(typeof(TextBlock));
+                ico.SetValue(TextBlock.TextProperty, icon);
+                ico.SetValue(TextBlock.FontSizeProperty, 12.0);
+                ico.SetValue(TextBlock.WidthProperty, 20.0);
+                ico.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
+                ico.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+                ico.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 10, 0));
+                ico.SetValue(TextBlock.ForegroundProperty, iconColor);
+
+                var lbl = new FrameworkElementFactory(typeof(TextBlock));
+                lbl.SetValue(TextBlock.TextProperty, header);
+                lbl.SetValue(TextBlock.FontSizeProperty, 13.0);
+                lbl.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+                lbl.SetValue(TextBlock.ForegroundProperty, textColor);
+
+                var arrow = new FrameworkElementFactory(typeof(TextBlock));
+                arrow.SetValue(TextBlock.TextProperty, " ›");
+                arrow.SetValue(TextBlock.FontSizeProperty, 15.0);
+                arrow.SetValue(TextBlock.ForegroundProperty, iconColor);
+                arrow.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+                sp.AppendChild(ico);
+                sp.AppendChild(lbl);
+                sp.AppendChild(arrow);
+                bd.AppendChild(sp);
+
+                // Popup with same dark border as root menu
+                var popup = new FrameworkElementFactory(typeof(Popup));
+                popup.SetValue(Popup.PlacementProperty, PlacementMode.Right);
+                popup.SetValue(Popup.AllowsTransparencyProperty, true);
+                popup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.Fade);
+                popup.SetBinding(Popup.IsOpenProperty, new Binding(nameof(MenuItem.IsSubmenuOpen))
+                    { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
+
+                var popupBd = new FrameworkElementFactory(typeof(Border));
+                popupBd.SetValue(Border.BackgroundProperty, menuBg);
+                popupBd.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(61, 61, 107)));
+                popupBd.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+                popupBd.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+                popupBd.SetValue(Border.PaddingProperty, new Thickness(4));
+                popupBd.SetValue(UIElement.EffectProperty, new DropShadowEffect
+                    { BlurRadius = 12, ShadowDepth = 4, Opacity = 0.4, Color = Colors.Black });
+                popupBd.AppendChild(new FrameworkElementFactory(typeof(ItemsPresenter)));
+                popup.AppendChild(popupBd);
+
+                rootGrd.AppendChild(bd);
+                rootGrd.AppendChild(popup);
+                t.VisualTree = rootGrd;
+
+                var tr = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+                tr.Setters.Add(new Setter(Border.BackgroundProperty, hoverBg, "Bd"));
+                t.Triggers.Add(tr);
+
+                var item = new MenuItem { Template = t, Background = menuBg, BorderThickness = new Thickness(0) };
+                foreach (var child in children)
+                    item.Items.Add(child);
+                return item;
             }
 
-            string GetUsbToggleText()
-            {
-                bool currentValue = pc.IsIndividual("USB_BLOCK") ? pc.UsbBlocked : global.UsbBlocked;
-                return currentValue ? "Разблокировать USB" : "Заблокировать USB";
-            }
+            // ── Toggle text helpers ───────────────────────────────────────────────
+            string PcNumberText() => (pc.IsIndividual("SHOW_PC_NUMBER") ? pc.ShowPcNumber : global.ShowPcNumber)
+                ? "Скрыть номер ПК" : "Показать номер ПК";
+            string UsbText() => (pc.IsIndividual("USB_BLOCK") ? pc.UsbBlocked : global.UsbBlocked)
+                ? "Разблокировать USB" : "Заблокировать USB";
+            string TaskMgrText() => (pc.IsIndividual("TASKMGR_DISABLE") ? pc.TaskMgrDisabled : global.TaskMgrDisabled)
+                ? "Включить диспетчер задач" : "Отключить диспетчер задач";
 
-            string GetTaskMgrToggleText()
-            {
-                bool currentValue = pc.IsIndividual("TASKMGR_DISABLE") ? pc.TaskMgrDisabled : global.TaskMgrDisabled;
-                return currentValue ? "Включить диспетчер задач" : "Отключить диспетчер задач";
-            }
+            // ═════════════════════════════════════════════════════════════════════
+            // Построение меню
+            // ═════════════════════════════════════════════════════════════════════
 
             menu.Items.Add(MakeItem("✎", "Переименовать", () => ShowRenameDialog(pc)));
-            menu.Items.Add(MakeItem("▣", "Изменить фон", () => ShowBackgroundDialog(pc)));
-            menu.Items.Add(MakeItem(
-                pc.IsIndividual("SHOW_PC_NUMBER") ? (pc.ShowPcNumber ? "◎" : "●") : (global.ShowPcNumber ? "◎" : "●"),
-                GetPcNumberToggleText(),
-                () => TogglePcNumber(pc)));
-            menu.Items.Add(MakeSep());
-            menu.Items.Add(MakeItem(
-                pc.IsIndividual("USB_BLOCK") ? (pc.UsbBlocked ? "▶" : "■") : (global.UsbBlocked ? "▶" : "■"),
-                GetUsbToggleText(),
-                () => ToggleUsb(pc)));
-            menu.Items.Add(MakeSep());
-            menu.Items.Add(MakeItem("■", global.BlockRegedit ? "Разрешить regedit" : "Запретить regedit", () => ToggleRegedit(pc)));
-            menu.Items.Add(MakeItem("■", global.BlockCmd ? "Разрешить CMD" : "Запретить CMD", () => ToggleCmd(pc)));
-            menu.Items.Add(MakeItem("■", global.BlockPowerShell ? "Разрешить PowerShell" : "Запретить PowerShell", () => TogglePowerShell(pc)));
-            menu.Items.Add(MakeItem("■", global.BlockInstall ? "Разрешить установку" : "Запретить установку программ", () => ToggleInstall(pc)));
-            menu.Items.Add(MakeItem(
-                pc.IsIndividual("TASKMGR_DISABLE") ? (pc.TaskMgrDisabled ? "▶" : "■") : (global.TaskMgrDisabled ? "▶" : "■"),
-                GetTaskMgrToggleText(),
-                () => ToggleTaskMgr(pc)));
-
-            if (pc.HasIndividualSettings)
-            {
-                menu.Items.Add(MakeSep());
-                menu.Items.Add(MakeItem("🔄", "Сбросить к глобальным", () => ResetIndividualSettings(pc), isDanger: true));
-            }
 
             if (pc.IsSession)
-            {
-                menu.Items.Add(MakeSep());
                 menu.Items.Add(MakeItem("↔", "Пересадить пользователя", () => ShowTransferDialog(pc)));
+
+            menu.Items.Add(MakeSep());
+
+            // ── Подменю «Настройки ПК» ───────────────────────────────────────────
+            var settingsChildren = new List<object>
+            {
+                MakeItem("▣", "Изменить фон", () => ShowBackgroundDialog(pc)),
+                MakeItem(
+                    pc.IsIndividual("SHOW_PC_NUMBER") ? (pc.ShowPcNumber ? "◎" : "●") : (global.ShowPcNumber ? "◎" : "●"),
+                    PcNumberText(), () => TogglePcNumber(pc))
+            };
+            if (pc.HasIndividualSettings)
+            {
+                settingsChildren.Add(MakeSep());
+                settingsChildren.Add(MakeItem("🔄", "Сбросить к глобальным", () => ResetIndividualSettings(pc), isDanger: true));
             }
+            menu.Items.Add(MakeSubMenu("🖥", "Настройки ПК", settingsChildren));
+
+            // ── Подменю «Ограничения» ────────────────────────────────────────────
+            var restrictChildren = new List<object>
+            {
+                MakeItem(
+                    pc.IsIndividual("USB_BLOCK") ? (pc.UsbBlocked ? "▶" : "■") : (global.UsbBlocked ? "▶" : "■"),
+                    UsbText(), () => ToggleUsb(pc)),
+                MakeItem(
+                    pc.IsIndividual("TASKMGR_DISABLE") ? (pc.TaskMgrDisabled ? "▶" : "■") : (global.TaskMgrDisabled ? "▶" : "■"),
+                    TaskMgrText(), () => ToggleTaskMgr(pc)),
+                MakeSep(),
+                MakeItem("■", global.BlockRegedit   ? "Разрешить regedit"  : "Запретить regedit",  () => ToggleRegedit(pc)),
+                MakeItem("■", global.BlockCmd        ? "Разрешить CMD"      : "Запретить CMD",       () => ToggleCmd(pc)),
+                MakeItem("■", global.BlockPowerShell ? "Разрешить PowerShell" : "Запретить PowerShell", () => TogglePowerShell(pc)),
+                MakeItem("■", global.BlockInstall    ? "Разрешить установку" : "Запретить установку программ", () => ToggleInstall(pc))
+            };
+            menu.Items.Add(MakeSubMenu("🛡", "Ограничения", restrictChildren));
 
             menu.Items.Add(MakeSep());
             menu.Items.Add(MakeItem("⟳", "Переподключить клиент", () => ReconnectPc(pc)));
-            menu.Items.Add(MakeItem("↺", "Перезагрузить ПК", () => RestartPc(pc)));
-            menu.Items.Add(MakeItem("", "Выключить ПК", () => ShutdownPc(pc), isDanger: true));
+            menu.Items.Add(MakeItem("↺", "Перезагрузить ПК",      () => RestartPc(pc)));
+            menu.Items.Add(MakeItem("⏻", "Выключить ПК",           () => ShutdownPc(pc), isDanger: true));
 
             return menu;
         }
