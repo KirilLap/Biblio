@@ -1033,17 +1033,23 @@ namespace BibAdmin
         // =====================
         private void ShowRenameDialog(ClientState pc)
         {
-            var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя:", pc.PcNumber);
+            var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя:", pc.CustomName);
             if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
             {
+                // Отправляем команду клиенту на изменение имени
                 _ = SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
+                // Обновляем сервер
                 _ = RenameOnServer(pc.PcNumber, dialog.Result);
             }
         }
 
-        private async Task RenameOnServer(string oldName, string newName)
+        private async Task RenameOnServer(string pcNumber, string newName)
         {
-            try { if (_hub?.State == HubConnectionState.Connected) await _hub.InvokeAsync("RenameClient", oldName, newName); }
+            try 
+            { 
+                if (_hub?.State == HubConnectionState.Connected) 
+                    await _hub.InvokeAsync("SetClientCustomName", pcNumber, newName); 
+            }
             catch (Exception ex) { Logger.Error($"Ошибка переименования: {ex.Message}"); }
         }
 

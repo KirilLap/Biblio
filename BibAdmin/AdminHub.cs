@@ -782,6 +782,45 @@ namespace BibAdmin
             }
         }
 
+        /// <summary>
+        /// Устанавливает индивидуальное отображаемое имя для клиента (CustomName).
+        /// Уникальный идентификатор PcNumberValue не меняется.
+        /// </summary>
+        public async Task SetClientCustomName(string pcNumber, string customName)
+        {
+            if (KnownClients.TryGetValue(pcNumber, out var client))
+            {
+                var oldName = pcNumber;
+                
+                // Обновляем CustomName
+                client.CustomName = customName;
+                
+                // Вычисляем новое отображаемое имя
+                var newName = string.IsNullOrEmpty(customName) ? $"ПК {client.PcNumberValue}" : customName;
+                
+                // Если имя изменилось - переносим в словаре
+                if (oldName != newName)
+                {
+                    KnownClients.TryRemove(oldName, out _);
+                    KnownClients[newName] = client;
+                    
+                    // Переносим отложенные команды
+                    if (_pendingCommands.TryRemove(oldName, out var cmds))
+                        _pendingCommands[newName] = cmds;
+                        
+                    Logger.Info($"✅ Имя ПК изменено: {oldName} → {newName} (CustomName={customName})");
+                }
+                else
+                {
+                    Logger.Info($"✅ CustomName обновлён для {pcNumber}: '{customName}'");
+                }
+                
+                SaveRegistry();
+                SavePending();
+                ClientsChanged?.Invoke();
+            }
+        }
+
         public async Task SendCommand(string pcNumber, string commandJson)
         {
             if (KnownClients.TryGetValue(pcNumber, out var client))
@@ -1049,5 +1088,8 @@ namespace BibAdmin
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
         public string ClientTimeUtc { get; set; } = "";
+        // ✅ Новые поля для разделения имени и номера
+        public int PcNumberValue { get; set; }
+        public string CustomName { get; set; } = "";
     }
 }
