@@ -30,12 +30,13 @@ namespace BibClient
         public static event Action<double>? ClockMismatchDetected;
 
         // Дебаунс gpupdate: накапливаем несколько команд политик, применяем одним запуском
-        private static Timer? _gpUpdateTimer;
+        private static System.Threading.Timer? _gpUpdateTimer;
 
         private static void ScheduleGpUpdate()
         {
             _gpUpdateTimer?.Dispose();
-            _gpUpdateTimer = new Timer(_ => GroupPolicyEngine.RunGpUpdate(), null, 3000, Timeout.Infinite);
+            _gpUpdateTimer = new System.Threading.Timer(
+                _ => GroupPolicyEngine.RunGpUpdate(), null, 3000, Timeout.Infinite);
         }
 
         public static async Task HandleCommand(string json)
@@ -210,7 +211,7 @@ namespace BibClient
 
                     case "BLOCK_REGEDIT":
                         bool blockRegedit = value?.ToLower() == "true";
-                        SettingsManager.Current.BlockRegedit = blockRegedit;
+                        SettingsManager.Current.RegeditBlocked = blockRegedit;
                         SettingsManager.Save();
                         GroupPolicyEngine.SetRegeditBlock(blockRegedit);
                         ScheduleGpUpdate();
@@ -218,7 +219,7 @@ namespace BibClient
 
                     case "BLOCK_CMD":
                         bool blockCmd = value?.ToLower() == "true";
-                        SettingsManager.Current.BlockCmd = blockCmd;
+                        SettingsManager.Current.CmdBlocked = blockCmd;
                         SettingsManager.Save();
                         GroupPolicyEngine.SetCmdBlock(blockCmd);
                         ScheduleGpUpdate();
@@ -226,7 +227,7 @@ namespace BibClient
 
                     case "BLOCK_POWERSHELL":
                         bool blockPs = value?.ToLower() == "true";
-                        SettingsManager.Current.BlockPowerShell = blockPs;
+                        SettingsManager.Current.PowerShellBlocked = blockPs;
                         SettingsManager.Save();
                         GroupPolicyEngine.SetPowerShellBlock(blockPs);
                         ScheduleGpUpdate();
@@ -234,14 +235,14 @@ namespace BibClient
 
                     case "HIDE_DRIVE_C":
                         bool hideDriveC = value?.ToLower() == "true";
-                        SettingsManager.Current.HideDriveC = hideDriveC;
+                        SettingsManager.Current.DriveCHidden = hideDriveC;
                         SettingsManager.Save();
                         GroupPolicyEngine.SetHideDriveC(hideDriveC);
                         break;
 
                     case "BLOCK_INSTALL_UNINSTALL":
                         bool blockInstall = value?.ToLower() == "true";
-                        SettingsManager.Current.BlockInstall = blockInstall;
+                        SettingsManager.Current.InstallBlocked = blockInstall;
                         SettingsManager.Save();
                         GroupPolicyEngine.SetInstallBlock(blockInstall);
                         ScheduleGpUpdate();
