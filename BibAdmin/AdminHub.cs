@@ -923,6 +923,89 @@ namespace BibAdmin
             catch (Exception ex) { Logger.Error($"Ошибка очистки Files: {ex.Message}"); }
         }
 
+        public async Task<string> TransferSession(string fromPcNumber, string toPcNumber)
+        {
+            if (!KnownClients.TryGetValue(fromPcNumber, out var source))
+                return $"Ошибка: ПК {fromPcNumber} не найден";
+            if (!KnownClients.TryGetValue(toPcNumber, out var target))
+                return $"Ошибка: ПК {toPcNumber} не найден";
+            if (!source.IsSession)
+                return "Ошибка: на исходном ПК нет активной сессии";
+            if (!target.IsOnline)
+                return "Ошибка: ПК назначения не в сети";
+            if (target.IsSession)
+                return "Ошибка: на ПК назначения уже есть активная сессия";
+
+            // Capture session data before clearing source
+            var sessionType = source.SessionType;
+            var limitSeconds = source.LimitSeconds;
+            var paidAmount = source.PaidAmount;
+            int elapsed = source.IsPaused
+                ? source.AccumulatedSeconds
+                : source.AccumulatedSeconds + (int)(DateTime.UtcNow - (source.SessionStart ?? DateTime.UtcNow)).TotalSeconds;
+            elapsed = Math.Max(0, elapsed);
+
+            // Lock then free source
+            var lockCmd = JsonSerializer.Serialize(new { Type = "REMOTE_LOCK", Value = "true" });
+            var unlockCmd = JsonSerializer.Serialize(new { Type = "REMOTE_UNLOCK", Value = "free" });
+            if (source.IsOnline)
+            {
+                await Clients.Client(source.ConnectionId).SendAsync("ReceiveCommand", lockCmd);
+                await Clients.Client(source.ConnectionId).SendAsync("ReceiveCommand", unlockCmd);
+            }
+            else
+            {
+                AddPendingCommand(source.PcNumber, "REMOTE_LOCK", "true");
+                AddPendingCommand(source.PcNumber, "REMOTE_UNLOCK", "free");
+            }
+
+            // Clear source session state
+            source.Status = "Свободный";
+            source.SessionType = "";
+            source.ElapsedSeconds = 0;
+            source.LimitSeconds = 0;
+            source.PaidAmount = 0;
+            source.SessionStart = null;
+            source.IsPaused = false;
+            source.AccumulatedSeconds = 0;
+            source.SessionId = "";
+            source.DisconnectedAt = null;
+            source.OfflineDecision = OfflineDecision.None;
+
+            // Start session on target with transferred data
+            var newStart = DateTime.UtcNow.AddSeconds(-elapsed);
+            var startCmd = JsonSerializer.Serialize(new
+            {
+                Type = "START_SESSION",
+                Value = sessionType,
+                SessionType = sessionType,
+                LimitSeconds = limitSeconds,
+                PaidAmount = paidAmount,
+                ElapsedSeconds = elapsed,
+                ServerStartTime = newStart.ToString("o")
+            });
+            await Clients.Client(target.ConnectionId).SendAsync("ReceiveCommand", startCmd);
+
+            // Update target session state
+            target.SessionType = sessionType;
+            target.Status = sessionType;
+            target.LimitSeconds = limitSeconds;
+            target.PaidAmount = paidAmount;
+            target.ElapsedSeconds = elapsed;
+            target.AccumulatedSeconds = elapsed;
+            target.SessionStart = newStart;
+            target.IsPaused = false;
+            target.SessionId = "";
+
+            SaveRegistry();
+            SaveActiveSessions();
+            ClientUpdated?.Invoke(source);
+            ClientUpdated?.Invoke(target);
+
+            Logger.Info($"✅ Сессия перенесена: {fromPcNumber} → {toPcNumber} ({sessionType}, прошло {elapsed}с)");
+            return "OK";
+        }
+
         public static void MarkIndividualSetting(string pcNumber, string commandType)
         {
             if (KnownClients.TryGetValue(pcNumber, out var client))

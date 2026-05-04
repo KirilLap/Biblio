@@ -502,6 +502,12 @@ namespace BibAdmin
                 menu.Items.Add(MakeItem("🔄", "Сбросить к глобальным", () => ResetIndividualSettings(pc), isDanger: true));
             }
 
+            if (pc.IsSession)
+            {
+                menu.Items.Add(MakeSep());
+                menu.Items.Add(MakeItem("↔", "Пересадить пользователя", () => ShowTransferDialog(pc)));
+            }
+
             menu.Items.Add(MakeSep());
             menu.Items.Add(MakeItem("⟳", "Переподключить клиент", () => ReconnectPc(pc)));
             menu.Items.Add(MakeItem("↺", "Перезагрузить ПК", () => RestartPc(pc)));
@@ -983,6 +989,49 @@ namespace BibAdmin
             AdminHub.MarkIndividualSetting(pc.PcNumber, "BLOCK_INSTALL_UNINSTALL");
             await SendCommand(pc.PcNumber, "BLOCK_INSTALL_UNINSTALL", global.BlockInstall.ToString().ToLower());
             BuildGrid();
+        }
+
+        private async void ShowTransferDialog(ClientState pc)
+        {
+            var availablePcs = AdminHub.KnownClients.Values
+                .Where(c => c.PcNumber != pc.PcNumber && c.IsOnline && !c.IsSession)
+                .Select(c => c.PcNumber)
+                .OrderBy(n => n)
+                .ToList();
+
+            if (!availablePcs.Any())
+            {
+                MessageBox.Show(
+                    "Нет доступных ПК для пересадки.\n\nЦелевой ПК должен быть в сети и без активной сессии.",
+                    "Пересадить", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            string elapsed = FormatTime(pc.ElapsedSeconds);
+            string remaining = pc.LimitSeconds > 0 ? $" · осталось {FormatTime(pc.RemainingSeconds)}" : "";
+            string sessionInfo = $"{pc.SessionType} · прошло {elapsed}{remaining}";
+
+            var dialog = new TransferSessionDialog(pc.PcNumber, sessionInfo, availablePcs);
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                if (_hub?.State != HubConnectionState.Connected)
+                {
+                    MessageBox.Show("Нет подключения к серверу.", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var result = await _hub.InvokeAsync<string>("TransferSession", pc.PcNumber, dialog.SelectedPcNumber);
+                if (result != "OK")
+                    MessageBox.Show(result, "Ошибка пересадки", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Logger.Error($"Ошибка TransferSession: {ex.Message}");
+            }
         }
 
         private async void ReconnectPc(ClientState pc)
