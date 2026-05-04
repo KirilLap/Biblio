@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
@@ -287,6 +288,16 @@ namespace BibClient
                         SettingsManager.Current.BlockInstall = value.ToLower() == "true";
                         SettingsManager.Save();
                         SettingsChanged?.Invoke();
+                        break;
+
+                    case "SHUTDOWN":
+                        Logger.Info("💤 Выключение ПК по команде сервера");
+                        Process.Start("shutdown", "/s /f /t 0");
+                        break;
+
+                    case "RESTART":
+                        Logger.Info("🔄 Перезагрузка ПК по команде сервера");
+                        Process.Start("shutdown", "/r /f /t 0");
                         break;
 
                     default:
