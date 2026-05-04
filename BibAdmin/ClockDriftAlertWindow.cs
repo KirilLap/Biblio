@@ -13,12 +13,11 @@ namespace BibAdmin
         private static readonly object _lock = new();
 
         private const double W = 340;
-        private const double H = 155;
         private const double Gap = 8;
 
         public ClockDriftAlertWindow(string pcNumber, double offsetSeconds)
         {
-            Width = W; Height = H;
+            Width = W;
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
             Topmost = true;
@@ -26,6 +25,7 @@ namespace BibAdmin
             WindowStartupLocation = WindowStartupLocation.Manual;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
+            SizeToContent = SizeToContent.Height;
 
             PositionWindow();
 
@@ -119,7 +119,7 @@ namespace BibAdmin
             int index;
             lock (_lock) { index = _active.Count; }
             Left = area.Left + (area.Width - W) / 2;
-            Top = area.Top + area.Height * 0.30 + (H + Gap) * index;
+            Top = area.Top + area.Height * 0.30 + (ActualHeight + Gap) * index;
         }
 
         private static void RepositionAll()
@@ -133,7 +133,7 @@ namespace BibAdmin
                     w.Dispatcher.Invoke(() =>
                     {
                         w.Left = area.Left + (area.Width - W) / 2;
-                        w.Top = area.Top + area.Height * 0.30 + (H + Gap) * i;
+                        w.Top = area.Top + area.Height * 0.30 + (w.ActualHeight + Gap) * i;
                     });
                 }
             }
