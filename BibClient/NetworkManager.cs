@@ -100,7 +100,17 @@ namespace BibClient
             if (!_isConnected || _hub == null) return;
             try
             {
-                var info = new { HostName = Environment.MachineName, OsVersion = Environment.OSVersion.VersionString, LocalIp = GetLocalIpAddress(), MacAddress = GetMacAddress(), DiskFreeGb = GetDiskFreeGb(), UptimeHours = GetUptimeHours(), ClientTimeUtc = DateTime.UtcNow.ToString("o") };
+                var info = new SystemInfoDto
+                {
+                    HostName = Environment.MachineName,
+                    OsVersion = Environment.OSVersion.VersionString,
+                    LocalIp = GetLocalIpAddress(),
+                    MacAddress = GetMacAddress(),
+                    DiskFreeGb = GetDiskFreeGb(),
+                    UptimeHours = GetUptimeHours(),
+                    PcNumberValue = SettingsManager.Current.PcNumberValue,
+                    CustomName = SettingsManager.Current.CustomName
+                };
 
                 // Читаем heartbeat-файл: SessionId и время последнего пульса → offline duration
                 var heartbeat = SessionManager.ReadHeartbeat();
@@ -112,7 +122,7 @@ namespace BibClient
                     Logger.Info($"🕐 Heartbeat: lastSync={heartbeat.Value.lastSync:HH:mm:ss}, offline={offlineSeconds}с, sessionId={sessionId[..Math.Min(8, sessionId.Length)]}…");
                 }
 
-                _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", SettingsManager.Current.PcNumber, info, info.MacAddress, IsRestoring, sessionId, offlineSeconds);
+                _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", info, info.MacAddress, IsRestoring, sessionId, offlineSeconds);
 
                 if (_pcNumber != SettingsManager.Current.PcNumber) { SettingsManager.Current.PcNumber = _pcNumber; SettingsManager.Save(); }
                 Logger.Info($"✅ Зарегистрирован как: {_pcNumber}");

@@ -60,12 +60,28 @@
         <!-- Заголовок -->
         <Grid Grid.Row="0" Margin="0,0,0,20">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Компьютеры" FontSize="22" FontWeight="Bold"
+            
+            <!-- Выпадающий список сортировки -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                <TextBlock Text="Сортировка:" 
+                           Foreground="#666" FontSize="13" 
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="CmbSortMode" 
+                          Width="150" Height="28"
+                          SelectionChanged="CmbSortMode_SelectionChanged"
+                          VerticalAlignment="Center">
+                    <ComboBoxItem Content="По номеру" Tag="ByNumber"/>
+                    <ComboBoxItem Content="По имени" Tag="ByName"/>
+                </ComboBox>
+            </StackPanel>
+            
+            <TextBlock Grid.Column="1" Text="Компьютеры" FontSize="22" FontWeight="Bold"
                        Foreground="#1E1E2E" VerticalAlignment="Center"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <Button Content="Заблокировать все"
                         Style="{StaticResource ActionBtn}"
                         Background="#FFF0F0" BorderBrush="#E24B4A"

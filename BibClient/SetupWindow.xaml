@@ -60,7 +60,7 @@
                        Margin="0,0,0,20"/>
 
             <!-- Номер ПК -->
-            <TextBlock Text="Номер этого компьютера"
+            <TextBlock Text="Номер этого компьютера (число)"
                        Foreground="#AAAACC" FontSize="12"
                        Margin="0,0,0,6"/>
             <Border BorderBrush="#3D3D6B" BorderThickness="1"
@@ -69,8 +69,12 @@
                          Background="#2A2A3E" Foreground="White"
                          BorderThickness="0" FontSize="14"
                          Padding="12,10" CaretBrush="White"
-                         Text="ПК 1"/>
+                         Text="1"
+                         PreviewTextInput="TxtPcNumber_PreviewTextInput"/>
             </Border>
+            <TextBlock Text="Только цифры. Имя будет автоматически: ПК {номер}"
+                       Foreground="#444466" FontSize="11"
+                       Margin="0,0,0,20"/>
 
             <!-- IP этого ПК — определяется автоматически -->
             <Border Background="#2A2A3E" CornerRadius="8"

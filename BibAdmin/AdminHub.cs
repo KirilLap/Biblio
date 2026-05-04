@@ -322,21 +322,32 @@ namespace BibAdmin
             return client;
         }
 
-        public async Task<string> RegisterClient(string requestedName, SystemInfoDto info, string macAddress, bool isRestoring = false, string sessionId = "", int offlineSeconds = 0)
+        public async Task<string> RegisterClient(SystemInfoDto info, string macAddress, bool isRestoring = false, string sessionId = "", int offlineSeconds = 0)
         {
-            Logger.Info($"Регистрация: {requestedName}, MAC: {macAddress}");
+            Logger.Info($"Регистрация: ПК {info.PcNumberValue}, MAC: {macAddress}");
 
             var existingByMac = KnownClients.Values.FirstOrDefault(c => c.MacAddress == macAddress);
-            string finalName = existingByMac?.PcNumber ?? requestedName;
+            
+            // Определяем финальное имя: если клиент уже известен по MAC - берем его PcNumberValue и CustomName
+            int finalPcNumberValue = info.PcNumberValue;
+            string finalCustomName = info.CustomName;
+            
+            if (existingByMac != null)
+            {
+                // Клиент уже известен - сохраняем его настройки имени
+                finalPcNumberValue = existingByMac.PcNumberValue;
+                finalCustomName = existingByMac.CustomName;
+            }
+            
+            string finalName = string.IsNullOrEmpty(finalCustomName) ? $"ПК {finalPcNumberValue}" : finalCustomName;
 
             if (existingByMac == null)
             {
-                int counter = 1;
+                // Новый клиент - проверяем нет ли конфликта по имени
                 while (KnownClients.ContainsKey(finalName))
                 {
-                    counter++;
-                    var baseName = Regex.Replace(requestedName, @"\s+\d+$", "");
-                    finalName = $"{baseName} {counter}";
+                    finalPcNumberValue++;
+                    finalName = $"ПК {finalPcNumberValue}";
                 }
             }
 
@@ -361,7 +372,8 @@ namespace BibAdmin
 
             var state = new ClientState
             {
-                PcNumber = finalName,
+                PcNumberValue = finalPcNumberValue,
+                CustomName = finalCustomName,
                 ConnectionId = Context.ConnectionId,
                 Ip = info.LocalIp,
                 MacAddress = macAddress,

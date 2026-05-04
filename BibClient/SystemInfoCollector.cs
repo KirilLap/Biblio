@@ -66,5 +66,8 @@ namespace BibClient
         public string MacAddress { get; set; } = "";
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
+        // ✅ Новые поля для разделения имени и номера
+        public int PcNumberValue { get; set; }
+        public string CustomName { get; set; } = "";
     }
 }
