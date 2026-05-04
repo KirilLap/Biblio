@@ -1036,20 +1036,32 @@ namespace BibAdmin
             var dialog = new PcSettingDialog(pc.PcNumberValue.ToString(), "Переименовать ПК", "Отображаемое имя:", pc.CustomName);
             if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
             {
-                // Отправляем команду клиенту на изменение имени
-                _ = SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
-                // Обновляем сервер и помечаем как индивидуальную настройку
-                _ = RenameOnServer(pc.PcNumber, dialog.Result);
-                AdminHub.MarkIndividualSetting(pc.PcNumber, "SET_PC_NAME");
+                string newName = dialog.Result;
+                
+                // 1. Немедленно обновляем модель данных (сработает INotifyPropertyChanged)
+                pc.CustomName = newName;
+                
+                // 2. Помечаем настройку как индивидуальную
+                pc.MarkIndividual("SET_PC_NAME");
+                
+                // 3. Отправляем команду клиенту на изменение имени
+                _ = SendCommand(pc.PcNumber, "SET_PC_NAME", newName);
+                
+                // 4. Обновляем сервер (БД)
+                _ = RenameOnServer(pc.PcNumberValue.ToString(), newName);
+                
+                // 5. Принудительно обновляем список (на случай если binding не сработал)
+                var view = CollectionViewSource.GetDefaultView(ComputersListBox.ItemsSource);
+                view.Refresh();
             }
         }
 
-        private async Task RenameOnServer(string pcNumber, string newName)
+        private async Task RenameOnServer(string pcNumberValue, string newName)
         {
             try 
             { 
                 if (_hub?.State == HubConnectionState.Connected) 
-                    await _hub.InvokeAsync("SetClientCustomName", pcNumber, newName); 
+                    await _hub.InvokeAsync("SetClientCustomName", pcNumberValue, newName); 
             }
             catch (Exception ex) { Logger.Error($"Ошибка переименования: {ex.Message}"); }
         }

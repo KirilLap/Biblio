@@ -786,38 +786,29 @@ namespace BibAdmin
         /// Устанавливает индивидуальное отображаемое имя для клиента (CustomName).
         /// Уникальный идентификатор PcNumberValue не меняется.
         /// </summary>
-        public async Task SetClientCustomName(string pcNumber, string customName)
+        public async Task SetClientCustomName(string pcNumberValue, string customName)
         {
-            if (KnownClients.TryGetValue(pcNumber, out var client))
+            // Ищем клиента по числовому идентификатору (PcNumberValue)
+            var client = KnownClients.Values.FirstOrDefault(c => c.PcNumberValue.ToString() == pcNumberValue);
+            
+            if (client != null)
             {
-                var oldName = pcNumber;
+                var oldDisplayName = client.PcNumber; // Текущее отображаемое имя (например "ПК 1" или "Комп 1")
                 
                 // Обновляем CustomName
                 client.CustomName = customName;
                 
-                // Вычисляем новое отображаемое имя
-                var newName = string.IsNullOrEmpty(customName) ? $"ПК {client.PcNumberValue}" : customName;
+                // Вычисляем новое отображаемое имя (формат: "Комп 1")
+                var newDisplayName = string.IsNullOrEmpty(customName) ? $"ПК {client.PcNumberValue}" : $"{customName} {client.PcNumberValue}";
                 
-                // Если имя изменилось - переносим в словаре
-                if (oldName != newName)
-                {
-                    KnownClients.TryRemove(oldName, out _);
-                    KnownClients[newName] = client;
-                    
-                    // Переносим отложенные команды
-                    if (_pendingCommands.TryRemove(oldName, out var cmds))
-                        _pendingCommands[newName] = cmds;
-                        
-                    Logger.Info($"✅ Имя ПК изменено: {oldName} → {newName} (CustomName={customName})");
-                }
-                else
-                {
-                    Logger.Info($"✅ CustomName обновлён для {pcNumber}: '{customName}'");
-                }
+                Logger.Info($"✅ Имя ПК изменено: {oldDisplayName} → {newDisplayName} (PcNumberValue={client.PcNumberValue}, CustomName={customName})");
                 
                 SaveRegistry();
-                SavePending();
                 ClientsChanged?.Invoke();
+            }
+            else
+            {
+                Logger.Error($"❌ Клиент с PcNumberValue={pcNumberValue} не найден для переименования");
             }
         }
 
@@ -1052,12 +1043,18 @@ namespace BibAdmin
 
         public static void MarkIndividualSetting(string pcNumber, string commandType)
         {
-            if (KnownClients.TryGetValue(pcNumber, out var client))
+            // Ищем клиента по числовому идентификатору или по отображаемому имени
+            var client = KnownClients.Values.FirstOrDefault(c => c.PcNumberValue.ToString() == pcNumber || c.PcNumber == pcNumber);
+            
+            if (client != null)
             {
                 client.MarkIndividual(commandType);
-                KnownClients[pcNumber] = client;
                 SaveRegistryStatic();
-                Logger.Info($"Индивидуальная настройка: {pcNumber} → {commandType}");
+                Logger.Info($"Индивидуальная настройка: {client.PcNumber} → {commandType}");
+            }
+            else
+            {
+                Logger.Error($"❌ Клиент {pcNumber} не найден для индивидуальной настройки");
             }
         }
 
