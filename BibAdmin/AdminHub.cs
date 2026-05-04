@@ -945,22 +945,15 @@ namespace BibAdmin
                 : source.AccumulatedSeconds + (int)(DateTime.UtcNow - (source.SessionStart ?? DateTime.UtcNow)).TotalSeconds;
             elapsed = Math.Max(0, elapsed);
 
-            // Lock then free source
+            // Lock source
             var lockCmd = JsonSerializer.Serialize(new { Type = "REMOTE_LOCK", Value = "true" });
-            var unlockCmd = JsonSerializer.Serialize(new { Type = "REMOTE_UNLOCK", Value = "free" });
             if (source.IsOnline)
-            {
                 await Clients.Client(source.ConnectionId).SendAsync("ReceiveCommand", lockCmd);
-                await Clients.Client(source.ConnectionId).SendAsync("ReceiveCommand", unlockCmd);
-            }
             else
-            {
                 AddPendingCommand(source.PcNumber, "REMOTE_LOCK", "true");
-                AddPendingCommand(source.PcNumber, "REMOTE_UNLOCK", "free");
-            }
 
             // Clear source session state
-            source.Status = "Свободный";
+            source.Status = "Заблокирован";
             source.SessionType = "";
             source.ElapsedSeconds = 0;
             source.LimitSeconds = 0;
