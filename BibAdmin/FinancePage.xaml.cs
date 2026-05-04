@@ -121,10 +121,12 @@ namespace BibAdmin
                 // Тип сессии с цветом
                 var typeColor = s.SessionType switch
                 {
-                    "VIP" => Color.FromRgb(133, 79, 11),
-                    "По времени" => Color.FromRgb(15, 110, 86),
-                    "По деньгам" => Color.FromRgb(24, 95, 165),
-                    _ => Color.FromRgb(100, 100, 100)
+                    "VIP"          => Color.FromRgb(133, 79, 11),
+                    "Лимит"        => Color.FromRgb(15, 110, 86),
+                    // Совместимость со старыми записями в истории
+                    "По времени"   => Color.FromRgb(15, 110, 86),
+                    "По деньгам"   => Color.FromRgb(24, 95, 165),
+                    _              => Color.FromRgb(100, 100, 100)
                 };
 
                 var typeBadge = new Border

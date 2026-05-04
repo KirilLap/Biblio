@@ -10,12 +10,59 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent">
-    <Border Background="#2A2A3E" CornerRadius="10" BorderBrush="#3D3D6B" BorderThickness="2" Padding="20">
-        <StackPanel>
-            <TextBlock x:Name="TxtSessionType" Foreground="#1D9E75" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
-            <TextBlock x:Name="TxtElapsed" Foreground="White" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
-            <TextBlock x:Name="TxtRemaining" Foreground="#AAA" FontSize="13" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-            <TextBlock x:Name="TxtPaused" Foreground="#F0B90B" FontSize="14" FontWeight="Bold" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,8,0,0">⏸ ПАУЗА</TextBlock>
-        </StackPanel>
+
+    <Border Background="#2A2A3E" CornerRadius="10"
+            BorderBrush="#3D3D6B" BorderThickness="2"
+            MouseLeftButtonDown="Border_MouseLeftButtonDown">
+        <Grid>
+            <!-- Основное содержимое -->
+            <StackPanel Margin="20,16,20,14" VerticalAlignment="Center">
+                <TextBlock x:Name="TxtSessionType"
+                           Foreground="#1D9E75" FontSize="16" FontWeight="Bold"
+                           HorizontalAlignment="Center"/>
+                <TextBlock x:Name="TxtElapsed"
+                           Foreground="White" FontSize="28" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                <TextBlock x:Name="TxtRemaining"
+                           Foreground="#AAA" FontSize="13"
+                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                <TextBlock x:Name="TxtPaused"
+                           Foreground="#F0B90B" FontSize="14" FontWeight="Bold"
+                           Visibility="Collapsed" HorizontalAlignment="Center"
+                           Margin="0,6,0,0">⏸ ПАУЗА</TextBlock>
+            </StackPanel>
+
+            <!-- Кнопка «скрыть в трей» — правый верхний угол -->
+            <Button x:Name="BtnHide" Content="−"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Width="22" Height="22" Margin="0,6,8,0"
+                    Foreground="#888" FontSize="15" FontWeight="Bold"
+                    Cursor="Hand" ToolTip="Скрыть в трей (вернуть: двойной клик на иконке)"
+                    Click="BtnHide_Click">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="5">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#3D3D6B"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
     </Border>
 </Window>

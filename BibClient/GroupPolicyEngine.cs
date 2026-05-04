@@ -151,46 +151,6 @@
             }
 
             // =====================
-            // Блокировка USB-накопителей (через реестр USBSTOR)
-            // =====================
-            public static void SetUsbBlock(bool block)
-            {
-                try
-                {
-                    using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                        @"SYSTEM\CurrentControlSet\Services\USBSTOR", writable: true);
-                    if (key != null)
-                    {
-                        key.SetValue("Start", block ? 4 : 3, Microsoft.Win32.RegistryValueKind.DWord);
-                        Logger.Info($"USB Storage: {(block ? "заблокировано" : "разблокировано")}");
-                    }
-                    else Logger.Warn("USB Storage: ключ реестра USBSTOR не найден");
-                }
-                catch (Exception ex) { Logger.Error($"SetUsbBlock: {ex.Message}"); }
-            }
-
-            // =====================
-            // Скрытие диска C (через реестр NoDrives)
-            // =====================
-            public static void SetHideDriveC(bool hide)
-            {
-                try
-                {
-                    using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
-                        @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer");
-                    if (key != null)
-                    {
-                        if (hide)
-                            key.SetValue("NoDrives", 4, Microsoft.Win32.RegistryValueKind.DWord);
-                        else
-                            key.DeleteValue("NoDrives", throwOnMissingValue: false);
-                        Logger.Info($"Диск C: {(hide ? "скрыт" : "показан")}");
-                    }
-                }
-                catch (Exception ex) { Logger.Error($"SetHideDriveC: {ex.Message}"); }
-            }
-
-            // =====================
             // Применить все политики одной командой
             // =====================
             public static void ApplyAll(

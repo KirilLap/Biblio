@@ -5,8 +5,8 @@
 
     <Page.Resources>
         <Style x:Key="PcCard" TargetType="Button">
-            <Setter Property="Width" Value="140"/>
-            <Setter Property="Height" Value="105"/>
+            <Setter Property="Width" Value="155"/>
+            <Setter Property="Height" Value="128"/>
             <Setter Property="Margin" Value="6"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="BorderThickness" Value="2"/>

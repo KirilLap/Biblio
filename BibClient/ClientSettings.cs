@@ -14,12 +14,6 @@ namespace BibClient
         public string AdminPasswordHash { get; set; } =
             HashPassword("1234");
 
-        // Только запись — при установке сразу хешируется
-        public string AdminPassword
-        {
-            set { AdminPasswordHash = HashPassword(value); }
-        }
-
         public bool ShowPcNumber { get; set; } = true;
         public string BackgroundImagePath { get; set; } = "";
         public string ServerIp { get; set; } = "172.16.5.53";

@@ -81,10 +81,11 @@ namespace BibAdmin
                         services.AddSignalR(options =>
                         {
                             options.MaximumReceiveMessageSize = 100 * 1024 * 1024;
-                            // Детектируем разрыв за ~30 сек: keepalive 15с → timeout 30с
-                            // Слишком агрессивные значения (7/15) вызывали ложные разрывы в LAN
-                            options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-                            options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+                            // Детектируем разрыв за ~25 сек: keepalive 10с → timeout 25с
+                            // 7/15 вызывали ложные разрывы на игровых ПК под нагрузкой;
+                            // 15/30 — слишком долго; 10/25 — баланс надёжности и скорости
+                            options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+                            options.ClientTimeoutInterval = TimeSpan.FromSeconds(25);
                         });
                         services.AddCors(options =>
                         {

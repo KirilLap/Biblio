@@ -8,7 +8,7 @@ namespace BibAdmin
 {
     public partial class SessionDialog : Window
     {
-        public string SessionType { get; private set; } = "По времени";
+        public string SessionType { get; private set; } = "Лимит";
         public int LimitSeconds { get; private set; }
         public int PaidAmount { get; private set; }
 
@@ -189,7 +189,7 @@ namespace BibAdmin
                 return;
             }
 
-            SessionType = "По времени";
+            SessionType = "Лимит";
 
             if (hasMinutes)
             {

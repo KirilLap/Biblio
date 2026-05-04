@@ -19,6 +19,9 @@ namespace BibAdmin
         public static int Revenue { get; set; } = 0;
         public static int Tariff { get; set; } = 3000;
 
+        // Дедупликация: не более одного окна оффлайн-уведомления на ПК
+        private readonly Dictionary<string, OfflineAlertWindow> _activeOfflineWindows = new();
+
         public ComputersPage()
         {
             InitializeComponent();
@@ -95,11 +98,17 @@ namespace BibAdmin
         {
             Dispatcher.Invoke(() =>
             {
+                // Если окно для этого ПК уже открыто — не создаём дублирующее
+                if (_activeOfflineWindows.TryGetValue(client.PcNumber, out var existing) && existing.IsVisible)
+                    return;
+
                 var win = new OfflineAlertWindow(
                     client,
                     onPause: () => OnPauseDecision(client.PcNumber),
                     onContinue: () => OnContinueDecision(client.PcNumber)
                 );
+                _activeOfflineWindows[client.PcNumber] = win;
+                win.Closed += (s, e) => _activeOfflineWindows.Remove(client.PcNumber);
                 win.Show();
             });
         }
@@ -225,75 +234,105 @@ namespace BibAdmin
                 var btn = new Button { Style = (Style)FindResource("PcCard") };
                 ApplyCardStyle(btn, pc);
 
+                // Выделение выбранной карточки синей рамкой
                 if (_selected?.PcNumber == pc.PcNumber)
                     btn.BorderBrush = new SolidColorBrush(Color.FromRgb(55, 138, 221));
 
-                var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                var stack = new StackPanel
+                {
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Margin = new Thickness(10, 7, 10, 7)
+                };
 
-                stack.Children.Add(new TextBlock
+                // ── Строка 1: кружок + имя ПК (+ ★ если инд. настройки) ──
+                var namePanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                namePanel.Children.Add(new TextBlock
+                {
+                    Text = "●",
+                    FontSize = 8,
+                    Foreground = GetDotColor(pc),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 1, 5, 0)
+                });
+                namePanel.Children.Add(new TextBlock
                 {
                     Text = pc.PcNumber,
                     FontSize = 13,
                     FontWeight = FontWeights.Bold,
                     Foreground = GetTextColor(pc),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                if (pc.HasIndividualSettings)
+                    namePanel.Children.Add(new TextBlock
+                    {
+                        Text = " ★",
+                        FontSize = 9,
+                        Foreground = new SolidColorBrush(Color.FromRgb(239, 159, 39)),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        ToolTip = "Есть индивидуальные настройки"
+                    });
+                stack.Children.Add(namePanel);
+
+                // ── Разделитель ───────────────────────────────────────────
+                stack.Children.Add(new Border
+                {
+                    Height = 1,
+                    Background = new SolidColorBrush(Color.FromRgb(210, 210, 210)),
+                    Margin = new Thickness(0, 5, 0, 5),
+                    Opacity = 0.6
+                });
+
+                // ── Строка 2: тип · статус сессии  ИЛИ  статус ПК ───────
+                stack.Children.Add(new TextBlock
+                {
+                    Text = GetMainStatusText(pc),
+                    FontSize = 11,
+                    FontWeight = pc.IsSession ? FontWeights.Medium : FontWeights.Normal,
+                    Foreground = GetMainStatusColor(pc),
                     HorizontalAlignment = HorizontalAlignment.Center
                 });
 
-                stack.Children.Add(new TextBlock
-                {
-                    Text = GetStatusIcon(pc),
-                    FontSize = 11,
-                    Foreground = GetStatusColor(pc),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 4, 0, 0)
-                });
-
-                if (pc.HasIndividualSettings)
+                // ── Строка 3: "📵 нет связи" — только если оффлайн + сессия ──
+                if (!pc.IsOnline && pc.IsSession)
                 {
                     stack.Children.Add(new TextBlock
                     {
-                        Text = "★ инд.",
-                        FontSize = 9,
-                        Foreground = new SolidColorBrush(Color.FromRgb(239, 159, 39)),
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        Margin = new Thickness(0, 2, 0, 0),
-                        ToolTip = "Есть индивидуальные настройки"
-                    });
-                }
-
-                if (!pc.IsOnline)
-                {
-                    stack.Children.Add(new TextBlock
-                    {
-                        Text = "Оффлайн",
+                        Text = "📵 нет связи",
                         FontSize = 10,
-                        Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 170)),
+                        Foreground = new SolidColorBrush(Color.FromRgb(200, 80, 80)),
                         HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(0, 2, 0, 0)
                     });
                 }
-                else if (pc.IsSession || pc.Status == "Пауза")
+
+                // ── Строка 4: таймер (только при наличии сессии) ─────────
+                if (pc.IsSession)
                 {
                     stack.Children.Add(new TextBlock
                     {
                         Text = FormatTime(pc.ElapsedSeconds),
-                        FontSize = 12,
-                        Foreground = GetStatusColor(pc),
+                        FontSize = 15,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = GetTimerColor(pc),
                         HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(0, 3, 0, 0)
                     });
 
-                    if (pc.Status == "VIP")
+                    // ── Строка 5: доп. инфо (стоимость VIP / остаток Лимит) ──
+                    if (pc.SessionType == "VIP")
                     {
-                        int currentCost = (int)(pc.ElapsedSeconds * Tariff / 3600.0);
+                        int cost = (int)(pc.ElapsedSeconds * Tariff / 3600.0);
                         stack.Children.Add(new TextBlock
                         {
-                            Text = $"К оплате: {currentCost:N0} сум",
+                            Text = $"К оплате: {cost:N0} сум",
                             FontSize = 10,
                             Foreground = new SolidColorBrush(Color.FromRgb(133, 79, 11)),
                             HorizontalAlignment = HorizontalAlignment.Center,
-                            Margin = new Thickness(0, 2, 0, 0),
-                            FontWeight = FontWeights.Medium
+                            Margin = new Thickness(0, 2, 0, 0)
                         });
                     }
                     else if (pc.LimitSeconds > 0 && !pc.IsPaused)
@@ -304,8 +343,8 @@ namespace BibAdmin
                             Text = $"ост. {FormatTime(rem)}",
                             FontSize = 10,
                             Foreground = rem <= 300
-                                ? new SolidColorBrush(Color.FromRgb(226, 75, 74))
-                                : new SolidColorBrush(Color.FromRgb(100, 100, 100)),
+                                ? new SolidColorBrush(Color.FromRgb(220, 60, 60))
+                                : new SolidColorBrush(Color.FromRgb(80, 120, 90)),
                             HorizontalAlignment = HorizontalAlignment.Center,
                             Margin = new Thickness(0, 2, 0, 0)
                         });
@@ -483,8 +522,8 @@ namespace BibAdmin
         private void UpdateBottomPanel(ClientState pc)
         {
             TxtPcName.Text = pc.PcNumber;
-            TxtPcStatus.Text = pc.Status;
-            TxtPcStatus.Foreground = GetStatusColor(pc);
+            TxtPcStatus.Text = GetMainStatusText(pc);
+            TxtPcStatus.Foreground = GetMainStatusColor(pc);
 
             bool isOnline = pc.IsOnline && pc.Status != "Оффлайн";
             bool isLocked = pc.Status == "Заблокирован";
@@ -504,48 +543,107 @@ namespace BibAdmin
         {
             if (!pc.IsOnline)
             {
-                btn.Background = new SolidColorBrush(Color.FromRgb(235, 235, 235));
-                btn.BorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200));
+                if (pc.IsSession)
+                {
+                    // Оффлайн, но сессия продолжает идти — тёплый красный фон
+                    btn.Background = new SolidColorBrush(Color.FromRgb(253, 236, 236));
+                    btn.BorderBrush = new SolidColorBrush(Color.FromRgb(210, 100, 100));
+                }
+                else
+                {
+                    btn.Background = new SolidColorBrush(Color.FromRgb(235, 235, 235));
+                    btn.BorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200));
+                }
                 return;
             }
             btn.Background = pc.Status switch
             {
                 "Заблокирован" => new SolidColorBrush(Color.FromRgb(241, 239, 232)),
-                "Свободный" => new SolidColorBrush(Color.FromRgb(230, 241, 251)),
-                "VIP" => new SolidColorBrush(Color.FromRgb(250, 238, 218)),
-                "По времени" or "По деньгам" => new SolidColorBrush(Color.FromRgb(225, 245, 238)),
-                _ => Brushes.White
+                "Свободный"    => new SolidColorBrush(Color.FromRgb(230, 241, 251)),
+                "VIP"          => new SolidColorBrush(Color.FromRgb(250, 238, 218)),
+                "Лимит"        => new SolidColorBrush(Color.FromRgb(225, 245, 238)),
+                "Пауза"        => new SolidColorBrush(Color.FromRgb(255, 249, 230)),
+                _              => Brushes.White
             };
             btn.BorderBrush = pc.Status switch
             {
                 "Заблокирован" => new SolidColorBrush(Color.FromRgb(180, 178, 169)),
-                "Свободный" => new SolidColorBrush(Color.FromRgb(55, 138, 221)),
-                "VIP" => new SolidColorBrush(Color.FromRgb(239, 159, 39)),
-                "По времени" or "По деньгам" => new SolidColorBrush(Color.FromRgb(29, 158, 117)),
-                _ => new SolidColorBrush(Color.FromRgb(220, 220, 220))
+                "Свободный"    => new SolidColorBrush(Color.FromRgb(55, 138, 221)),
+                "VIP"          => new SolidColorBrush(Color.FromRgb(239, 159, 39)),
+                "Лимит"        => new SolidColorBrush(Color.FromRgb(29, 158, 117)),
+                "Пауза"        => new SolidColorBrush(Color.FromRgb(210, 140, 30)),
+                _              => new SolidColorBrush(Color.FromRgb(220, 220, 220))
             };
         }
 
-        private string GetStatusIcon(ClientState pc) => pc.Status switch
-        {
-            "Заблокирован" => "🔒 Заблокирован",
-            "Свободный" => "🔓 Свободный",
-            "VIP" => "⭐ VIP",
-            "По времени" => "⏱ По времени",
-            "По деньгам" => "💰 По деньгам",
-            "Пауза" => "⏸ Пауза",
-            _ => pc.Status
-        };
+        // ── Кружок: зелёный = онлайн, красный = оффлайн ─────────────────────────
+        private SolidColorBrush GetDotColor(ClientState pc) =>
+            pc.IsOnline
+                ? new SolidColorBrush(Color.FromRgb(34, 197, 94))    // зелёный
+                : new SolidColorBrush(Color.FromRgb(239, 68, 68));    // красный
 
-        private SolidColorBrush GetStatusColor(ClientState pc) => pc.Status switch
+        // ── Основной статус: тип · состояние  ИЛИ  статус ПК ────────────────
+        private string GetMainStatusText(ClientState pc)
         {
-            "Заблокирован" => new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-            "Свободный" => new SolidColorBrush(Color.FromRgb(24, 95, 165)),
-            "VIP" => new SolidColorBrush(Color.FromRgb(133, 79, 11)),
-            "По времени" or "По деньгам" => new SolidColorBrush(Color.FromRgb(15, 110, 86)),
-            "Пауза" => new SolidColorBrush(Color.FromRgb(239, 159, 39)),
-            _ => new SolidColorBrush(Color.FromRgb(100, 100, 100))
-        };
+            if (pc.IsSession)
+            {
+                string state = pc.IsPaused ? "Пауза" : "Идёт";
+                return pc.SessionType switch
+                {
+                    "VIP"   => $"⭐ VIP · {state}",
+                    "Лимит" => $"⏱ Лимит · {state}",
+                    _       => $"{pc.SessionType} · {state}"
+                };
+            }
+            if (!pc.IsOnline) return "Оффлайн";
+            return pc.Status switch
+            {
+                "Заблокирован" => "🔒 Заблокирован",
+                "Свободный"    => "🔓 Свободен",
+                _              => pc.Status
+            };
+        }
+
+        // ── Цвет основного статуса ────────────────────────────────────────────
+        private SolidColorBrush GetMainStatusColor(ClientState pc)
+        {
+            if (pc.IsSession)
+            {
+                if (pc.IsPaused)
+                    return new SolidColorBrush(Color.FromRgb(180, 120, 20));
+                return pc.SessionType switch
+                {
+                    "VIP"   => new SolidColorBrush(Color.FromRgb(133, 79, 11)),
+                    "Лимит" => new SolidColorBrush(Color.FromRgb(15, 110, 86)),
+                    _       => new SolidColorBrush(Color.FromRgb(15, 110, 86))
+                };
+            }
+            if (!pc.IsOnline) return new SolidColorBrush(Color.FromRgb(160, 160, 160));
+            return pc.Status switch
+            {
+                "Заблокирован" => new SolidColorBrush(Color.FromRgb(150, 150, 150)),
+                "Свободный"    => new SolidColorBrush(Color.FromRgb(24, 95, 165)),
+                _              => new SolidColorBrush(Color.FromRgb(100, 100, 100))
+            };
+        }
+
+        // ── Цвет таймера ──────────────────────────────────────────────────────
+        private SolidColorBrush GetTimerColor(ClientState pc)
+        {
+            if (!pc.IsOnline && pc.IsSession)
+                return new SolidColorBrush(Color.FromRgb(200, 80, 80));   // красный (оффлайн)
+            if (pc.IsPaused)
+                return new SolidColorBrush(Color.FromRgb(180, 120, 20));  // янтарный (пауза)
+            return pc.SessionType switch
+            {
+                "VIP"   => new SolidColorBrush(Color.FromRgb(133, 79, 11)),
+                "Лимит" => new SolidColorBrush(Color.FromRgb(15, 110, 86)),
+                _       => new SolidColorBrush(Color.FromRgb(15, 110, 86))
+            };
+        }
+
+        // ── Цвет имени ПК ─────────────────────────────────────────────────────
+        private SolidColorBrush GetStatusColor(ClientState pc) => GetMainStatusColor(pc);
 
         private SolidColorBrush GetTextColor(ClientState pc) =>
             !pc.IsOnline || pc.Status == "Заблокирован"
@@ -582,11 +680,15 @@ namespace BibAdmin
 
             await SendCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
             _selected.Status = "Заблокирован";
+            _selected.SessionType = "";
             _selected.ElapsedSeconds = 0;
             _selected.LimitSeconds = 0;
             _selected.SessionStart = null;
             _selected.IsPaused = false;
             _selected.AccumulatedSeconds = 0;
+            _selected.SessionId = "";
+            AdminHub.SaveActiveSessions();
+            AdminHub.AddPendingCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
             SelectPc(_selected);
         }
 
@@ -597,18 +699,38 @@ namespace BibAdmin
 
             if (_selected.IsPaused)
             {
+                // ── Снять с паузы ─────────────────────────────────────────────────
                 _selected.IsPaused = false;
                 _selected.SessionStart = DateTime.UtcNow;
-                _selected.Status = string.IsNullOrEmpty(_selected.SessionType) ? "По времени" : _selected.SessionType;
-                _ = _hub?.InvokeAsync("SendCommand", _selected.PcNumber, JsonSerializer.Serialize(new { Type = "RESUME_SESSION", Value = "" }));
+                // SessionType хранит правильный тип ("Лимит"/"VIP") — не перезаписываем
+                _selected.Status = string.IsNullOrEmpty(_selected.SessionType) ? "Лимит" : _selected.SessionType;
+
+                if (!_selected.IsOnline)
+                {
+                    // Оффлайн-ПК: фиксируем решение Continue в хабе — при реконнекте сессия продолжится
+                    AdminHub.SetOfflineDecision(_selected.PcNumber, OfflineDecision.Continue);
+                }
+
+                _ = _hub?.InvokeAsync("SendCommand", _selected.PcNumber,
+                    JsonSerializer.Serialize(new { Type = "RESUME_SESSION", Value = "" }));
             }
             else
             {
+                // ── Поставить на паузу ────────────────────────────────────────────
                 _selected.IsPaused = true;
                 _selected.AccumulatedSeconds = _selected.ElapsedSeconds;
-                if (!string.IsNullOrEmpty(_selected.Status)) _selected.SessionType = _selected.Status;
+                // ❌ НЕ перезаписываем SessionType! Он уже правильный ("Лимит"/"VIP").
+                // Старая строка "SessionType = Status" портила тип, если Status был "Оффлайн".
                 _selected.Status = "Пауза";
-                _ = _hub?.InvokeAsync("SendCommand", _selected.PcNumber, JsonSerializer.Serialize(new { Type = "PAUSE_SESSION", Value = "" }));
+
+                if (!_selected.IsOnline)
+                {
+                    // Оффлайн-ПК: фиксируем решение Pause в хабе — при реконнекте сессия встанет на паузу
+                    AdminHub.SetOfflineDecision(_selected.PcNumber, OfflineDecision.Pause);
+                }
+
+                _ = _hub?.InvokeAsync("SendCommand", _selected.PcNumber,
+                    JsonSerializer.Serialize(new { Type = "PAUSE_SESSION", Value = "" }));
             }
             BuildGrid();
             UpdateBottomPanel(_selected);
@@ -633,7 +755,10 @@ namespace BibAdmin
             if (dialog.ShowDialog() == true)
             {
                 _selected.Status = dialog.SessionType;
+                _selected.SessionType = dialog.SessionType;   // ← сразу синхронизируем SessionType
                 _selected.SessionStart = DateTime.UtcNow;
+                _selected.AccumulatedSeconds = 0;
+                _selected.IsPaused = false;
                 _selected.LimitSeconds = dialog.LimitSeconds;
                 _selected.PaidAmount = dialog.PaidAmount;
                 _selected.ElapsedSeconds = 0;
@@ -714,12 +839,18 @@ namespace BibAdmin
 
             await SendCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
             _selected.Status = "Заблокирован";
+            _selected.SessionType = "";      // ← очищаем, иначе active_sessions.json восстановит сессию при рестарте
             _selected.ElapsedSeconds = 0;
             _selected.LimitSeconds = 0;
             _selected.PaidAmount = 0;
             _selected.SessionStart = null;
             _selected.IsPaused = false;
             _selected.AccumulatedSeconds = 0;
+            _selected.SessionId = "";
+            // Немедленно сохраняем: убираем запись из active_sessions.json до закрытия приложения
+            AdminHub.SaveActiveSessions();
+            // Страховка: если клиент переподключится позже — всё равно получит блокировку
+            AdminHub.AddPendingCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
 
             SelectPc(_selected);
             UpdateStats();

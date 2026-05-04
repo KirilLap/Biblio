@@ -10,6 +10,8 @@ namespace BibAdmin
     public class OfflineAlertWindow : Window
     {
         private readonly string _pcNumber;
+        private TextBlock? _titleText;   // для обновления заголовка при реконнекте
+        private Border? _rootBorder;     // для смены цвета рамки при реконнекте
         private static readonly List<OfflineAlertWindow> _active = new();
         private static readonly object _lock = new();
 
@@ -42,6 +44,7 @@ namespace BibAdmin
                 Padding = new Thickness(16),
                 Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.5, Color = Colors.Black }
             };
+            _rootBorder = root;
 
             var grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -57,14 +60,15 @@ namespace BibAdmin
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 6, 0)
             });
-            titlePanel.Children.Add(new TextBlock
+            _titleText = new TextBlock
             {
                 Text = $"{client.PcNumber} — потеря связи",
                 Foreground = new SolidColorBrush(Color.FromRgb(226, 75, 74)),
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            titlePanel.Children.Add(_titleText);
             Grid.SetRow(titlePanel, 0);
             grid.Children.Add(titlePanel);
 
@@ -101,7 +105,9 @@ namespace BibAdmin
             root.Child = grid;
             Content = root;
 
-            // Авто-закрытие при реконнекте клиента
+            // Не закрываем автоматически при реконнекте — вместо этого обновляем заголовок.
+            // Пока окно открыто, дедупликация в ComputersPage блокирует повторные попапы
+            // при нестабильной сети (многократные обрывы/реконнекты без действия администратора).
             AdminHub.ClientUpdated += OnClientUpdated;
             Closed += (s, e) =>
             {
@@ -114,8 +120,33 @@ namespace BibAdmin
 
         private void OnClientUpdated(ClientState updated)
         {
-            if (updated.PcNumber == _pcNumber && updated.IsOnline)
-                Dispatcher.Invoke(SafeClose);
+            if (updated.PcNumber != _pcNumber) return;
+
+            Dispatcher.Invoke(() =>
+            {
+                if (updated.IsOnline)
+                {
+                    // Связь восстановлена — меняем заголовок и цвет рамки, не закрываем
+                    if (_titleText != null)
+                    {
+                        _titleText.Text = $"{_pcNumber} — связь восстановлена";
+                        _titleText.Foreground = new SolidColorBrush(Color.FromRgb(29, 158, 117));
+                    }
+                    if (_rootBorder != null)
+                        _rootBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(29, 158, 117));
+                }
+                else
+                {
+                    // Снова оффлайн — возвращаем красный
+                    if (_titleText != null)
+                    {
+                        _titleText.Text = $"{_pcNumber} — потеря связи";
+                        _titleText.Foreground = new SolidColorBrush(Color.FromRgb(226, 75, 74));
+                    }
+                    if (_rootBorder != null)
+                        _rootBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 75, 74));
+                }
+            });
         }
 
         public void SafeClose()

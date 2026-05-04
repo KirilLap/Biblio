@@ -64,8 +64,7 @@ namespace BibAdmin
 
         // Активная сессия: по статусу ИЛИ оффлайн-клиент с незакрытой сессией (таймер продолжает идти)
         public bool IsSession =>
-            Status == "По времени" ||
-            Status == "По деньгам" ||
+            Status == "Лимит" ||
             Status == "VIP" ||
             Status == "Пауза" ||
             (!IsOnline &&

@@ -24,7 +24,7 @@
             </Grid.RowDefinitions>
 
             <!-- Номер ПК и статус -->
-            <StackPanel x:Name="PanelContent" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel x:Name="PanelCenter" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock x:Name="TxtPcNumber" FontSize="52" FontWeight="Bold" Foreground="White" TextAlignment="Center" Margin="0,0,0,10"/>
                 <TextBlock x:Name="TxtLocked" Text="Компьютер заблокирован" FontSize="16" Foreground="#AAA" TextAlignment="Center"/>
                 <TextBlock x:Name="TxtClockWarning"

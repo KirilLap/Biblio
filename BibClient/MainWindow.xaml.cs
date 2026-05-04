@@ -33,6 +33,9 @@ namespace BibClient
         // true — экран заблокирован из-за потери сети, сессия при этом жива
         private bool _isOfflineLocked = false;
 
+        // true — экран заблокирован из-за паузы (сессия жива, таймер стоит)
+        private bool _isPauseLocked = false;
+
         private ClientSettings _settings => SettingsManager.Current;
 
         public MainWindow()
@@ -47,7 +50,6 @@ namespace BibClient
             SettingsManager.Load();
             ApplySettings();
             StartClock();
-            ApplyStoredRestrictionsAsync();
             StartNetwork();
 
             // Подписки на удалённые команды
@@ -70,6 +72,13 @@ namespace BibClient
             // Подписка на запуск сессии (initialElapsed > 0 при восстановлении после реконнекта)
             PolicyEngine.StartSessionRequested += (type, limit, paid, initialElapsed) =>
                 Dispatcher.Invoke(() => StartSession(type, limit, paid, initialElapsed));
+
+            // Блокировка экрана при паузе: пользователь не может работать пока сессия на паузе
+            PolicyEngine.SessionPaused += (paused) => Dispatcher.Invoke(() =>
+            {
+                if (paused) PauseLock();
+                else PauseUnlock();
+            });
 
             _isReady = true;
         }
@@ -159,6 +168,9 @@ namespace BibClient
             _isOfflineLocked = false;
             Logger.Info("📶 Сеть восстановлена — снимаем оффлайн-блокировку");
 
+            // Если пауза ещё активна — экран остаётся заблокированным
+            if (_isPauseLocked) return;
+
             _lockHook?.Dispose();
             _lockHook = null;
             _clockTimer.Stop();
@@ -172,74 +184,116 @@ namespace BibClient
             _sessionManager?.ShowPopup();
         }
 
+        // ── Блокировка экрана при паузе ──────────────────────────────────────
+        private void PauseLock()
+        {
+            if (_isPauseLocked) return;
+            _isPauseLocked = true;
+            Logger.Info("⏸ Блокировка экрана по паузе");
+
+            // Если экран уже заблокирован (оффлайн) — просто обновляем флаг
+            if (_isOfflineLocked) return;
+
+            _lockHook?.Dispose();
+            _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+
+            this.WindowStyle = WindowStyle.None;
+            this.WindowState = WindowState.Maximized;
+            this.Topmost = true;
+            this.ResizeMode = ResizeMode.NoResize;
+            this.Width = double.NaN;
+            this.Height = double.NaN;
+            this.Content = _originalContent;
+
+            this.Show();
+            this.Activate();
+            StartClock();
+            ApplySettings();
+        }
+
+        // ── Снятие блокировки при продолжении сессии ─────────────────────────
+        private void PauseUnlock()
+        {
+            if (!_isPauseLocked) return;
+            _isPauseLocked = false;
+            Logger.Info("▶ Снятие блокировки паузы — сессия продолжается");
+
+            // Если оффлайн-блокировка ещё активна — оставляем экран заблокированным
+            if (_isOfflineLocked) return;
+
+            _lockHook?.Dispose();
+            _lockHook = null;
+            _clockTimer.Stop();
+
+            this.WindowStyle = WindowStyle.None;
+            this.WindowState = WindowState.Minimized;
+            this.Topmost = false;
+            this.Hide();
+
+            // Показываем попап с текущим состоянием сессии
+            _sessionManager?.ShowPopup();
+        }
+
         public void ApplySettings()
         {
-            var s = _settings;
+            // Перечитываем с диска — PolicyEngine уже сохранил новые значения перед вызовом
+            SettingsManager.Load();
 
-            TxtPcNumber.Visibility = s.ShowPcNumber ? Visibility.Visible : Visibility.Collapsed;
-            TxtPcNumber.Text = s.PcNumber;
-            TxtPcNumber.FontSize = s.PcNumberFontSize;
-            this.Title = $"BibClient - {s.PcNumber}";
+            // ── Номер ПК ─────────────────────────────────────────────────────────
+            TxtPcNumber.Visibility = _settings.ShowPcNumber ? Visibility.Visible : Visibility.Collapsed;
+            TxtPcNumber.Text = _settings.PcNumber;
+            TxtPcNumber.FontSize = _settings.PcNumberFontSize;
+            this.Title = $"BibClient - {_settings.PcNumber}";
 
-            TxtLocked.Visibility = s.ShowLockedText ? Visibility.Visible : Visibility.Collapsed;
-            TxtLocked.FontSize = s.LockedTextFontSize;
+            // ── Текст "Компьютер заблокирован" ───────────────────────────────────
+            TxtLocked.Visibility = _settings.ShowLockedText ? Visibility.Visible : Visibility.Collapsed;
+            TxtLocked.FontSize = _settings.LockedTextFontSize;
 
-            TxtTime.FontSize = s.TimeFontSize;
-            BgImage.Opacity = s.BackgroundOpacity;
+            // ── Время ────────────────────────────────────────────────────────────
+            TxtTime.FontSize = _settings.TimeFontSize;
 
-            ApplyPosition(PanelContent, s.PcNumberPosition);
-            ApplyPosition(PanelTime, s.TimePosition);
+            // ── Фон ──────────────────────────────────────────────────────────────
+            BgImage.Opacity = _settings.BackgroundOpacity;
 
-            if (!string.IsNullOrEmpty(s.BackgroundImagePath) && File.Exists(s.BackgroundImagePath))
-            {
-                try { BgImage.Source = new BitmapImage(new Uri(s.BackgroundImagePath, UriKind.Absolute)); }
-                catch (Exception ex) { Logger.Error($"Ошибка загрузки фона: {ex.Message}"); }
-            }
-        }
-
-        private static (WpfHorizontalAlignment h, VerticalAlignment v) ParsePosition(string pos) =>
-            pos switch
-            {
-                "TopLeft"      => (WpfHorizontalAlignment.Left,   VerticalAlignment.Top),
-                "TopCenter"    => (WpfHorizontalAlignment.Center, VerticalAlignment.Top),
-                "TopRight"     => (WpfHorizontalAlignment.Right,  VerticalAlignment.Top),
-                "MiddleLeft"   => (WpfHorizontalAlignment.Left,   VerticalAlignment.Center),
-                "MiddleRight"  => (WpfHorizontalAlignment.Right,  VerticalAlignment.Center),
-                "BottomLeft"   => (WpfHorizontalAlignment.Left,   VerticalAlignment.Bottom),
-                "BottomCenter" => (WpfHorizontalAlignment.Center, VerticalAlignment.Bottom),
-                "BottomRight"  => (WpfHorizontalAlignment.Right,  VerticalAlignment.Bottom),
-                _              => (WpfHorizontalAlignment.Center, VerticalAlignment.Center)
-            };
-
-        private void ApplyPosition(System.Windows.Controls.StackPanel panel, string position)
-        {
-            var (h, v) = ParsePosition(position);
-            panel.HorizontalAlignment = h;
-            panel.VerticalAlignment = v;
-        }
-
-        // Восстанавливает сохранённые ограничения при запуске приложения
-        private static void ApplyStoredRestrictionsAsync()
-        {
-            if (!PrivilegeManager.IsAdmin) return;
-            _ = System.Threading.Tasks.Task.Run(() =>
+            if (!string.IsNullOrEmpty(_settings.BackgroundImagePath) && File.Exists(_settings.BackgroundImagePath))
             {
                 try
                 {
-                    var s = SettingsManager.Current;
-                    GroupPolicyEngine.SetCtrlAltDelBlock(s.TaskMgrDisabled);
-                    GroupPolicyEngine.SetRegeditBlock(s.RegeditBlocked);
-                    GroupPolicyEngine.SetCmdBlock(s.CmdBlocked);
-                    GroupPolicyEngine.SetPowerShellBlock(s.PowerShellBlocked);
-                    GroupPolicyEngine.SetInstallBlock(s.InstallBlocked);
-                    GroupPolicyEngine.SetUsbBlock(s.UsbBlocked);
-                    GroupPolicyEngine.SetHideDriveC(s.DriveCHidden);
-                    if (s.TaskMgrDisabled || s.RegeditBlocked || s.CmdBlocked || s.PowerShellBlocked || s.InstallBlocked)
-                        GroupPolicyEngine.RunGpUpdate();
-                    Logger.Info("✅ Ограничения восстановлены");
+                    BgImage.Source = new BitmapImage(new Uri(_settings.BackgroundImagePath, UriKind.Absolute));
+                    Logger.Info($"Фон обновлён: {_settings.BackgroundImagePath}");
                 }
-                catch (Exception ex) { Logger.Error($"Ошибка восстановления ограничений: {ex.Message}"); }
-            });
+                catch (Exception ex) { Logger.Error($"Ошибка загрузки фона: {ex.Message}"); }
+            }
+
+            // ── Позиции ──────────────────────────────────────────────────────────
+            ApplyPosition(PanelCenter, _settings.PcNumberPosition);
+            ApplyPosition(PanelTime, _settings.TimePosition);
+        }
+
+        // Переводит строку-позицию ("TopLeft", "MiddleCenter", …) в выравнивание WPF
+        private static void ApplyPosition(FrameworkElement? element, string position)
+        {
+            if (element == null) return;
+
+            VerticalAlignment va;
+            WpfHorizontalAlignment ha;
+
+            switch (position)
+            {
+                case "TopLeft":      va = VerticalAlignment.Top;    ha = WpfHorizontalAlignment.Left;   break;
+                case "TopCenter":    va = VerticalAlignment.Top;    ha = WpfHorizontalAlignment.Center; break;
+                case "TopRight":     va = VerticalAlignment.Top;    ha = WpfHorizontalAlignment.Right;  break;
+                case "MiddleLeft":   va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Left;   break;
+                case "MiddleCenter": va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Center; break;
+                case "MiddleRight":  va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Right;  break;
+                case "BottomLeft":   va = VerticalAlignment.Bottom; ha = WpfHorizontalAlignment.Left;   break;
+                case "BottomCenter": va = VerticalAlignment.Bottom; ha = WpfHorizontalAlignment.Center; break;
+                case "BottomRight":  va = VerticalAlignment.Bottom; ha = WpfHorizontalAlignment.Right;  break;
+                default:             va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Center; break;
+            }
+
+            element.VerticalAlignment = va;
+            element.HorizontalAlignment = ha;
         }
 
         private void StartClock()
@@ -274,6 +328,7 @@ namespace BibClient
             Logger.Info($"Запуск сессии: {sessionType}, лимит: {limitSeconds}с, начальное: {initialElapsedSeconds}с");
 
             _isOfflineLocked = false;
+            _isPauseLocked = false;  // новая сессия — снимаем все блокировки
 
             // 1. Останавливаем старую сессию если есть
             _sessionManager?.Dispose();
@@ -502,6 +557,7 @@ namespace BibClient
             if (!_isReady) return;
 
             _isUnlocked = false;
+            _isPauseLocked = false;  // REMOTE_LOCK сбрасывает состояние паузы
             Logger.Info("ПК блокируется...");
 
             // 1. Останавливаем сессию если активна

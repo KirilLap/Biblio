@@ -12,34 +12,23 @@ namespace BibAdmin
 {
     public class AdminHub : Hub
     {
-        // Хранилище всех известных клиентов
         public static ConcurrentDictionary<string, ClientState> KnownClients { get; } = new();
-
-        // Очередь команд для оффлайн-ПК
         private static readonly ConcurrentDictionary<string, List<PendingCommand>> _pendingCommands = new();
-
         private static readonly string _registryPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "clients.json");
         private static readonly string _pendingPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "pending_commands.json");
         private static readonly string SessionsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_sessions.json");
 
         public static event Action<ClientState>? ClientUpdated;
         public static event Action? ClientsChanged;
-
-        // Срабатывает когда клиент уходит в оффлайн с активной сессией → показываем попап администратору
         public static event Action<ClientState>? ClientOfflineWithSession;
-
-        // Фаза 3: расхождение времени оффлайна между клиентом и сервером
         public static event Action<string, int, int>? ClientTimeMismatch;
         private const int OfflineMismatchThreshold = 60;
-
-        // Фаза 4: дрейф системных часов клиента (pcNumber, offsetSeconds)
-        // offsetSeconds > 0 → клиент отстаёт от сервера; < 0 → опережает
         public static event Action<string, double>? ClientTimeDrift;
         private const double ClockDriftThreshold = 30.0;
 
-        // =====================
-        // Загрузка при старте
-        // =====================
+        // ✅ ДЛЯ ЗАЩИТЫ ОТ ДУБЛЕЙ УВЕДОМЛЕНИЙ
+        private static readonly ConcurrentDictionary<string, DateTime> _lastOfflineAlert = new();
+
         public static void LoadRegistry()
         {
             if (File.Exists(_registryPath))
@@ -53,7 +42,7 @@ namespace BibAdmin
                         foreach (var c in list)
                         {
                             c.IsOnline = false;
-                            c.Status = "Оффлайн";
+                            c.Status = c.IsPaused ? "Пауза" : "Оффлайн";
                             c.LastSeen = DateTime.MinValue;
                             KnownClients[c.PcNumber] = c;
                         }
@@ -63,7 +52,6 @@ namespace BibAdmin
                 catch (Exception ex) { Logger.Error($"Ошибка загрузки clients.json: {ex.Message}"); }
             }
 
-            // Загружаем pending команды
             if (File.Exists(_pendingPath))
             {
                 try
@@ -97,9 +85,6 @@ namespace BibAdmin
             catch { }
         }
 
-        // ==========================================
-        // 🔹 СОХРАНЕНИЕ АКТИВНЫХ СЕССИЙ
-        // ==========================================
         public static void SaveActiveSessions()
         {
             try
@@ -137,9 +122,13 @@ namespace BibAdmin
             catch (Exception ex) { Logger.Error($"❌ SaveActiveSessions: {ex.Message}"); }
         }
 
-        // ==========================================
-        // 🔹 ЗАГРУЗКА ПРИ СТАРТЕ СЕРВЕРА
-        // ==========================================
+        /// <summary>
+        /// Нормализует тип сессии: "По времени" и "По деньгам" → "Лимит".
+        /// Обеспечивает совместимость со старыми сохранёнными данными.
+        /// </summary>
+        private static string NormalizeSessionType(string sessionType) =>
+            sessionType is "По времени" or "По деньгам" ? "Лимит" : sessionType;
+
         public static void LoadActiveSessions()
         {
             if (!File.Exists(SessionsFilePath)) return;
@@ -162,7 +151,8 @@ namespace BibAdmin
                         continue;
                     }
 
-                    var sessionType = s.GetProperty("SessionType").GetString() ?? "";
+                    // Нормализуем: старые "По времени"/"По деньгам" → "Лимит"
+                    var sessionType = NormalizeSessionType(s.GetProperty("SessionType").GetString() ?? "");
                     if (string.IsNullOrEmpty(sessionType) || sessionType == "Заблокирован" || sessionType == "Свободный")
                         continue;
 
@@ -171,7 +161,7 @@ namespace BibAdmin
                     {
                         var startStr = startProp.GetString();
                         if (!string.IsNullOrEmpty(startStr))
-                            sessionStart = DateTime.Parse(startStr, null, System.Globalization.DateTimeStyles.RoundtripKind); // ✅ Читаем как UTC
+                            sessionStart = DateTime.Parse(startStr, null, System.Globalization.DateTimeStyles.RoundtripKind);
                     }
 
                     int elapsedSeconds = 0;
@@ -222,10 +212,15 @@ namespace BibAdmin
                     client.AccumulatedSeconds = accumulatedSeconds;
                     client.PaidAmount = paidAmount;
                     client.LimitSeconds = limitSeconds;
-                    client.Status = isPaused ? "Пауза" : sessionType;
+
+                    if (isPaused)
+                        client.Status = "Пауза";
+                    else
+                        client.Status = sessionType;
+
                     client.SessionId = sessionIdVal;
                     client.DisconnectedAt = disconnectedAt;
-                    client.ElapsedAtDisconnect = elapsedAtDisconnect;
+                    client.ElapsedAtDisconnect = elapsedAtDisconnect; // ✅ СОХРАНЯЕМ!
                     client.OfflineDecision = offlineDecision;
 
                     KnownClients[pcNumber] = client;
@@ -241,9 +236,6 @@ namespace BibAdmin
             }
         }
 
-        // =====================
-        // Подключение / Отключение
-        // =====================
         public override Task OnConnectedAsync()
         {
             Logger.Info($"Клиент подключился: {Context.ConnectionId}");
@@ -261,11 +253,10 @@ namespace BibAdmin
 
                 if (client.IsSession)
                 {
-                    // Фиксируем точный elapsed в момент разрыва (не ждём следующего UpdateStatus)
                     int elapsedNow = client.IsPaused
                         ? client.AccumulatedSeconds
                         : Math.Max(0, client.AccumulatedSeconds + (int)(DateTime.UtcNow - client.SessionStart!.Value).TotalSeconds);
-                    client.ElapsedAtDisconnect = elapsedNow;
+                    client.ElapsedAtDisconnect = elapsedNow; // ✅ СОХРАНЯЕМ ПЕРЕД ОТСОЕДИНЕНИЕМ
                     client.DisconnectedAt = DateTime.UtcNow;
                     client.OfflineDecision = OfflineDecision.None;
                 }
@@ -282,16 +273,25 @@ namespace BibAdmin
                 ClientsChanged?.Invoke();
                 Logger.Info($"Клиент отключился: {client.PcNumber}{(client.DisconnectedAt.HasValue ? $" (активная сессия, elapsed={client.ElapsedAtDisconnect}с)" : "")}");
 
-                // Уведомляем UI — покажет попап «Пауза/Продолжить» администратору
+                // ✅ ЗАЩИТА ОТ ДУБЛЕЙ: не чаще 1 раза в 5 минут
                 if (client.DisconnectedAt.HasValue)
-                    ClientOfflineWithSession?.Invoke(client);
+                {
+                    // Дедуп 60 сек — защита от rapid-disconnect, сбрасывается при реконнекте
+                    if (_lastOfflineAlert.TryGetValue(client.PcNumber, out var lastAlert) &&
+                        DateTime.UtcNow - lastAlert < TimeSpan.FromSeconds(60))
+                    {
+                        Logger.Info($"⏭️ Пропуск дубля уведомления для {client.PcNumber} (< 60с)");
+                    }
+                    else
+                    {
+                        _lastOfflineAlert[client.PcNumber] = DateTime.UtcNow;
+                        ClientOfflineWithSession?.Invoke(client);
+                    }
+                }
             }
             return base.OnDisconnectedAsync(exception);
         }
 
-        // =====================
-        // Решение администратора по оффлайн-клиенту
-        // =====================
         public static ClientState? SetOfflineDecision(string pcNumber, OfflineDecision decision)
         {
             if (!KnownClients.TryGetValue(pcNumber, out var client)) return null;
@@ -300,11 +300,19 @@ namespace BibAdmin
 
             if (decision == OfflineDecision.Pause)
             {
-                // Замораживаем таймер на значении elapsed в момент разрыва
                 client.IsPaused = true;
                 client.AccumulatedSeconds = client.ElapsedAtDisconnect;
                 client.ElapsedSeconds = client.ElapsedAtDisconnect;
                 client.Status = "Пауза";
+            }
+            else if (decision == OfflineDecision.Continue)
+            {
+                // Явный Continue — сбрасываем паузу, восстанавливаем статус из типа сессии
+                client.IsPaused = false;
+                if (!string.IsNullOrEmpty(client.SessionType) &&
+                    client.SessionType != "Заблокирован" &&
+                    client.SessionType != "Свободный")
+                    client.Status = client.SessionType;
             }
 
             KnownClients[pcNumber] = client;
@@ -314,9 +322,6 @@ namespace BibAdmin
             return client;
         }
 
-        // =====================
-        // Регистрация клиента
-        // =====================
         public async Task<string> RegisterClient(string requestedName, SystemInfoDto info, string macAddress, bool isRestoring = false, string sessionId = "", int offlineSeconds = 0)
         {
             Logger.Info($"Регистрация: {requestedName}, MAC: {macAddress}");
@@ -343,17 +348,16 @@ namespace BibAdmin
 
             bool isNewClient = existingByMac == null;
 
-            // Определяем, была ли у клиента активная сессия до переподключения
             bool hadActiveSession = existingByMac != null &&
                 !string.IsNullOrEmpty(existingByMac.SessionType) &&
                 existingByMac.SessionType != "Заблокирован" &&
                 existingByMac.SessionType != "Свободный" &&
                 existingByMac.SessionStart.HasValue;
 
-            // Восстанавливаем корректный статус
-            string restoredStatus = hadActiveSession
-                ? (existingByMac!.IsPaused ? "Пауза" : existingByMac.SessionType)
-                : "Заблокирован";
+            // Нормализуем тип сессии из сохранённых данных (совместимость со старыми записями)
+            var restoredSessionType = NormalizeSessionType(existingByMac?.SessionType ?? "");
+            var restoredStatus = (existingByMac?.IsPaused == true) ? "Пауза"
+                : (hadActiveSession ? restoredSessionType : "Заблокирован");
 
             var state = new ClientState
             {
@@ -367,7 +371,7 @@ namespace BibAdmin
                 IsOnline = true,
                 LastSeen = DateTime.UtcNow,
                 Status = restoredStatus,
-                SessionType = existingByMac?.SessionType ?? "",
+                SessionType = restoredSessionType,
                 SessionStart = existingByMac?.SessionStart,
                 LimitSeconds = existingByMac?.LimitSeconds ?? 0,
                 ElapsedSeconds = existingByMac?.ElapsedSeconds ?? 0,
@@ -376,19 +380,21 @@ namespace BibAdmin
                 AccumulatedSeconds = existingByMac?.AccumulatedSeconds ?? 0,
                 HasIndividualSettings = existingByMac?.HasIndividualSettings ?? false,
                 IndividualSettingKeys = existingByMac?.IndividualSettingKeys ?? new(),
-                // Сохраняем SessionId от клиента; при реконнекте обновится ниже
                 SessionId = !string.IsNullOrEmpty(sessionId) ? sessionId : existingByMac?.SessionId ?? "",
-                // DisconnectedAt сбрасывается — клиент снова онлайн
-                DisconnectedAt = null
+                DisconnectedAt = null,
+                OfflineDecision = existingByMac?.OfflineDecision ?? OfflineDecision.None,
+                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // ✅ КОПИРУЕМ!
             };
 
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);
             SaveRegistry();
 
+            // Сбрасываем дедуп оффлайн-уведомлений — при следующем разрыве уведомление появится снова
+            _lastOfflineAlert.TryRemove(finalName, out _);
+
             ClientUpdated?.Invoke(state);
             ClientsChanged?.Invoke();
 
-            // Логируем расхождение SessionId — в Фазе 2 здесь будет принудительная блокировка
             if (!string.IsNullOrEmpty(sessionId) && !string.IsNullOrEmpty(existingByMac?.SessionId)
                 && existingByMac.SessionId != sessionId && hadActiveSession)
                 Logger.Warn($"⚠️ SessionId мismatch: {finalName} прислал {sessionId[..8]}…, сервер помнит {existingByMac.SessionId[..8]}…");
@@ -397,21 +403,18 @@ namespace BibAdmin
             if (offlineSeconds > 0)
                 Logger.Info($"🕐 Клиент {finalName} сообщает о {offlineSeconds}с оффлайна");
 
-            if (isNewClient)
-            {
-                await SendGlobalSettingsToClient(finalName);
-                Logger.Info($"Глобальные настройки отправлены новому ПК: {finalName}");
-            }
+            // Всегда отправляем глобальные настройки — и новым, и переподключившимся клиентам.
+            // Метод внутри проверяет индивидуальные настройки и пропускает их.
+            await SendGlobalSettingsToClient(finalName);
+            Logger.Info($"Глобальные настройки отправлены ПК: {finalName} (новый: {isNewClient})");
 
             await FlushPendingCommands(finalName);
 
-            // Фаза 4: синхронизация системных часов
             if (!string.IsNullOrEmpty(info.ClientTimeUtc) &&
                 DateTime.TryParse(info.ClientTimeUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var clientClock))
             {
                 double offsetSeconds = (DateTime.UtcNow - clientClock).TotalSeconds;
 
-                // Всегда отправляем смещение — клиент применяет его к таймеру сессии
                 var offsetCmd = new { Type = "SET_TIME_OFFSET", Value = offsetSeconds.ToString("F2") };
                 await Clients.Client(Context.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(offsetCmd));
 
@@ -421,7 +424,6 @@ namespace BibAdmin
                     Logger.Warn($"⚠️ CLOCK DRIFT {finalName}: клиент {direction} на {Math.Abs(offsetSeconds):F0}с");
                     ClientTimeDrift?.Invoke(finalName, offsetSeconds);
 
-                    // Сообщаем клиенту показать предупреждение
                     var mismatchCmd = new { Type = "CLOCK_MISMATCH", Value = offsetSeconds.ToString("F2") };
                     await Clients.Client(Context.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(mismatchCmd));
                 }
@@ -433,7 +435,6 @@ namespace BibAdmin
 
             if (hadActiveSession && KnownClients.TryGetValue(finalName, out var client))
             {
-                // Фаза 3: верификация времени оффлайна
                 if (isRestoring && offlineSeconds > 0 && existingByMac?.DisconnectedAt.HasValue == true)
                 {
                     int serverOfflineSecs = (int)(DateTime.UtcNow - existingByMac.DisconnectedAt!.Value).TotalSeconds;
@@ -457,15 +458,17 @@ namespace BibAdmin
 
                 if (adminChosePause)
                 {
-                    // Администратор нажал «Пауза задним числом» — отправляем замороженное время
-                    elapsedToSend = client.ElapsedAtDisconnect;
+                    elapsedToSend = client.ElapsedAtDisconnect; // ✅ ИСПОЛЬЗУЕМ СОХРАНЁННОЕ ЗНАЧЕНИЕ
                     sendPause = true;
+
+                    client.Status = "Пауза";
+                    client.IsPaused = true;
+                    KnownClients[finalName] = client;
+                    ClientUpdated?.Invoke(client);
                     Logger.Info($"✅ {finalName}: применяем решение ПАУЗА, elapsed={elapsedToSend}с");
                 }
                 else if (!isRestoring || adminChoseContinue)
                 {
-                    // LAN-реконнект (сессия шла на клиенте) ИЛИ админ явно выбрал «Продолжить»
-                    // → диктуем актуальное серверное время
                     int serverElapsed = client.AccumulatedSeconds +
                         (client.IsPaused ? 0 : (int)(DateTime.UtcNow - client.SessionStart!.Value).TotalSeconds);
                     elapsedToSend = Math.Max(0, serverElapsed);
@@ -474,8 +477,6 @@ namespace BibAdmin
                 }
                 else
                 {
-                    // Перезапуск приложения (выключение ПК), решения администратора нет →
-                    // умная защита: не считаем время выключения против пользователя
                     int activePart = Math.Max(0, client.ElapsedSeconds - client.AccumulatedSeconds);
                     client.SessionStart = DateTime.UtcNow.AddSeconds(-activePart);
                     KnownClients[finalName] = client;
@@ -500,10 +501,11 @@ namespace BibAdmin
                         JsonSerializer.Serialize(new { Type = "PAUSE_SESSION", Value = "" }));
                 }
 
-                // Сбрасываем решение после применения
                 client.OfflineDecision = OfflineDecision.None;
                 client.DisconnectedAt = null;
                 KnownClients[finalName] = client;
+
+                ClientUpdated?.Invoke(client);
 
                 await Task.Delay(1000);
                 await SyncSessionTime(finalName, force: true);
@@ -512,7 +514,6 @@ namespace BibAdmin
             return finalName;
         }
 
-        // ✅ Отправить глобальные настройки с авто-очисткой индивидуальных флагов
         private async Task SendGlobalSettingsToClient(string pcNumber)
         {
             try
@@ -563,7 +564,6 @@ namespace BibAdmin
             };
         }
 
-        // Отправить накопленные pending команды
         private async Task FlushPendingCommands(string pcNumber)
         {
             if (!_pendingCommands.TryGetValue(pcNumber, out var commands) || commands.Count == 0)
@@ -578,6 +578,15 @@ namespace BibAdmin
                 try
                 {
                     if (client.IsIndividual(cmd.Type)) continue;
+
+                    if (cmd.Type == "REMOTE_LOCK" &&
+                        !string.IsNullOrEmpty(client.SessionType) &&
+                        client.SessionStart.HasValue)
+                    {
+                        Logger.Info($"⏭️ Пропуск REMOTE_LOCK для {pcNumber} — есть активная сессия ({client.SessionType})");
+                        continue;
+                    }
+
                     var json = JsonSerializer.Serialize(new { cmd.Type, cmd.Value });
                     await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
                 }
@@ -589,9 +598,6 @@ namespace BibAdmin
             Logger.Info($"Pending команды очищены для {pcNumber}");
         }
 
-        // =====================
-        // Добавить в очередь для оффлайн ПК
-        // =====================
         public static void AddPendingCommand(string pcNumber, string type, string value)
         {
             var cmd = new PendingCommand(type, value);
@@ -611,9 +617,6 @@ namespace BibAdmin
             }
         }
 
-        // =====================
-        // Heartbeat и статус
-        // =====================
         public async Task SendHeartbeat(string pcNumber)
         {
             if (KnownClients.TryGetValue(pcNumber, out var client))
@@ -624,9 +627,6 @@ namespace BibAdmin
             }
         }
 
-        // ==========================================
-        // 🔹 ОБНОВЛЕНИЕ СТАТУСА (с защитой от перезагрузки)
-        // ==========================================
         public async Task UpdateStatus(string pcNumber, string status, string sessionType, int elapsedSeconds)
         {
             if (!KnownClients.TryGetValue(pcNumber, out var client)) return;
@@ -634,11 +634,20 @@ namespace BibAdmin
             client.LastSeen = DateTime.UtcNow;
             client.IsOnline = true;
 
-            // 🔑 ЗАЩИТА: если есть активная сессия, а клиент прислал 0 — игнорируем
+            if (string.IsNullOrEmpty(client.SessionType) && !client.SessionStart.HasValue &&
+                status != "Заблокирован" && status != "Свободный")
+            {
+                KnownClients[pcNumber] = client;
+                ClientUpdated?.Invoke(client);
+                return;
+            }
+
             if (client.SessionStart.HasValue && elapsedSeconds == 0)
             {
+                // Применяем IsPaused как приоритет — клиент ещё не прислал elapsed,
+                // но пауза уже стоит на сервере (например, решение администратора).
                 if (status != "Заблокирован" && status != "Свободный")
-                    client.Status = status;
+                    client.Status = client.IsPaused ? "Пауза" : status;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
                 return;
@@ -647,52 +656,90 @@ namespace BibAdmin
             if (elapsedSeconds > 0)
             {
                 client.ElapsedSeconds = elapsedSeconds;
-                // Постоянно сдвигаем точку старта, чтобы она была точной
                 client.SessionStart = DateTime.UtcNow.AddSeconds(-elapsedSeconds);
-                // После обновления SessionStart переходим на «чистую» модель:
-                // elapsed = 0 + (now − SessionStart). AccumulatedSeconds должен быть 0,
-                // иначе Timer_Tick посчитает его дважды (двойной счёт после пауз).
-                // Исключение: если сейчас на паузе — AccumulatedSeconds уже содержит
-                // правильное замороженное значение и его трогать нельзя.
                 if (!client.IsPaused)
                     client.AccumulatedSeconds = 0;
             }
 
-            // Управляем IsPaused только когда клиент явно отправляет статус "Пауза".
-            // НЕ снимаем паузу на основе других статусов клиента — администратор является
-            // источником истины для паузы (только PauseSession_Click / RESUME_SESSION).
+            // Нормализуем тип сессии от клиента: "По времени"/"По деньгам" → "Лимит"
+            if (!string.IsNullOrEmpty(sessionType))
+                client.SessionType = NormalizeSessionType(sessionType);
+
             if (status == "Пауза")
             {
                 client.IsPaused = true;
                 client.AccumulatedSeconds = elapsedSeconds;
             }
 
-            if (!string.IsNullOrEmpty(sessionType)) client.SessionType = sessionType;
-            client.Status = status;
+            // 🔑 🔥 ГЛАВНАЯ ЗАЩИТА: ЕСЛИ ЕСТЬ OFFLINE_DECISION = PAUSE, ИГНОРИРУЕМ СТАТУС ОТ КЛИЕНТА
+            if (client.OfflineDecision == OfflineDecision.Pause && !client.IsPaused)
+            {
+                client.IsPaused = true;
+                client.AccumulatedSeconds = client.ElapsedAtDisconnect;
+                Logger.Info($"🛡️ {pcNumber}: принудительная пауза по OfflineDecision");
+            }
+
+            // ── Строгая цепочка приоритетов визуального статуса ──────────────────────
+            // Сервер является источником истины; клиентский статус используется только
+            // для цифр/биллинга, визуальный статус пересчитывается здесь независимо.
+            string visualStatus;
+            string reason;
+
+            if (!client.IsOnline)
+            {
+                visualStatus = "Оффлайн";
+                reason = "IsOnline=false";
+            }
+            else if (client.IsPaused)
+            {
+                visualStatus = "Пауза";
+                reason = "IsPaused=true (приоритет над клиентским статусом)";
+            }
+            else if (client.SessionType == "VIP")
+            {
+                visualStatus = "VIP";
+                reason = "SessionType=VIP";
+            }
+            else if (client.SessionType == "Лимит")
+            {
+                visualStatus = "Лимит";
+                reason = "SessionType=Лимит";
+            }
+            else if (status == "Свободный")
+            {
+                visualStatus = "Свободный";
+                reason = "клиент сообщил Свободный";
+            }
+            else
+            {
+                // Нет активной сессии, нет явного освобождения — считаем заблокированным
+                visualStatus = "Заблокирован";
+                reason = "нет активной сессии (fallback)";
+            }
+
+            client.Status = visualStatus;
+
             KnownClients[pcNumber] = client;
             ClientUpdated?.Invoke(client);
 
-            Logger.Info($"Статус обновлён: {pcNumber} → {status} (elapsed={client.ElapsedSeconds}с)");
+            Logger.Info($"🎨 Визуал {pcNumber}: \"{client.Status}\" | Причина: {reason} (SessionType={client.SessionType}, elapsed={client.ElapsedSeconds}с, paused={client.IsPaused})");
 
-            if (client.IsSession || status == "Пауза") SaveActiveSessions();
+            if (client.IsSession || client.Status == "Пауза")
+                SaveActiveSessions();
         }
 
-        // ==========================================
-        // 🔹 СИНХРОНИЗАЦИЯ ВРЕМЕНИ (умная)
-        // ==========================================
-        public async Task SyncSessionTime(string pcNumber, bool force = false) // ✅ Добавлен параметр force
+        public async Task SyncSessionTime(string pcNumber, bool force = false)
         {
             if (!KnownClients.TryGetValue(pcNumber, out var client)) return;
             if (client.IsPaused || !(client.IsSession || client.Status == "Пауза") || !client.SessionStart.HasValue) return;
 
-            // Не синхронизируем, если клиент только что подключился (<10 сек)
-            if (!force && DateTime.UtcNow - client.LastSeen < TimeSpan.FromSeconds(10)) return; // ✅ Игнорируем задержку, если force = true
+            if (!force && DateTime.UtcNow - client.LastSeen < TimeSpan.FromSeconds(10)) return;
 
             int serverElapsed = client.AccumulatedSeconds + (int)(DateTime.UtcNow - client.SessionStart.Value).TotalSeconds;
             serverElapsed = Math.Max(0, serverElapsed);
 
             int diff = Math.Abs(serverElapsed - client.ElapsedSeconds);
-            if (!force && diff < 10) return; // ✅ Добавляем !force: если это принудительная синхронизация, игнорируем лимит
+            if (!force && diff < 10) return;
 
             client.ElapsedSeconds = serverElapsed;
             KnownClients[pcNumber] = client;
@@ -705,9 +752,6 @@ namespace BibAdmin
             Logger.Info($"🔄 SyncSessionTime: {pcNumber} → {serverElapsed}с (расхождение {diff}с)");
         }
 
-        // =====================
-        // Переименование
-        // =====================
         public async Task RenameClient(string oldName, string newName)
         {
             if (KnownClients.TryGetValue(oldName, out var client))
@@ -725,9 +769,6 @@ namespace BibAdmin
             }
         }
 
-        // =====================
-        // Отправка команд
-        // =====================
         public async Task SendCommand(string pcNumber, string commandJson)
         {
             if (KnownClients.TryGetValue(pcNumber, out var client))
@@ -769,9 +810,6 @@ namespace BibAdmin
             }
         }
 
-        // =====================
-        // Загрузка файлов (фон)
-        // =====================
         public async Task UploadFile(string fileName, byte[] fileData, string targetPc)
         {
             try
@@ -814,9 +852,6 @@ namespace BibAdmin
             }
         }
 
-        // =====================
-        // Методы для индивидуальных настроек
-        // =====================
         public static void MarkIndividualSetting(string pcNumber, string commandType)
         {
             if (KnownClients.TryGetValue(pcNumber, out var client))
@@ -854,6 +889,6 @@ namespace BibAdmin
         public string MacAddress { get; set; } = "";
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
-        public string ClientTimeUtc { get; set; } = ""; // Фаза 4: локальное время клиента
+        public string ClientTimeUtc { get; set; } = "";
     }
 }
