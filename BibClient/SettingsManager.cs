@@ -8,7 +8,41 @@ namespace BibClient
 {
     public class ClientSettings
     {
-        public string PcNumber { get; set; } = "ПК 1";
+        // ✅ Уникальный числовой идентификатор (задаётся при установке, не меняется)
+        public int PcNumberValue { get; set; } = 1;
+        
+        // ✅ Отображаемое имя (можно менять через админку)
+        public string CustomName { get; set; } = "";
+        
+        // ✅ Вычисляемое свойство для обратной совместимости
+        public string PcNumber 
+        { 
+            get => string.IsNullOrEmpty(CustomName) ? $"ПК {PcNumberValue}" : CustomName;
+            set 
+            { 
+                // Парсинг старого формата "ПК 1" -> PcNumberValue=1, CustomName=""
+                if (value.StartsWith("ПК ") && int.TryParse(value.Substring(3), out var num))
+                {
+                    PcNumberValue = num;
+                    CustomName = "";
+                }
+                else
+                {
+                    // Если просто число
+                    if (int.TryParse(value, out num))
+                    {
+                        PcNumberValue = num;
+                        CustomName = "";
+                    }
+                    else
+                    {
+                        // Произвольное имя
+                        CustomName = value;
+                    }
+                }
+            }
+        }
+        
         public string ServerIp { get; set; } = "127.0.0.1";
         public int ServerPort { get; set; } = 8080;
 

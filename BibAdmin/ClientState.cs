@@ -10,7 +10,41 @@ namespace BibAdmin
         // =====================
         // Основная информация
         // =====================
-        public string PcNumber { get; set; } = "";
+        // ✅ Уникальный числовой идентификатор (не меняется)
+        public int PcNumberValue { get; set; } = 1;
+        
+        // ✅ Отображаемое имя (можно менять через админку)
+        public string CustomName { get; set; } = "";
+        
+        // ✅ Вычисляемое свойство для обратной совместимости
+        public string PcNumber 
+        { 
+            get => string.IsNullOrEmpty(CustomName) ? $"ПК {PcNumberValue}" : CustomName;
+            set 
+            { 
+                // Парсинг старого формата "ПК 1" -> PcNumberValue=1, CustomName=""
+                if (value.StartsWith("ПК ") && int.TryParse(value.Substring(3), out var num))
+                {
+                    PcNumberValue = num;
+                    CustomName = "";
+                }
+                else
+                {
+                    // Если просто число
+                    if (int.TryParse(value, out num))
+                    {
+                        PcNumberValue = num;
+                        CustomName = "";
+                    }
+                    else
+                    {
+                        // Произвольное имя
+                        CustomName = value;
+                    }
+                }
+            }
+        }
+        
         public string ConnectionId { get; set; } = "";
         public string Ip { get; set; } = "";
         public string MacAddress { get; set; } = "";

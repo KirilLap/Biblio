@@ -1,7 +1,9 @@
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Input;
 
 namespace BibClient
 {
@@ -13,6 +15,12 @@ namespace BibClient
         {
             InitializeComponent();
             TxtLocalIp.Text = GetLocalIp();
+        }
+
+        private void TxtPcNumber_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            // Разрешаем только цифры
+            e.Handled = !int.TryParse(e.Text, out _);
         }
 
         private string GetLocalIp()
@@ -36,13 +44,14 @@ namespace BibClient
         {
             if (string.IsNullOrWhiteSpace(TxtServerIp.Text)) { ShowError("Введите IP адрес сервера"); return; }
             if (!int.TryParse(TxtServerPort.Text, out int port) || port < 1 || port > 65535) { ShowError("Введите корректный порт (1-65535)"); return; }
-            if (string.IsNullOrWhiteSpace(TxtPcNumber.Text)) { ShowError("Введите номер компьютера"); return; }
+            if (!int.TryParse(TxtPcNumber.Text, out int pcNum) || pcNum < 1) { ShowError("Введите корректный номер ПК (число)"); return; }
 
             Result = new ClientSettings
             {
                 ServerIp = TxtServerIp.Text.Trim(),
                 ServerPort = port,
-                PcNumber = TxtPcNumber.Text.Trim(),
+                PcNumberValue = pcNum,
+                CustomName = "", // По умолчанию пустое, будет "ПК {номер}"
 
                 // ✅ Теперь это работает: пароль хешируется автоматически
                 AdminPassword = "1234",

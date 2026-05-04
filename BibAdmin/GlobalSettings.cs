@@ -53,6 +53,11 @@ namespace BibAdmin
         // =====================
         public DateTime LastApplied { get; set; } = DateTime.MinValue;
         public List<PendingCommand> PendingCommands { get; set; } = new();
+        
+        // =====================
+        // Сортировка ПК в админке
+        // =====================
+        public string ClientSortMode { get; set; } = "ByNumber"; // "ByNumber" или "ByName"
 
         private static readonly string _path = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");

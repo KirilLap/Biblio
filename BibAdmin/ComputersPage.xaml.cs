@@ -21,6 +21,9 @@ namespace BibAdmin
         private HubConnection? _hub;
         public static int Revenue { get; set; } = 0;
         public static int Tariff { get; set; } = 3000;
+        
+        // Текущий режим сортировки
+        private string _currentSortMode = "ByNumber";
 
         // Дедупликация: не более одного окна оффлайн-уведомления на ПК
         private readonly Dictionary<string, OfflineAlertWindow> _activeOfflineWindows = new();
@@ -35,6 +38,9 @@ namespace BibAdmin
             AdminHub.ClientTimeMismatch += OnClientTimeMismatch;
             AdminHub.ClientTimeDrift += OnClientTimeDrift;
 
+            // Загружаем сохранённый режим сортировки
+            LoadSortMode();
+            
             BuildGrid();
             UpdateStats();
 
@@ -43,6 +49,46 @@ namespace BibAdmin
             _timer.Start();
 
             ConnectToHub();
+        }
+        
+        private void LoadSortMode()
+        {
+            var settings = GlobalSettings.Load();
+            _currentSortMode = settings.ClientSortMode ?? "ByNumber";
+            
+            // Устанавливаем значение в ComboBox
+            if (CmbSortMode != null)
+            {
+                foreach (var item in CmbSortMode.Items)
+                {
+                    if (item is ComboBoxItem cmbItem && cmbItem.Tag?.ToString() == _currentSortMode)
+                    {
+                        CmbSortMode.SelectedItem = cmbItem;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        private void SaveSortMode(string mode)
+        {
+            _currentSortMode = mode;
+            var settings = GlobalSettings.Load();
+            settings.ClientSortMode = mode;
+            settings.Save();
+        }
+        
+        private void CmbSortMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CmbSortMode.SelectedItem is ComboBoxItem selected)
+            {
+                var mode = selected.Tag?.ToString();
+                if (!string.IsNullOrEmpty(mode))
+                {
+                    SaveSortMode(mode);
+                    BuildGrid(); // Перестраиваем сетку с новой сортировкой
+                }
+            }
         }
 
         private async void ConnectToHub()
@@ -232,7 +278,16 @@ namespace BibAdmin
                 return;
             }
 
-            foreach (var pc in AdminHub.KnownClients.Values)
+            // Сортировка клиентов в зависимости от выбранного режима
+            var sortedClients = _currentSortMode switch
+            {
+                "ByName" => AdminHub.KnownClients.Values.OrderBy(c => c.CustomName.ToLower())
+                                                          .ThenBy(c => c.PcNumberValue),
+                "ByNumber" => AdminHub.KnownClients.Values.OrderBy(c => c.PcNumberValue),
+                _ => AdminHub.KnownClients.Values.OrderBy(c => c.PcNumberValue)
+            };
+
+            foreach (var pc in sortedClients)
             {
                 var btn = new Button { Style = (Style)FindResource("PcCard") };
                 ApplyCardStyle(btn, pc);
