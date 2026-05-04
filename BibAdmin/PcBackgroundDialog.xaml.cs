@@ -74,8 +74,9 @@ namespace BibAdmin
                 if (_hub?.State == HubConnectionState.Connected)
                 {
                     // Вызываем метод на сервере, который сохранит файл и отправит команду клиенту
+                    // Передаём replaceIndividual=false, чтобы не перезаписывать индивидуальные настройки других ПК
                     await _hub.InvokeAsync("UploadFile",
-                        fileName, bytes, _pcNumber);
+                        fileName, bytes, _pcNumber, false);
                         
                     MessageBox.Show(
                         $"Фон успешно отправлен на {_pcNumber}",

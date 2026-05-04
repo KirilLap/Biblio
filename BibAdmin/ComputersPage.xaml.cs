@@ -1038,8 +1038,9 @@ namespace BibAdmin
             {
                 // Отправляем команду клиенту на изменение имени
                 _ = SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
-                // Обновляем сервер
+                // Обновляем сервер и помечаем как индивидуальную настройку
                 _ = RenameOnServer(pc.PcNumber, dialog.Result);
+                AdminHub.MarkIndividualSetting(pc.PcNumber, "SET_PC_NAME");
             }
         }
 
@@ -1057,7 +1058,10 @@ namespace BibAdmin
         {
             var dialog = new PcBackgroundDialog(pc.PcNumber);
             if (dialog.ShowDialog() == true)
+            {
+                // Фон уже отправлен через Hub в самом диалоге, просто помечаем как индивидуальную настройку
                 AdminHub.MarkIndividualSetting(pc.PcNumber, "SET_BACKGROUND");
+            }
         }
 
         private async void TogglePcNumber(ClientState pc)

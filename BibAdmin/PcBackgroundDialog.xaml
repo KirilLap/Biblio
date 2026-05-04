@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Изменить фон"
         SizeToContent="Height" Width="400"
+        MaxHeight="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#1E1E2E">
@@ -61,7 +62,8 @@
         <Border Grid.Row="3" Background="#2A2A3E"
                 CornerRadius="8" Margin="0,0,0,16"
                 Height="200">
-            <Image x:Name="ImgPreview" Stretch="Uniform"/>
+            <Image x:Name="ImgPreview" Stretch="UniformToFill" 
+                   MaxHeight="200" MaxWidth="350"/>
         </Border>
 
         <Button Grid.Row="4" Content="Отправить на ПК"

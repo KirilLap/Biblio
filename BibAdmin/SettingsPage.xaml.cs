@@ -433,6 +433,10 @@ namespace BibAdmin
         {
             foreach (var pc in AdminHub.KnownClients.Values)
             {
+                // Пропускаем ПК с индивидуальными настройками для этого типа команды
+                if (pc.IsIndividual(type))
+                    continue;
+                    
                 if (pc.IsOnline)
                     await SendCommand(pc.PcNumber, type, value);
                 else
