@@ -563,6 +563,7 @@ namespace BibClient
             // 1. Останавливаем сессию если активна
             _sessionManager?.Dispose();
             _sessionManager = null;
+            SessionManager.ClearStateFile();
 
             // 2. Очищаем UI
             if (PbPassword != null) PbPassword.Clear();

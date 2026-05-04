@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -56,6 +57,8 @@ namespace BibClient
                         break;
 
                     case "REMOTE_LOCK":
+                        ActiveSessionType = "";
+                        ActiveElapsedSeconds = 0;
                         RemoteLockRequested?.Invoke();
                         break;
 
@@ -90,6 +93,8 @@ namespace BibClient
                         break;
 
                     case "END_SESSION":
+                        ActiveSessionType = "";
+                        ActiveElapsedSeconds = 0;
                         EndSessionRequested?.Invoke();
                         break;
 
@@ -189,8 +194,24 @@ namespace BibClient
                     case "SET_BACKGROUND":
                         if (!string.IsNullOrEmpty(value))
                         {
-                            // Ищем файл в локальной папке Files (синхронизируется с сервером)
-                            var localBg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files", value);
+                            var localDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+                            var localBg = Path.Combine(localDir, value);
+                            if (!File.Exists(localBg))
+                            {
+                                try
+                                {
+                                    Directory.CreateDirectory(localDir);
+                                    var serverUrl = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}/files/{value}";
+                                    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                                    var data = await http.GetByteArrayAsync(serverUrl);
+                                    await File.WriteAllBytesAsync(localBg, data);
+                                    Logger.Info($"Фон скачан с сервера: {value}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.Error($"Ошибка скачивания фона: {ex.Message}");
+                                }
+                            }
                             SettingsManager.Current.BackgroundImagePath = File.Exists(localBg) ? localBg : value;
                             SettingsManager.Save();
                             SettingsChanged?.Invoke();

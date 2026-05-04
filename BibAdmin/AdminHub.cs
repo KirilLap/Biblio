@@ -661,8 +661,9 @@ namespace BibAdmin
                     client.AccumulatedSeconds = 0;
             }
 
-            // Нормализуем тип сессии от клиента: "По времени"/"По деньгам" → "Лимит"
-            if (!string.IsNullOrEmpty(sessionType))
+            // Нормализуем тип сессии от клиента, но не перезаписываем при блокировке —
+            // иначе клиент с устаревшим ActiveSessionType восстановит "призрачную" сессию.
+            if (status != "Заблокирован" && status != "Свободный" && !string.IsNullOrEmpty(sessionType))
                 client.SessionType = NormalizeSessionType(sessionType);
 
             if (status == "Пауза")
