@@ -33,6 +33,15 @@ namespace BibClient
         public string BackgroundImagePath { get; set; } = "";
         public int Tariff { get; set; } = 3000;
 
+        // Ограничения (сохраняются для восстановления при перезапуске)
+        public bool UsbBlocked { get; set; } = false;
+        public bool TaskMgrDisabled { get; set; } = false;
+        public bool BlockRegedit { get; set; } = false;
+        public bool BlockCmd { get; set; } = false;
+        public bool BlockPowerShell { get; set; } = false;
+        public bool HideDriveC { get; set; } = false;
+        public bool BlockInstall { get; set; } = false;
+
         public static string HashPassword(string password)
         {
             using var md5 = MD5.Create();
