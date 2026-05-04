@@ -1050,9 +1050,7 @@ namespace BibAdmin
                 // 4. Обновляем сервер (БД)
                 _ = RenameOnServer(pc.PcNumberValue.ToString(), newName);
                 
-                // 5. Принудительно обновляем список (на случай если binding не сработал)
-                var view = CollectionViewSource.GetDefaultView(ComputersListBox.ItemsSource);
-                view.Refresh();
+                // UI обновится автоматически благодаря INotifyPropertyChanged
             }
         }
 
