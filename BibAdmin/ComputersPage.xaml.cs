@@ -1033,7 +1033,7 @@ namespace BibAdmin
         // =====================
         private void ShowRenameDialog(ClientState pc)
         {
-            var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя:", pc.CustomName);
+            var dialog = new PcSettingDialog(pc.PcNumberValue.ToString(), "Переименовать ПК", "Отображаемое имя:", pc.CustomName);
             if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
             {
                 // Отправляем команду клиенту на изменение имени

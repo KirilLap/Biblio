@@ -20,10 +20,12 @@
                    FontWeight="Bold" HorizontalAlignment="Center"
                    Margin="0,0,0,4"/>
 
-        <TextBlock x:Name="TxtPcName" Grid.Row="1"
-                   Foreground="#666688" FontSize="12"
-                   HorizontalAlignment="Center"
-                   Margin="0,0,0,16"/>
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Center" Margin="0,0,0,16">
+            <TextBlock Text="ПК №" Foreground="#666688" FontSize="12"/>
+            <TextBlock x:Name="TxtPcNumber" Foreground="#AAAACC" 
+                       FontSize="12" FontWeight="Bold"/>
+        </StackPanel>
 
         <TextBlock x:Name="TxtLabel" Grid.Row="2"
                    Foreground="#AAAACC" FontSize="12"

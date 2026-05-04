@@ -11,7 +11,7 @@ namespace BibAdmin
         {
             InitializeComponent();
             TxtTitle.Text = title;
-            TxtPcName.Text = pcNumber;
+            TxtPcNumber.Text = pcNumber;
             TxtLabel.Text = label;
             TxtInput.Text = defaultValue;
             TxtInput.SelectAll();
