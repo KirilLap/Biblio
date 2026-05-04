@@ -814,7 +814,18 @@ namespace BibAdmin
 
         public async Task SendCommand(string pcNumber, string commandJson)
         {
-            if (KnownClients.TryGetValue(pcNumber, out var client))
+            // Ищем клиента по ключу, по PcNumberValue или по текущему PcNumber
+            ClientState? client = null;
+            
+            if (!KnownClients.TryGetValue(pcNumber, out client))
+            {
+                // Если не нашли по ключу, ищем по PcNumberValue или PcNumber
+                client = KnownClients.Values.FirstOrDefault(c => 
+                    c.PcNumberValue.ToString() == pcNumber || 
+                    c.PcNumber == pcNumber);
+            }
+            
+            if (client != null)
             {
                 if (client.IsOnline)
                 {
@@ -825,11 +836,15 @@ namespace BibAdmin
                     try
                     {
                         var cmd = JsonSerializer.Deserialize<PendingCommand>(commandJson);
-                        if (cmd != null) AddPendingCommand(pcNumber, cmd.Type, cmd.Value);
+                        if (cmd != null) AddPendingCommand(client.PcNumber, cmd.Type, cmd.Value);
                     }
                     catch { }
-                    Logger.Info($"ПК {pcNumber} оффлайн — команда добавлена в очередь");
+                    Logger.Info($"ПК {client.PcNumber} оффлайн — команда добавлена в очередь");
                 }
+            }
+            else
+            {
+                Logger.Error($"❌ Клиент {pcNumber} не найден для отправки команды");
             }
         }
 
