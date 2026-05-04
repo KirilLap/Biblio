@@ -1,20 +1,49 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace BibAdmin
 {
     public enum OfflineDecision { None, Pause, Continue }
 
-    public class ClientState
+    public class ClientState : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler PropertyChanged;
+        
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+        
         // =====================
         // Основная информация
         // =====================
         // ✅ Уникальный числовой идентификатор (не меняется)
-        public int PcNumberValue { get; set; } = 1;
+        private int _pcNumberValue = 1;
+        public int PcNumberValue 
+        { 
+            get => _pcNumberValue; 
+            set 
+            { 
+                _pcNumberValue = value; 
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PcNumber));
+            } 
+        }
         
         // ✅ Отображаемое имя (можно менять через админку)
-        public string CustomName { get; set; } = "";
+        private string _customName = "";
+        public string CustomName 
+        { 
+            get => _customName; 
+            set 
+            { 
+                _customName = value; 
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PcNumber));
+            } 
+        }
         
         // ✅ Вычисляемое свойство для обратной совместимости
         public string PcNumber 
