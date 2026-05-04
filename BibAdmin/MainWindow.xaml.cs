@@ -15,6 +15,13 @@ namespace BibAdmin
         {
             InitializeComponent();
             Instance = this;
+            
+            // Устанавливаем размер окна в процентах от размера экрана (80% ширины, 75% высоты)
+            var screenWidth = SystemParameters.PrimaryScreenWidth;
+            var screenHeight = SystemParameters.PrimaryScreenHeight;
+            Width = screenWidth * 0.80;
+            Height = screenHeight * 0.75;
+            
             StartServer();
         }
 
