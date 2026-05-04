@@ -503,6 +503,7 @@ namespace BibAdmin
             }
 
             menu.Items.Add(MakeSep());
+            menu.Items.Add(MakeItem("⟳", "Переподключить клиент", () => ReconnectPc(pc)));
             menu.Items.Add(MakeItem("↺", "Перезагрузить ПК", () => RestartPc(pc)));
             menu.Items.Add(MakeItem("", "Выключить ПК", () => ShutdownPc(pc), isDanger: true));
 
@@ -982,6 +983,11 @@ namespace BibAdmin
             AdminHub.MarkIndividualSetting(pc.PcNumber, "BLOCK_INSTALL_UNINSTALL");
             await SendCommand(pc.PcNumber, "BLOCK_INSTALL_UNINSTALL", global.BlockInstall.ToString().ToLower());
             BuildGrid();
+        }
+
+        private async void ReconnectPc(ClientState pc)
+        {
+            await SendCommand(pc.PcNumber, "RECONNECT", "true");
         }
 
         private async void RestartPc(ClientState pc)
