@@ -1088,10 +1088,7 @@ namespace BibAdmin
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
         public string ClientTimeUtc { get; set; } = "";
-<<<<<<< HEAD
-=======
         // ✅ Новые поля для разделения имени и номера
->>>>>>> 56e07f364f2dc1e9031d9d8fc3fc43a351697d0d
         public int PcNumberValue { get; set; }
         public string CustomName { get; set; } = "";
     }
