@@ -47,6 +47,7 @@ namespace BibClient
             SettingsManager.Load();
             ApplySettings();
             StartClock();
+            ApplyStoredRestrictionsAsync();
             StartNetwork();
 
             // Подписки на удалённые команды
@@ -173,21 +174,72 @@ namespace BibClient
 
         public void ApplySettings()
         {
-            SettingsManager.Load();
+            var s = _settings;
 
-            TxtPcNumber.Visibility = _settings.ShowPcNumber ? Visibility.Visible : Visibility.Collapsed;
-            TxtPcNumber.Text = _settings.PcNumber;
-            this.Title = $"BibClient - {_settings.PcNumber}";
+            TxtPcNumber.Visibility = s.ShowPcNumber ? Visibility.Visible : Visibility.Collapsed;
+            TxtPcNumber.Text = s.PcNumber;
+            TxtPcNumber.FontSize = s.PcNumberFontSize;
+            this.Title = $"BibClient - {s.PcNumber}";
 
-            if (!string.IsNullOrEmpty(_settings.BackgroundImagePath) && File.Exists(_settings.BackgroundImagePath))
+            TxtLocked.Visibility = s.ShowLockedText ? Visibility.Visible : Visibility.Collapsed;
+            TxtLocked.FontSize = s.LockedTextFontSize;
+
+            TxtTime.FontSize = s.TimeFontSize;
+            BgImage.Opacity = s.BackgroundOpacity;
+
+            ApplyPosition(PanelContent, s.PcNumberPosition);
+            ApplyPosition(PanelTime, s.TimePosition);
+
+            if (!string.IsNullOrEmpty(s.BackgroundImagePath) && File.Exists(s.BackgroundImagePath))
+            {
+                try { BgImage.Source = new BitmapImage(new Uri(s.BackgroundImagePath, UriKind.Absolute)); }
+                catch (Exception ex) { Logger.Error($"Ошибка загрузки фона: {ex.Message}"); }
+            }
+        }
+
+        private static (HorizontalAlignment h, VerticalAlignment v) ParsePosition(string pos) =>
+            pos switch
+            {
+                "TopLeft"      => (HorizontalAlignment.Left,   VerticalAlignment.Top),
+                "TopCenter"    => (HorizontalAlignment.Center, VerticalAlignment.Top),
+                "TopRight"     => (HorizontalAlignment.Right,  VerticalAlignment.Top),
+                "MiddleLeft"   => (HorizontalAlignment.Left,   VerticalAlignment.Center),
+                "MiddleRight"  => (HorizontalAlignment.Right,  VerticalAlignment.Center),
+                "BottomLeft"   => (HorizontalAlignment.Left,   VerticalAlignment.Bottom),
+                "BottomCenter" => (HorizontalAlignment.Center, VerticalAlignment.Bottom),
+                "BottomRight"  => (HorizontalAlignment.Right,  VerticalAlignment.Bottom),
+                _              => (HorizontalAlignment.Center, VerticalAlignment.Center)
+            };
+
+        private static void ApplyPosition(System.Windows.Controls.StackPanel panel, string position)
+        {
+            var (h, v) = ParsePosition(position);
+            panel.HorizontalAlignment = h;
+            panel.VerticalAlignment = v;
+        }
+
+        // Восстанавливает сохранённые ограничения при запуске приложения
+        private static void ApplyStoredRestrictionsAsync()
+        {
+            if (!PrivilegeManager.IsAdmin) return;
+            _ = System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    BgImage.Source = new BitmapImage(new Uri(_settings.BackgroundImagePath, UriKind.Absolute));
-                    Logger.Info($"Фон обновлён: {_settings.BackgroundImagePath}");
+                    var s = SettingsManager.Current;
+                    GroupPolicyEngine.SetCtrlAltDelBlock(s.TaskMgrDisabled);
+                    GroupPolicyEngine.SetRegeditBlock(s.BlockRegedit);
+                    GroupPolicyEngine.SetCmdBlock(s.BlockCmd);
+                    GroupPolicyEngine.SetPowerShellBlock(s.BlockPowerShell);
+                    GroupPolicyEngine.SetInstallBlock(s.BlockInstall);
+                    GroupPolicyEngine.SetUsbBlock(s.UsbBlocked);
+                    GroupPolicyEngine.SetHideDriveC(s.HideDriveC);
+                    if (s.TaskMgrDisabled || s.BlockRegedit || s.BlockCmd || s.BlockPowerShell || s.BlockInstall)
+                        GroupPolicyEngine.RunGpUpdate();
+                    Logger.Info("✅ Ограничения восстановлены");
                 }
-                catch (Exception ex) { Logger.Error($"Ошибка загрузки фона: {ex.Message}"); }
-            }
+                catch (Exception ex) { Logger.Error($"Ошибка восстановления ограничений: {ex.Message}"); }
+            });
         }
 
         private void StartClock()
