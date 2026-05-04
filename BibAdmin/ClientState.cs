@@ -38,6 +38,7 @@ namespace BibAdmin
         // =====================
         // Отслеживание сессии и оффлайна
         // =====================
+        public string BackgroundFileName { get; set; } = "";     // Имя файла индивидуального фона
         public string SessionId { get; set; } = "";           // ID текущей сессии (от клиента)
         public DateTime? DisconnectedAt { get; set; }         // Когда ушёл в оффлайн с активной сессией
         public int ElapsedAtDisconnect { get; set; } = 0;     // Elapsed зафиксированный в момент разрыва

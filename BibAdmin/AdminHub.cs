@@ -811,7 +811,7 @@ namespace BibAdmin
             }
         }
 
-        public async Task UploadFile(string fileName, byte[] fileData, string targetPc)
+        public async Task UploadFile(string fileName, byte[] fileData, string targetPc, bool replaceIndividual = true)
         {
             try
             {
@@ -819,31 +819,63 @@ namespace BibAdmin
                 Directory.CreateDirectory(filesDir);
                 var filePath = Path.Combine(filesDir, fileName);
 
-                if (File.Exists(filePath))
-                {
-                    try { File.Delete(filePath); }
-                    catch (Exception delEx)
-                    {
-                        Logger.Warn($"Не удалось удалить старый файл: {delEx.Message}");
-                        fileName = $"{Path.GetFileNameWithoutExtension(fileName)}_{DateTime.Now:yyyyMMdd_HHmmss}{Path.GetExtension(fileName)}";
-                        filePath = Path.Combine(filesDir, fileName);
-                    }
-                }
-
+                // Просто перезаписываем файл — без создания версий с timestamp
                 await File.WriteAllBytesAsync(filePath, fileData);
-
-                var global = GlobalSettings.Load();
-                global.BackgroundFileName = fileName;
-                global.Save();
                 Logger.Info($"Фон сохранён: {fileName}");
 
                 var command = new { Type = "SET_BACKGROUND", Value = fileName };
                 var json = JsonSerializer.Serialize(command);
 
-                if (targetPc == "*") await SendCommandToAll(json);
-                else await SendCommand(targetPc, json);
+                if (targetPc == "*")
+                {
+                    // Глобальный фон — обновляем GlobalSettings
+                    var global = GlobalSettings.Load();
+                    global.BackgroundFileName = fileName;
+                    global.Save();
 
-                Logger.Info($"Файл сохранён: {fileName} → {targetPc}");
+                    foreach (var client in KnownClients.Values)
+                    {
+                        bool isIndividual = client.IsIndividual("SET_BACKGROUND");
+
+                        if (isIndividual && !replaceIndividual)
+                            continue; // Оставляем индивидуальный фон нетронутым
+
+                        if (isIndividual && replaceIndividual)
+                        {
+                            // Сбрасываем индивидуальный фон
+                            client.IndividualSettingKeys.Remove("SET_BACKGROUND");
+                            if (client.IndividualSettingKeys.Count == 0)
+                                client.HasIndividualSettings = false;
+                            client.BackgroundFileName = "";
+                        }
+
+                        if (client.IsOnline)
+                            await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                        else
+                            AddPendingCommand(client.PcNumber, "SET_BACKGROUND", fileName);
+                    }
+
+                    SaveRegistry();
+                }
+                else
+                {
+                    // Индивидуальный фон — не трогаем GlobalSettings
+                    if (KnownClients.TryGetValue(targetPc, out var client))
+                    {
+                        client.BackgroundFileName = fileName;
+                        client.MarkIndividual("SET_BACKGROUND");
+                        KnownClients[targetPc] = client;
+                        SaveRegistry();
+
+                        if (client.IsOnline)
+                            await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                        else
+                            AddPendingCommand(targetPc, "SET_BACKGROUND", fileName);
+                    }
+                }
+
+                CleanupUnusedBackgroundFiles();
+                Logger.Info($"Фон применён: {fileName} → {targetPc}");
             }
             catch (Exception ex)
             {
@@ -851,6 +883,44 @@ namespace BibAdmin
                 Logger.Error($"Stack: {ex.StackTrace}");
                 throw;
             }
+        }
+
+        private static void CleanupUnusedBackgroundFiles()
+        {
+            try
+            {
+                var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+                if (!Directory.Exists(filesDir)) return;
+
+                // Собираем все файлы, на которые кто-то ссылается
+                var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var global = GlobalSettings.Load();
+                if (!string.IsNullOrEmpty(global.BackgroundFileName))
+                    referenced.Add(global.BackgroundFileName);
+
+                foreach (var client in KnownClients.Values)
+                {
+                    if (client.IsIndividual("SET_BACKGROUND") && !string.IsNullOrEmpty(client.BackgroundFileName))
+                        referenced.Add(client.BackgroundFileName);
+                }
+
+                // Удаляем все файлы, которые больше не используются
+                foreach (var file in Directory.GetFiles(filesDir))
+                {
+                    var name = Path.GetFileName(file);
+                    if (!referenced.Contains(name))
+                    {
+                        try
+                        {
+                            File.Delete(file);
+                            Logger.Info($"Удалён неиспользуемый фон: {name}");
+                        }
+                        catch (Exception ex) { Logger.Warn($"Не удалось удалить {name}: {ex.Message}"); }
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Error($"Ошибка очистки Files: {ex.Message}"); }
         }
 
         public static void MarkIndividualSetting(string pcNumber, string commandType)

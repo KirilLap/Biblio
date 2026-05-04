@@ -278,26 +278,50 @@ namespace BibAdmin
                 return;
             }
 
-            var r = MessageBox.Show("Отправить фон всем ПК?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r != MessageBoxResult.Yes) return;
+            if (_hub?.State != HubConnectionState.Connected)
+            {
+                MessageBox.Show("Нет соединения с сервером", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Проверяем есть ли ПК с индивидуальным фоном
+            var pcsWithIndividualBg = AdminHub.KnownClients.Values
+                .Where(pc => pc.IsIndividual("SET_BACKGROUND"))
+                .ToList();
+
+            bool replaceIndividual = true;
+
+            if (pcsWithIndividualBg.Any())
+            {
+                var names = string.Join(", ", pcsWithIndividualBg.Select(p => p.PcNumber));
+                var result = MessageBox.Show(
+                    $"Следующие ПК имеют индивидуальный фон:\n\n{names}\n\n" +
+                    "[Да] — Заменить фон на всех ПК\n" +
+                    "[Нет] — Оставить индивидуальные фоны без изменений\n" +
+                    "[Отмена] — Не применять",
+                    "Индивидуальные фоны",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Cancel) return;
+                replaceIndividual = result == MessageBoxResult.Yes;
+            }
+            else
+            {
+                var r = MessageBox.Show("Отправить фон всем ПК?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (r != MessageBoxResult.Yes) return;
+            }
 
             try
             {
-                if (_hub?.State != HubConnectionState.Connected)
-                {
-                    MessageBox.Show("Нет соединения с сервером", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
                 var bytes = await File.ReadAllBytesAsync(TxtBgPath.Text);
                 var fileName = Path.GetFileName(TxtBgPath.Text);
 
-                _global.BackgroundFileName = fileName;
-                _global.Save();
+                // GlobalSettings и pending-команды теперь обновляются внутри UploadFile
+                await _hub.InvokeAsync("UploadFile", fileName, bytes, "*", replaceIndividual);
 
-                await _hub.InvokeAsync("UploadFile", fileName, bytes, "*");
-
-                AdminHub.AddPendingCommandForAll("SET_BACKGROUND", fileName, new List<string>());
+                // Обновляем локальную копию чтобы превью осталось актуальным
+                _global = GlobalSettings.Load();
                 ShowSaved(TxtBgSaved);
             }
             catch (Exception ex)
