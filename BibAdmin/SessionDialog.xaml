@@ -1,0 +1,170 @@
+<Window x:Class="BibAdmin.SessionDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Платная сессия"
+        Height="500" Width="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#1E1E2E">
+
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Запуск платной сессии"
+                       Foreground="White" FontSize="20"
+                       FontWeight="Bold" HorizontalAlignment="Center"/>
+            <TextBlock x:Name="TxtPcInfo"
+                       Foreground="#666688" FontSize="12"
+                       HorizontalAlignment="Center" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <!-- Контент -->
+        <StackPanel Grid.Row="1">
+
+            <!-- Тип сессии — только 2 варианта -->
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="BtnLimited"
+                        Grid.Column="0"
+                        Background="#2A2A3E"
+                        BorderBrush="#1D9E75"
+                        BorderThickness="2"
+                        CornerRadius="8"
+                        Padding="0,12"
+                        Margin="0,0,6,0"
+                        Cursor="Hand"
+                        MouseLeftButtonUp="BtnLimited_Click">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="⏱"
+                                   FontSize="20"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="TxtLimitedLabel"
+                                   Text="Лимитированная"
+                                   Foreground="#1D9E75"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="BtnVip"
+                        Grid.Column="1"
+                        Background="#1E1E2E"
+                        BorderBrush="#3D3D6B"
+                        BorderThickness="2"
+                        CornerRadius="8"
+                        Padding="0,12"
+                        Margin="6,0,0,0"
+                        Cursor="Hand"
+                        MouseLeftButtonUp="BtnVip_Click">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="⭐"
+                                   FontSize="20"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="TxtVipLabel"
+                                   Text="VIP"
+                                   Foreground="#666688"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Поля ввода — только для лимитированной -->
+            <StackPanel x:Name="PanelFields">
+
+                <!-- Время -->
+                <TextBlock Text="Время (минуты)"
+                           Foreground="#AAAACC" FontSize="12"
+                           Margin="0,0,0,6"/>
+                <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                        CornerRadius="8" Margin="0,0,0,4">
+                    <TextBox x:Name="TxtMinutes"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"
+                             TextChanged="TxtMinutes_TextChanged"/>
+                </Border>
+
+                <!-- Сумма -->
+                <TextBlock Text="Сумма (сум)"
+                           Foreground="#AAAACC" FontSize="12"
+                           Margin="0,12,0,6"/>
+                <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                        CornerRadius="8" Margin="0,0,0,4">
+                    <TextBox x:Name="TxtMoney"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"
+                             TextChanged="TxtMoney_TextChanged"/>
+                </Border>
+
+                <!-- Подсказка -->
+                <TextBlock x:Name="TxtHint"
+                           Foreground="#1D9E75" FontSize="11"
+                           HorizontalAlignment="Right"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- Сообщение для VIP -->
+            <TextBlock x:Name="TxtVipInfo"
+                       Text="Безлимитный доступ без ограничений по времени"
+                       Foreground="#666688" FontSize="12"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Visibility="Collapsed"/>
+        </StackPanel>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Отмена" Click="BtnCancel_Click"
+                    Background="Transparent" Foreground="#666688"
+                    FontSize="13" Padding="20,10"
+                    BorderThickness="1" BorderBrush="#3D3D6B"
+                    Cursor="Hand" Margin="0,0,12,0">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Button Content="Начать" Click="BtnStart_Click"
+                    Background="#1D9E75" Foreground="White"
+                    FontSize="13" Padding="24,10"
+                    BorderThickness="0" Cursor="Hand">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,111 @@
+<Window x:Class="BibAdmin.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BibAdmin — Панель управления"
+        Height="680" Width="1100"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F5F5">
+
+    <Window.Resources>
+        <Style x:Key="NavBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#AAAACC"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,11"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2E2E4E"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="border" Property="Background" Value="#3D3D6B"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="210"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Боковое меню -->
+        <Border Grid.Column="0" Background="#1E1E2E">
+            <DockPanel>
+
+                <!-- Логотип -->
+                <Border DockPanel.Dock="Top" Padding="20,24,20,18"
+                        BorderBrush="#2E2E4E" BorderThickness="0,0,0,1">
+                    <StackPanel>
+                        <TextBlock Text="BibAdmin"
+                                   Foreground="White" FontSize="18"
+                                   FontWeight="Bold"/>
+                        <TextBlock Text="Панель управления"
+                                   Foreground="#666688" FontSize="11"
+                                   Margin="0,3,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Статус сервера -->
+                <Border DockPanel.Dock="Bottom" Padding="20,14"
+                        BorderBrush="#2E2E4E" BorderThickness="0,1,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="DotServer" Width="8" Height="8"
+                                     Fill="#E24B4A" VerticalAlignment="Center"
+                                     Margin="0,0,8,0"/>
+                            <TextBlock x:Name="TxtServerStatus"
+                                       Text="Запуск сервера..."
+                                       Foreground="#666688" FontSize="11"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Навигация -->
+                <StackPanel Margin="12,16,12,0">
+                    <Button x:Name="BtnComputers"
+                            Content="🖥  Компьютеры"
+                            Style="{StaticResource NavBtn}"
+                            Tag="active"
+                            Click="BtnComputers_Click"/>
+                    <Button x:Name="BtnFinance"
+                            Content="💰  Финансы"
+                            Style="{StaticResource NavBtn}"
+                            Click="BtnFinance_Click"/>
+                    <Button x:Name="BtnSettings"
+                            Content="⚙  Настройки"
+                            Style="{StaticResource NavBtn}"
+                            Click="BtnSettings_Click"/>
+                </StackPanel>
+
+            </DockPanel>
+        </Border>
+
+        <!-- Основная область -->
+        <Frame x:Name="MainFrame"
+               Grid.Column="1"
+               NavigationUIVisibility="Hidden"
+               Background="#F5F5F5"/>
+
+    </Grid>
+</Window>

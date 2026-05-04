@@ -1,0 +1,507 @@
+<Page x:Class="BibAdmin.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="#F5F5F5">
+
+    <Page.Resources>
+        <Style x:Key="SettingsBtn" TargetType="Button">
+            <Setter Property="Padding" Value="16,9"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20,16"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="0,0,0,20">
+                <TextBlock Text="Общие настройки"
+                           FontSize="22" FontWeight="Bold"
+                           Foreground="#1E1E2E"/>
+                <TextBlock Text="Применяются ко всем ПК сразу"
+                           FontSize="12" Foreground="#888"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Левая колонка -->
+                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+
+                    <!-- Тариф -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Тариф" FontSize="15"
+                                       FontWeight="Bold" Foreground="#1E1E2E"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Цена за час (сум)"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,6"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="TxtTariff"
+                                         Padding="10,8" FontSize="13"
+                                         BorderBrush="#DDDDDD" Text="3000"/>
+                                <Button Grid.Column="1" Content="Сохранить"
+                                        Style="{StaticResource SettingsBtn}"
+                                        Background="#EEF3FF"
+                                        BorderBrush="#378ADD"
+                                        Foreground="#185FA5"
+                                        Margin="8,0,0,0"
+                                        Click="SaveTariff_Click"/>
+                            </Grid>
+                            <TextBlock x:Name="TxtTariffSaved"
+                                       Text="✓ Тариф сохранён"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Margin="0,8,0,0"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Пароль -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Пароль администратора"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Новый пароль (для всех ПК)"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,6"/>
+                            <TextBox x:Name="TxtNewPassword"
+                                     Padding="10,8" FontSize="13"
+                                     BorderBrush="#DDDDDD"
+                                     Margin="0,0,0,10"/>
+                            <Button Content="Отправить всем ПК"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#F0FFF8"
+                                    BorderBrush="#1D9E75"
+                                    Foreground="#0F6E56"
+                                    HorizontalAlignment="Left"
+                                    Click="SendPasswordAll_Click"/>
+                            <TextBlock x:Name="TxtPasswordSaved"
+                                       Text="✓ Пароль отправлен"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Margin="0,8,0,0"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Ограничения -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Ограничения для всех ПК"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,12"/>
+
+                            <CheckBox x:Name="ChkBlockUsb"
+                                      Content="Заблокировать USB накопители"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkDisableTaskMgr"
+                                      Content="Отключить диспетчер задач"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkBlockRegedit" 
+                                      Content="Заблокировать редактор реестра (regedit)" 
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkBlockCmd" 
+                                      Content="Заблокировать командную строку (cmd)" 
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkBlockPowerShell" 
+                                      Content="Заблокировать PowerShell" 
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkHideDriveC" 
+                                      Content="Скрыть диск C:" 
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkBlockInstall" 
+                                      Content="Запретить установку/удаление программ" 
+                                      Margin="0,0,0,16"/>
+
+                            <Button Content="Применить ко всем ПК"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#EEF3FF"
+                                    BorderBrush="#378ADD"
+                                    Foreground="#185FA5"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,0,0,8"
+                                    Click="ApplyRestrictions_Click"/>
+
+                            <TextBlock x:Name="TxtRestrictionsSaved"
+                                       Text="✓ Ограничения применены"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Поведение при потере сети -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Поведение при потере сети"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Что делать с ПК, если во время платной сессии пропадёт связь"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,12"/>
+
+                            <CheckBox x:Name="ChkLockOnOffline"
+                                      Content="Блокировать ПК при потере связи"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,6"/>
+                            <TextBlock Text="Выкл: сессия продолжается, ПК не блокируется. При восстановлении связи — таймер синхронизируется."
+                                       Foreground="#888" FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="20,0,0,10"/>
+
+                            <Button Content="Применить ко всем ПК"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#EEF3FF"
+                                    BorderBrush="#378ADD"
+                                    Foreground="#185FA5"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,0,0,8"
+                                    Click="ApplyOfflineBehavior_Click"/>
+                            <TextBlock x:Name="TxtOfflineSaved"
+                                       Text="✓ Настройка применена"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Управление питанием -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Управление питанием"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Применяется ко всем онлайн ПК"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,12"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="  Выключить все ПК"
+                                        Style="{StaticResource SettingsBtn}"
+                                        Background="#FFF0F0"
+                                        BorderBrush="#E24B4A"
+                                        Foreground="#A32D2D"
+                                        Margin="0,0,8,0"
+                                        Click="ShutdownAll_Click"/>
+                                <Button Content="🔄  Перезагрузить все"
+                                        Style="{StaticResource SettingsBtn}"
+                                        Background="#FFFBF0"
+                                        BorderBrush="#EF9F27"
+                                        Foreground="#854F0B"
+                                        Click="RestartAll_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+
+                <!-- Правая колонка -->
+                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+
+                    <!-- Фон -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Фоновое изображение"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="Применить одно изображение ко всем ПК"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,12"/>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="TxtBgPath"
+                                         Padding="10,8" FontSize="13"
+                                         BorderBrush="#DDDDDD"
+                                         IsReadOnly="True"/>
+                                <Button Grid.Column="1" Content="📁 Обзор"
+                                        Style="{StaticResource SettingsBtn}"
+                                        Background="#F5F5F5"
+                                        BorderBrush="#BBBBBB"
+                                        Foreground="#555"
+                                        Margin="8,0,0,0"
+                                        Click="BrowseBg_Click"/>
+                            </Grid>
+                            <Border Background="#F5F5F5" CornerRadius="8"
+                                    Height="120" Margin="0,0,0,12">
+                                <Image x:Name="ImgPreview"
+                                       Stretch="UniformToFill"/>
+                            </Border>
+                            <Button Content="📤  Отправить всем ПК"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#FFF0F0"
+                                    BorderBrush="#E24B4A"
+                                    Foreground="#A32D2D"
+                                    HorizontalAlignment="Left"
+                                    Click="SendBgAll_Click"/>
+                            <TextBlock x:Name="TxtBgSaved"
+                                       Text="✓ Изображение отправлено"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Margin="0,8,0,0"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Экран блокировки -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Экран блокировки"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,16"/>
+
+                            <!-- Показ номера ПК -->
+                            <CheckBox x:Name="ChkShowPcNumber"
+                                      Content="Показывать номер ПК"
+                                      FontSize="13" Foreground="#333"
+                                      IsChecked="True"
+                                      Margin="0,0,0,12"/>
+
+                            <!-- Прозрачность фона -->
+                            <TextBlock Text="Прозрачность фона"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="SliderOpacity"
+                                        Minimum="0" Maximum="100"
+                                        Value="30" TickFrequency="5"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        ValueChanged="SliderOpacity_Changed"/>
+                                <TextBlock x:Name="TxtOpacityValue"
+                                           Grid.Column="1"
+                                           Text="30%"
+                                           Foreground="#1D9E75"
+                                           FontSize="12" FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <!-- Разделитель -->
+                            <Border Height="1" Background="#F0F0F0" Margin="0,0,0,16"/>
+
+                            <!-- Номер ПК — позиция и размер -->
+                            <TextBlock Text="Номер ПК"
+                                       Foreground="#555" FontSize="13"
+                                       FontWeight="Medium"
+                                       Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Позиция"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <ComboBox x:Name="CmbPcNumberPosition"
+                                      FontSize="13" Padding="8,5"
+                                      Margin="0,0,0,10"
+                                      SelectionChanged="CmbPosition_Changed">
+                                <ComboBoxItem Content="Сверху слева" Tag="TopLeft"/>
+                                <ComboBoxItem Content="Сверху по центру" Tag="TopCenter"/>
+                                <ComboBoxItem Content="Сверху справа" Tag="TopRight"/>
+                                <ComboBoxItem Content="По центру слева" Tag="MiddleLeft"/>
+                                <ComboBoxItem Content="По центру" Tag="MiddleCenter" IsSelected="True"/>
+                                <ComboBoxItem Content="По центру справа" Tag="MiddleRight"/>
+                                <ComboBoxItem Content="Снизу слева" Tag="BottomLeft"/>
+                                <ComboBoxItem Content="Снизу по центру" Tag="BottomCenter"/>
+                                <ComboBoxItem Content="Снизу справа" Tag="BottomRight"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Размер шрифта"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="SliderPcFontSize"
+                                        Minimum="16" Maximum="120"
+                                        Value="52" TickFrequency="4"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        ValueChanged="SliderFont_Changed"/>
+                                <TextBlock x:Name="TxtPcFontValue"
+                                           Grid.Column="1"
+                                           Text="52"
+                                           Foreground="#1D9E75"
+                                           FontSize="12" FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <!-- Разделитель -->
+                            <Border Height="1" Background="#F0F0F0" Margin="0,0,0,16"/>
+
+                            <!-- Надпись "Компьютер заблокирован" -->
+                            <TextBlock Text="Надпись «Компьютер заблокирован»"
+                                       Foreground="#555" FontSize="13"
+                                       FontWeight="Medium"
+                                       Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkShowLockedText"
+                                      Content="Показывать надпись"
+                                      FontSize="13" Foreground="#333"
+                                      IsChecked="True"
+                                      Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Позиция"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <ComboBox x:Name="CmbLockedTextPosition"
+                                      FontSize="13" Padding="8,5"
+                                      Margin="0,0,0,10"
+                                      SelectionChanged="CmbPosition_Changed">
+                                <ComboBoxItem Content="Сверху слева" Tag="TopLeft"/>
+                                <ComboBoxItem Content="Сверху по центру" Tag="TopCenter"/>
+                                <ComboBoxItem Content="Сверху справа" Tag="TopRight"/>
+                                <ComboBoxItem Content="По центру слева" Tag="MiddleLeft"/>
+                                <ComboBoxItem Content="По центру" Tag="MiddleCenter" IsSelected="True"/>
+                                <ComboBoxItem Content="По центру справа" Tag="MiddleRight"/>
+                                <ComboBoxItem Content="Снизу слева" Tag="BottomLeft"/>
+                                <ComboBoxItem Content="Снизу по центру" Tag="BottomCenter"/>
+                                <ComboBoxItem Content="Снизу справа" Tag="BottomRight"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Размер шрифта"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="SliderLockedTextFontSize"
+                                        Minimum="10" Maximum="40"
+                                        Value="16" TickFrequency="1"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        ValueChanged="SliderLockedFont_Changed"/>
+                                <TextBlock x:Name="TxtLockedFontValue"
+                                           Grid.Column="1"
+                                           Text="16"
+                                           Foreground="#1D9E75"
+                                           FontSize="12" FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <!-- Разделитель -->
+                            <Border Height="1" Background="#F0F0F0" Margin="0,0,0,16"/>
+
+                            <!-- Время и дата -->
+                            <TextBlock Text="Время и дата"
+                                       Foreground="#555" FontSize="13"
+                                       FontWeight="Medium"
+                                       Margin="0,0,0,10"/>
+
+                            <TextBlock Text="Позиция"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <ComboBox x:Name="CmbTimePosition"
+                                      FontSize="13" Padding="8,5"
+                                      Margin="0,0,0,10"
+                                      SelectionChanged="CmbPosition_Changed">
+                                <ComboBoxItem Content="Сверху слева" Tag="TopLeft"/>
+                                <ComboBoxItem Content="Сверху по центру" Tag="TopCenter"/>
+                                <ComboBoxItem Content="Сверху справа" Tag="TopRight"/>
+                                <ComboBoxItem Content="По центру слева" Tag="MiddleLeft"/>
+                                <ComboBoxItem Content="По центру" Tag="MiddleCenter"/>
+                                <ComboBoxItem Content="По центру справа" Tag="MiddleRight"/>
+                                <ComboBoxItem Content="Снизу слева" Tag="BottomLeft"/>
+                                <ComboBoxItem Content="Снизу по центру" Tag="BottomCenter" IsSelected="True"/>
+                                <ComboBoxItem Content="Снизу справа" Tag="BottomRight"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Размер шрифта"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="SliderTimeFontSize"
+                                        Minimum="12" Maximum="80"
+                                        Value="36" TickFrequency="2"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        ValueChanged="SliderFont_Changed"/>
+                                <TextBlock x:Name="TxtTimeFontValue"
+                                           Grid.Column="1"
+                                           Text="36"
+                                           Foreground="#1D9E75"
+                                           FontSize="12" FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <!-- Кнопка -->
+                            <Button Content="Применить ко всем ПК"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#EEF3FF"
+                                    BorderBrush="#378ADD"
+                                    Foreground="#185FA5"
+                                    HorizontalAlignment="Left"
+                                    Click="ApplyScreenSettingsAll_Click"/>
+
+                            <TextBlock x:Name="TxtScreenSaved"
+                                       Text="✓ Настройки применены"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Margin="0,8,0,0"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,90 @@
+<Window x:Class="BibAdmin.PcBackgroundDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Изменить фон"
+        Height="340" Width="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#1E1E2E">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Изменить фон" Grid.Row="0"
+                   Foreground="White" FontSize="16"
+                   FontWeight="Bold" HorizontalAlignment="Center"
+                   Margin="0,0,0,4"/>
+
+        <TextBlock x:Name="TxtPcName" Grid.Row="1"
+                   Foreground="#666688" FontSize="12"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,20"/>
+
+        <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                    CornerRadius="8">
+                <TextBox x:Name="TxtPath"
+                         Background="#2A2A3E" Foreground="White"
+                         BorderThickness="0" FontSize="13"
+                         Padding="10,8" CaretBrush="White"
+                         IsReadOnly="True"/>
+            </Border>
+            <Button Grid.Column="1" Content=" Обзор"
+                    Click="BrowseFile_Click"
+                    Background="#3D3D6B" Foreground="White"
+                    FontSize="13" Padding="12,8"
+                    BorderThickness="0" Cursor="Hand"
+                    Margin="8,0,0,0">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </Grid>
+
+        <!-- Превью -->
+        <Border Grid.Row="3" Background="#2A2A3E"
+                CornerRadius="8" Margin="0,0,0,16">
+            <Image x:Name="ImgPreview" Stretch="UniformToFill"/>
+        </Border>
+
+        <Button Grid.Row="4" Content="Отправить на ПК"
+                x:Name="BtnSend"
+                Click="BtnSend_Click"
+                Background="#1D9E75" Foreground="White"
+                FontSize="14" Padding="0,12"
+                BorderThickness="0" Cursor="Hand"
+                IsEnabled="False">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="8"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </Grid>
+</Window>

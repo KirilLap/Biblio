@@ -1,0 +1,6 @@
+<Window x:Class="BibClient.SessionScreen"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SessionScreen" Height="0" Width="0" ShowInTaskbar="False" WindowStyle="None">
+    <Grid/>
+</Window>

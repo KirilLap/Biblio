@@ -1,0 +1,460 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using Microsoft.AspNetCore.SignalR.Client;
+
+namespace BibAdmin
+{
+    public partial class SettingsPage : Page
+    {
+        private HubConnection? _hub;
+        private GlobalSettings _global = GlobalSettings.Load();
+
+        public SettingsPage()
+        {
+            InitializeComponent();
+            LoadGlobalSettingsToUI();
+            ConnectToHub();
+        }
+
+        // Загружаем сохранённые глобальные настройки в UI
+        private void LoadGlobalSettingsToUI()
+        {
+            try
+            {
+                TxtTariff.Text = _global.Tariff.ToString();
+                ComputersPage.Tariff = _global.Tariff;
+
+                SliderOpacity.Value = _global.BackgroundOpacity * 100;
+                TxtOpacityValue.Text = $"{(int)(SliderOpacity.Value)}%";
+
+                ChkShowPcNumber.IsChecked = _global.ShowPcNumber;
+                SliderPcFontSize.Value = _global.PcNumberFontSize;
+                TxtPcFontValue.Text = $"{(int)_global.PcNumberFontSize}";
+
+                ChkShowLockedText.IsChecked = _global.ShowLockedText;
+                SliderLockedTextFontSize.Value = _global.LockedTextFontSize;
+                TxtLockedFontValue.Text = $"{(int)_global.LockedTextFontSize}";
+
+                SliderTimeFontSize.Value = _global.TimeFontSize;
+                TxtTimeFontValue.Text = $"{(int)_global.TimeFontSize}";
+
+                ChkBlockUsb.IsChecked = _global.UsbBlocked;
+                ChkDisableTaskMgr.IsChecked = _global.TaskMgrDisabled;
+                ChkBlockRegedit.IsChecked = _global.BlockRegedit;
+                ChkBlockCmd.IsChecked = _global.BlockCmd;
+                ChkBlockPowerShell.IsChecked = _global.BlockPowerShell;
+                ChkHideDriveC.IsChecked = _global.HideDriveC;
+                ChkBlockInstall.IsChecked = _global.BlockInstall;
+                ChkLockOnOffline.IsChecked = _global.LockOnOffline;
+
+                SelectComboByTag(CmbPcNumberPosition, _global.PcNumberPosition);
+                SelectComboByTag(CmbLockedTextPosition, _global.LockedTextPosition);
+                SelectComboByTag(CmbTimePosition, _global.TimePosition);
+
+                if (!string.IsNullOrEmpty(_global.BackgroundFileName))
+                {
+                    string bgPath = Path.Combine(
+                        AppDomain.CurrentDomain.BaseDirectory,
+                        "Files", _global.BackgroundFileName);
+                    if (File.Exists(bgPath))
+                    {
+                        TxtBgPath.Text = bgPath;
+                        ImgPreview.Source = new BitmapImage(new Uri(bgPath));
+                    }
+                }
+
+                Logger.Info("Настройки загружены в UI");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка загрузки: {ex.Message}");
+            }
+        }
+
+        private void SelectComboByTag(ComboBox cmb, string tag)
+        {
+            foreach (ComboBoxItem item in cmb.Items)
+            {
+                if (item.Tag?.ToString() == tag)
+                {
+                    cmb.SelectedItem = item;
+                    return;
+                }
+            }
+        }
+
+        private async void ConnectToHub()
+        {
+            try
+            {
+                _hub = new HubConnectionBuilder()
+                    .WithUrl("http://localhost:8080/hub")
+                    .WithAutomaticReconnect()
+                    .Build();
+                await _hub.StartAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Settings hub error: {ex.Message}");
+            }
+        }
+
+        // =====================
+        // Тариф
+        // =====================
+        private void SaveTariff_Click(object sender, RoutedEventArgs e)
+        {
+            if (int.TryParse(TxtTariff.Text, out int tariff) && tariff > 0)
+            {
+                ComputersPage.Tariff = tariff;
+                _global.Tariff = tariff;
+                _global.Save();
+                ShowSaved(TxtTariffSaved);
+            }
+            else
+            {
+                MessageBox.Show("Введите корректный тариф", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        // =====================
+        // Пароль
+        // =====================
+        private async void SendPasswordAll_Click(object sender, RoutedEventArgs e)
+        {
+            string password = TxtNewPassword.Text.Trim();
+            if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("Введите новый пароль", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var r = MessageBox.Show("Отправить новый пароль всем ПК?",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (r != MessageBoxResult.Yes) return;
+
+            _global.AdminPassword = password;
+            _global.Save();
+
+            await ApplyCommandToAll("ADMIN_PASSWORD", password);
+            ShowSaved(TxtPasswordSaved);
+            TxtNewPassword.Clear();
+        }
+
+        // =====================
+        // Ограничения
+        // =====================
+        private async void ApplyRestrictions_Click(object sender, RoutedEventArgs e)
+        {
+            bool blockUsb = ChkBlockUsb.IsChecked == true;
+            bool disableTaskMgr = ChkDisableTaskMgr.IsChecked == true;
+            bool blockRegedit = ChkBlockRegedit.IsChecked == true;
+            bool blockCmd = ChkBlockCmd.IsChecked == true;
+            bool blockPowerShell = ChkBlockPowerShell.IsChecked == true;
+            bool hideDriveC = ChkHideDriveC.IsChecked == true;
+            bool blockInstall = ChkBlockInstall.IsChecked == true;
+
+            var r = MessageBox.Show(
+                $"Применить ограничения ко всем ПК?\n\n" +
+                $"USB: {(blockUsb ? "Заблокировать" : "Разблокировать")}\n" +
+                $"Диспетчер задач: {(disableTaskMgr ? "Отключить" : "Включить")}\n" +
+                $"Реестр: {(blockRegedit ? "Заблокировать" : "Разрешить")}\n" +
+                $"CMD: {(blockCmd ? "Заблокировать" : "Разрешить")}\n" +
+                $"PowerShell: {(blockPowerShell ? "Заблокировать" : "Разрешить")}\n" +
+                $"Диск C: {(hideDriveC ? "Скрыть" : "Показать")}\n" +
+                $"Установка программ: {(blockInstall ? "Запретить" : "Разрешить")}",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (r != MessageBoxResult.Yes) return;
+
+            _global.UsbBlocked = blockUsb;
+            _global.TaskMgrDisabled = disableTaskMgr;
+            _global.BlockRegedit = blockRegedit;
+            _global.BlockCmd = blockCmd;
+            _global.BlockPowerShell = blockPowerShell;
+            _global.HideDriveC = hideDriveC;
+            _global.BlockInstall = blockInstall;
+            _global.Save();
+
+            await ApplyCommandToAll("USB_BLOCK", blockUsb.ToString().ToLower());
+            await ApplyCommandToAll("TASKMGR_DISABLE", disableTaskMgr.ToString().ToLower());
+            await ApplyCommandToAll("BLOCK_REGEDIT", blockRegedit.ToString().ToLower());
+            await ApplyCommandToAll("BLOCK_CMD", blockCmd.ToString().ToLower());
+            await ApplyCommandToAll("BLOCK_POWERSHELL", blockPowerShell.ToString().ToLower());
+            await ApplyCommandToAll("HIDE_DRIVE_C", hideDriveC.ToString().ToLower());
+            await ApplyCommandToAll("BLOCK_INSTALL_UNINSTALL", blockInstall.ToString().ToLower());
+
+            foreach (var pc in AdminHub.KnownClients.Values)
+            {
+                pc.UsbBlocked = blockUsb;
+                pc.TaskMgrDisabled = disableTaskMgr;
+            }
+
+            ShowSaved(TxtRestrictionsSaved);
+        }
+
+        // =====================
+        // Оффлайн-поведение
+        // =====================
+        private async void ApplyOfflineBehavior_Click(object sender, RoutedEventArgs e)
+        {
+            bool lockOnOffline = ChkLockOnOffline.IsChecked == true;
+            _global.LockOnOffline = lockOnOffline;
+            _global.Save();
+            await ApplyCommandToAll("LOCK_ON_OFFLINE", lockOnOffline.ToString().ToLower());
+            ShowSaved(TxtOfflineSaved);
+        }
+
+        // =====================
+        // Питание
+        // =====================
+        private async void ShutdownAll_Click(object sender, RoutedEventArgs e)
+        {
+            int count = AdminHub.KnownClients.Values.Count(pc => pc.IsOnline);
+            if (count == 0)
+            {
+                MessageBox.Show("Нет онлайн ПК", "Внимание", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var r = MessageBox.Show($"Выключить все ПК ({count} шт.)?\n\nЭто действие нельзя отменить!",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (r != MessageBoxResult.Yes) return;
+
+            foreach (var pc in AdminHub.KnownClients.Values.Where(pc => pc.IsOnline))
+                await SendCommand(pc.PcNumber, "SHUTDOWN", "true");
+        }
+
+        private async void RestartAll_Click(object sender, RoutedEventArgs e)
+        {
+            int count = AdminHub.KnownClients.Values.Count(pc => pc.IsOnline);
+            if (count == 0)
+            {
+                MessageBox.Show("Нет онлайн ПК", "Внимание", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var r = MessageBox.Show($"Перезагрузить все ПК ({count} шт.)?",
+                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (r != MessageBoxResult.Yes) return;
+
+            foreach (var pc in AdminHub.KnownClients.Values.Where(pc => pc.IsOnline))
+                await SendCommand(pc.PcNumber, "RESTART", "true");
+        }
+
+        // =====================
+        // Фон
+        // =====================
+        private void BrowseBg_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "Изображения|*.jpg;*.jpeg;*.png;*.bmp|Все файлы|*.*",
+                Title = "Выберите фоновое изображение"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                TxtBgPath.Text = dialog.FileName;
+                try { ImgPreview.Source = new BitmapImage(new Uri(dialog.FileName)); } catch { }
+            }
+        }
+
+        private async void SendBgAll_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(TxtBgPath.Text))
+            {
+                MessageBox.Show("Выберите файл изображения", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var r = MessageBox.Show("Отправить фон всем ПК?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (r != MessageBoxResult.Yes) return;
+
+            try
+            {
+                if (_hub?.State != HubConnectionState.Connected)
+                {
+                    MessageBox.Show("Нет соединения с сервером", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                var bytes = await File.ReadAllBytesAsync(TxtBgPath.Text);
+                var fileName = Path.GetFileName(TxtBgPath.Text);
+
+                _global.BackgroundFileName = fileName;
+                _global.Save();
+
+                await _hub.InvokeAsync("UploadFile", fileName, bytes, "*");
+
+                AdminHub.AddPendingCommandForAll("SET_BACKGROUND", fileName, new List<string>());
+                ShowSaved(TxtBgSaved);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка отправки фона: {ex.Message}");
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // =====================
+        // Экран блокировки
+        // =====================
+        private void SliderOpacity_Changed(object sender, System.Windows.RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtOpacityValue == null) return;
+            TxtOpacityValue.Text = $"{(int)e.NewValue}%";
+        }
+
+        private void SliderFont_Changed(object sender, System.Windows.RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtPcFontValue == null || TxtTimeFontValue == null) return;
+            TxtPcFontValue.Text = $"{(int)SliderPcFontSize.Value}";
+            TxtTimeFontValue.Text = $"{(int)SliderTimeFontSize.Value}";
+        }
+
+        private void SliderLockedFont_Changed(object sender, System.Windows.RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtLockedFontValue != null)
+                TxtLockedFontValue.Text = $"{(int)e.NewValue}";
+        }
+
+        private void CmbPosition_Changed(object sender, SelectionChangedEventArgs e) { }
+
+        private async void ApplyScreenSettingsAll_Click(object sender, RoutedEventArgs e)
+        {
+            bool showPcNumber = ChkShowPcNumber.IsChecked == true;
+            double opacity = SliderOpacity.Value / 100.0;
+            string pcPos = GetSelectedTag(CmbPcNumberPosition);
+            string timePos = GetSelectedTag(CmbTimePosition);
+            double pcFont = SliderPcFontSize.Value;
+            double timeFont = SliderTimeFontSize.Value;
+            bool showLockedText = ChkShowLockedText?.IsChecked ?? true;
+            string lockedPos = GetSelectedTag(CmbLockedTextPosition);
+            double lockedFont = SliderLockedTextFontSize?.Value ?? 16;
+
+            var pcsWithIndividual = AdminHub.KnownClients.Values
+                .Where(pc => pc.HasIndividualSettings)
+                .ToList();
+
+            bool keepIndividual = false;
+            if (pcsWithIndividual.Any())
+            {
+                var pcNames = string.Join(", ", pcsWithIndividual.Select(p => p.PcNumber));
+                var result = MessageBox.Show(
+                    $"Следующие ПК имеют индивидуальные настройки:\n\n{pcNames}\n\n" +
+                    $"Сбросить их и применить глобальные настройки?\n\n" +
+                    $"[Да] — Сбросить все индивидуальные настройки\n" +
+                    $"[Нет] — Оставить индивидуальные, применить остальные",
+                    "Индивидуальные настройки", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Cancel) return;
+                keepIndividual = result == MessageBoxResult.No;
+                if (!keepIndividual)
+                    foreach (var pc in pcsWithIndividual)
+                        AdminHub.ClearIndividualSettings(pc.PcNumber);
+            }
+
+            _global.ShowPcNumber = showPcNumber;
+            _global.BackgroundOpacity = opacity;
+            _global.PcNumberPosition = pcPos;
+            _global.PcNumberFontSize = pcFont;
+            _global.ShowLockedText = showLockedText;
+            _global.LockedTextPosition = lockedPos;
+            _global.LockedTextFontSize = lockedFont;
+            _global.TimePosition = timePos;
+            _global.TimeFontSize = timeFont;
+            _global.LastApplied = DateTime.UtcNow;
+            _global.Save();
+
+            var commands = new Dictionary<string, string>
+            {
+                ["SHOW_PC_NUMBER"] = showPcNumber.ToString().ToLower(),
+                ["SET_BACKGROUND_OPACITY"] = opacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+                ["SET_PC_NUMBER_POSITION"] = pcPos,
+                ["SET_PC_NUMBER_FONT_SIZE"] = pcFont.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["SHOW_LOCKED_TEXT"] = showLockedText.ToString().ToLower(),
+                ["SET_LOCKED_TEXT_POSITION"] = lockedPos,
+                ["SET_LOCKED_TEXT_FONT_SIZE"] = lockedFont.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["SET_TIME_POSITION"] = timePos,
+                ["SET_TIME_FONT_SIZE"] = timeFont.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+
+            foreach (var pc in AdminHub.KnownClients.Values)
+            {
+                foreach (var kv in commands)
+                {
+                    if (keepIndividual && pc.IsIndividual(kv.Key)) continue;
+                    await SendCommand(pc.PcNumber, kv.Key, kv.Value);
+                }
+            }
+
+            ShowSaved(TxtScreenSaved);
+        }
+
+        // =====================
+        // Вспомогательные методы
+        // =====================
+        private async Task ApplyCommandToAll(string type, string value)
+        {
+            foreach (var pc in AdminHub.KnownClients.Values)
+            {
+                if (pc.IsOnline)
+                    await SendCommand(pc.PcNumber, type, value);
+                else
+                    AdminHub.AddPendingCommand(pc.PcNumber, type, value);
+            }
+        }
+
+        private string GetSelectedTag(ComboBox cmb)
+        {
+            if (cmb.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+                return tag;
+            return "MiddleCenter";
+        }
+
+        private async Task SendCommand(string pcNumber, string type, string value)
+        {
+            try
+            {
+                if (_hub?.State != HubConnectionState.Connected)
+                {
+                    AdminHub.AddPendingCommand(pcNumber, type, value);
+                    return;
+                }
+
+                var cmd = new { Type = type, Value = value };
+                var json = JsonSerializer.Serialize(cmd);
+                await _hub.InvokeAsync("SendCommand", pcNumber, json);
+
+                if (AdminHub.KnownClients.TryGetValue(pcNumber, out var pc) && !pc.IsOnline)
+                    AdminHub.AddPendingCommand(pcNumber, type, value);
+
+                Logger.Info($"Команда: {type}={value} → {pcNumber}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка команды: {ex.Message}");
+                AdminHub.AddPendingCommand(pcNumber, type, value);
+            }
+        }
+
+        private void ShowSaved(TextBlock txt)
+        {
+            txt.Visibility = Visibility.Visible;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            t.Tick += (s, _) => { txt.Visibility = Visibility.Collapsed; t.Stop(); };
+            t.Start();
+        }
+    }
+}
