@@ -59,8 +59,9 @@
 
         <!-- Превью -->
         <Border Grid.Row="3" Background="#2A2A3E"
-                CornerRadius="8" Margin="0,0,0,16">
-            <Image x:Name="ImgPreview" Stretch="UniformToFill"/>
+                CornerRadius="8" Margin="0,0,0,16"
+                Height="200">
+            <Image x:Name="ImgPreview" Stretch="Uniform"/>
         </Border>
 
         <Button Grid.Row="4" Content="Отправить на ПК"

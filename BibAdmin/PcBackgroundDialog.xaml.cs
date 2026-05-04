@@ -81,6 +81,7 @@ namespace BibAdmin
                         $"Фон успешно отправлен на {_pcNumber}",
                         "Готово", MessageBoxButton.OK,
                         MessageBoxImage.Information);
+                    DialogResult = true;
                     Close();
                 }
                 else
