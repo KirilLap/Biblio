@@ -118,6 +118,13 @@ namespace BibClient
                         }
                         break;
 
+                    case "SET_PC_NAME":
+                        // Обновляем отображаемое имя клиента
+                        SettingsManager.Current.CustomName = value;
+                        SettingsManager.Save();
+                        Logger.Info($"✅ Имя ПК изменено на: {value}");
+                        break;
+
                     case "CLOCK_MISMATCH":
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double drift))
                         {
