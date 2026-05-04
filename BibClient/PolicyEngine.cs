@@ -67,6 +67,7 @@ namespace BibClient
                         break;
 
                     case "RECONNECT":
+                        TimeZoneInfo.ClearCachedData();
                         if (ReconnectRequested != null) await ReconnectRequested();
                         break;
 
@@ -110,6 +111,7 @@ namespace BibClient
                     case "SET_TIME_OFFSET":
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double offset))
                         {
+                            TimeZoneInfo.ClearCachedData();
                             SessionManager.SetTimeOffset(offset);
                             Logger.Info($"🕐 Смещение часов применено: {offset:F1}с");
                         }
