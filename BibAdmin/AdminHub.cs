@@ -339,7 +339,7 @@ namespace BibAdmin
                 finalCustomName = existingByMac.CustomName;
             }
             
-            string finalName = string.IsNullOrEmpty(finalCustomName) ? $"ПК {finalPcNumberValue}" : finalCustomName;
+            string finalName = string.IsNullOrEmpty(finalCustomName) ? $"ПК {finalPcNumberValue}" : $"{finalCustomName} {finalPcNumberValue}";
 
             if (existingByMac == null)
             {
@@ -836,8 +836,8 @@ namespace BibAdmin
                 // Обновляем CustomName
                 client.CustomName = customName;
                 
-                // Вычисляем новое отображаемое имя
-                var newName = string.IsNullOrEmpty(customName) ? $"ПК {pcNumberValue}" : customName;
+                // Вычисляем новое отображаемое имя (теперь это "{CustomName} {PcNumberValue}" или "ПК {PcNumberValue}")
+                var newName = string.IsNullOrEmpty(customName) ? $"ПК {pcNumberValue}" : $"{customName} {pcNumberValue}";
                 
                 // Если имя изменилось - переносим в словаре
                 if (oldName != newName)

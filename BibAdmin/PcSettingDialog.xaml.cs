@@ -28,6 +28,19 @@ namespace BibAdmin
                     MessageBoxImage.Warning);
                 return;
             }
+            
+            // Проверка: ввод должен содержать только буквы (русские/английские) и пробелы
+            foreach (char c in Result)
+            {
+                if (!char.IsLetter(c) && c != ' ')
+                {
+                    MessageBox.Show("Разрешены только буквы русского или английского алфавита и пробелы.\nЦифры вводить не нужно — номер добавится автоматически.",
+                        "Ошибка ввода", MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+            }
+            
             DialogResult = true;
             Close();
         }

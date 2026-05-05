@@ -5,30 +5,43 @@ obj/
 *.dll
 *.exe
 *.pdb
-*.nupkg
-*.snupkg
+*.config
+AppPackages/
 
 # Dependencies
 packages/
 node_modules/
+bower_components/
 
 # Logs
 *.log
 
-# Environment
+# User-specific files
+.vs/
+.vstest/
+*.user
+*.userosscache
+*.suo
+*.csproj.user
+
+# Environment specific settings
 .env
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-
 # OS generated files
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Testing
+TestResults/
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*~
 ```
