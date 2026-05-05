@@ -1041,13 +1041,16 @@ namespace BibAdmin
         {
             // Передаём только CustomName (без номера), так как диалог теперь принимает только имя
             var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя (без номера):", pc.CustomName);
-            if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
+            if (dialog.ShowDialog() == true)
             {
+                // Результат может быть пустым - это нормально (сброс на "ПК N")
+                var newName = dialog.Result.Trim();
+                
                 // Сначала отправляем команду клиенту на изменение имени (пока ключ ещё актуален)
-                await SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
+                await SendCommand(pc.PcNumber, "SET_PC_NAME", newName);
                 
                 // Затем обновляем сервер (это изменит ключ в KnownClients и вызовет ClientsChanged)
-                await RenameOnServer(pc.PcNumberValue, dialog.Result);
+                await RenameOnServer(pc.PcNumberValue, newName);
                 
                 // Обновляем _selected до актуального объекта после переименования
                 RefreshSelected();

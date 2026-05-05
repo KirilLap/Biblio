@@ -601,7 +601,6 @@ namespace BibClient
             SettingsManager.Current = settings;
             SettingsManager.Save();
             ApplySettings();
-            TxtPcNumber.Text = _settings.PcNumber;
         }
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
