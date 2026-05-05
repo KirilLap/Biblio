@@ -1046,10 +1046,7 @@ namespace BibAdmin
                 // Результат может быть пустым - это нормально (сброс на "ПК N")
                 var newName = dialog.Result.Trim();
                 
-                // Сначала отправляем команду клиенту на изменение имени (пока ключ ещё актуален)
-                await SendCommand(pc.PcNumber, "SET_PC_NAME", newName);
-                
-                // Затем обновляем сервер (это изменит ключ в KnownClients и вызовет ClientsChanged)
+                // Обновляем сервер (это изменит ключ в KnownClients, вызовет ClientsChanged и отправит команду клиенту)
                 await RenameOnServer(pc.PcNumberValue, newName);
                 
                 // Обновляем _selected до актуального объекта после переименования
