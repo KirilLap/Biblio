@@ -19,7 +19,7 @@ namespace BibAdmin
         // ✅ Вычисляемое свойство для обратной совместимости
         public string PcNumber 
         { 
-            get => string.IsNullOrEmpty(CustomName) ? $"ПК {PcNumberValue}" : CustomName;
+            get => string.IsNullOrEmpty(CustomName) ? $"ПК {PcNumberValue}" : $"{CustomName} {PcNumberValue}";
             set 
             { 
                 // Парсинг старого формата "ПК 1" -> PcNumberValue=1, CustomName=""
@@ -38,7 +38,7 @@ namespace BibAdmin
                     }
                     else
                     {
-                        // Произвольное имя
+                        // Произвольное имя - сохраняем только буквенную часть
                         CustomName = value;
                     }
                 }

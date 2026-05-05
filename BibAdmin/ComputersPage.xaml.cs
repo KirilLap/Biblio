@@ -284,9 +284,12 @@ namespace BibAdmin
             // Сортировка клиентов в зависимости от выбранного режима
             var sortedClients = _currentSortMode switch
             {
-                "ByName" => AdminHub.KnownClients.Values.OrderBy(c => c.CustomName.ToLower())
-                                                          .ThenBy(c => c.PcNumberValue),
-                "ByNumber" => AdminHub.KnownClients.Values.OrderBy(c => c.PcNumberValue),
+                "ByName" => AdminHub.KnownClients.Values
+                                  .OrderBy(c => string.IsNullOrEmpty(c.CustomName) ? "zzz" : c.CustomName.ToLower())
+                                  .ThenBy(c => c.PcNumberValue),
+                "ByNumber" => AdminHub.KnownClients.Values
+                                  .OrderBy(c => c.PcNumberValue)
+                                  .ThenBy(c => c.CustomName),
                 _ => AdminHub.KnownClients.Values.OrderBy(c => c.PcNumberValue)
             };
 
@@ -1036,7 +1039,8 @@ namespace BibAdmin
         // =====================
         private async void ShowRenameDialog(ClientState pc)
         {
-            var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя:", pc.CustomName);
+            // Передаём только CustomName (без номера), так как диалог теперь принимает только имя
+            var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя (без номера):", pc.CustomName);
             if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
             {
                 // Сначала отправляем команду клиенту на изменение имени (пока ключ ещё актуален)

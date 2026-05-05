@@ -123,6 +123,8 @@ namespace BibClient
                         SettingsManager.Current.CustomName = value;
                         SettingsManager.Save();
                         Logger.Info($"✅ Имя ПК изменено на: {value}");
+                        // Мгновенно уведомляем UI об изменении
+                        SettingsChanged?.Invoke();
                         break;
 
                     case "CLOCK_MISMATCH":
