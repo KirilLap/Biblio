@@ -817,6 +817,48 @@ namespace BibAdmin
                 
                 SaveRegistry();
                 SavePending();
+                ClientUpdated?.Invoke(client);  // ✅ Вызываем ClientUpdated для обновления UI
+                ClientsChanged?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// Устанавливает индивидуальное отображаемое имя для клиента по его числовому идентификатору.
+        /// Это более надёжный способ, так как PcNumberValue не меняется при переименовании.
+        /// </summary>
+        public async Task SetClientCustomNameByValue(int pcNumberValue, string customName)
+        {
+            var client = KnownClients.Values.FirstOrDefault(c => c.PcNumberValue == pcNumberValue);
+            if (client != null)
+            {
+                var oldName = client.PcNumber;
+                
+                // Обновляем CustomName
+                client.CustomName = customName;
+                
+                // Вычисляем новое отображаемое имя
+                var newName = string.IsNullOrEmpty(customName) ? $"ПК {pcNumberValue}" : customName;
+                
+                // Если имя изменилось - переносим в словаре
+                if (oldName != newName)
+                {
+                    KnownClients.TryRemove(oldName, out _);
+                    KnownClients[newName] = client;
+                    
+                    // Переносим отложенные команды
+                    if (_pendingCommands.TryRemove(oldName, out var cmds))
+                        _pendingCommands[newName] = cmds;
+                        
+                    Logger.Info($"✅ Имя ПК изменено: {oldName} → {newName} (CustomName={customName})");
+                }
+                else
+                {
+                    Logger.Info($"✅ CustomName обновлён для ПК {pcNumberValue}: '{customName}'");
+                }
+                
+                SaveRegistry();
+                SavePending();
+                ClientUpdated?.Invoke(client);  // ✅ Вызываем ClientUpdated для обновления UI
                 ClientsChanged?.Invoke();
             }
         }
