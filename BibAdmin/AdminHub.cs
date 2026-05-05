@@ -867,9 +867,10 @@ namespace BibAdmin
                 {
                     try
                     {
-                        var cmd = new { Type = "SET_PC_NAME", Value = customName };
+                        // Отправляем только CustomName (без номера), клиент сам сформирует полное имя
+                        var cmd = new { Type = "SET_PC_NAME", Value = customName ?? "" };
                         await Clients.Client(oldConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
-                        Logger.Info($"📤 Команда SET_PC_NAME отправлена клиенту: {customName}");
+                        Logger.Info($"📤 Команда SET_PC_NAME отправлена клиенту: '{customName}' (PcNumberValue={pcNumberValue})");
                     }
                     catch (Exception ex)
                     {

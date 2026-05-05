@@ -20,7 +20,8 @@ namespace BibClient
         public string SavedAtUtc { get; set; } = "";
         public bool IsPaused { get; set; }
         public int AccumulatedSeconds { get; set; }
-        public string PcNumber { get; set; } = "";
+        // ✅ Храним только числовой идентификатор для проверки соответствия ПК
+        public int PcNumberValue { get; set; }
         public string ServerIp { get; set; } = "";
     }
 
@@ -119,7 +120,7 @@ namespace BibClient
                     ServerStartTimeUtc = _serverStartTime != DateTime.MinValue ? _serverStartTime.ToString("o") : DateTime.UtcNow.AddSeconds(-_elapsedSeconds).ToString("o"),
                     SavedAtUtc = DateTime.UtcNow.ToString("o"), IsPaused = _isPaused,
                     AccumulatedSeconds = _isPaused ? _elapsedSeconds : 0,
-                    PcNumber = SettingsManager.Current.PcNumber, ServerIp = SettingsManager.Current.ServerIp
+                    PcNumberValue = SettingsManager.Current.PcNumberValue, ServerIp = SettingsManager.Current.ServerIp
                 };
                 var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
                 var tempPath = GetStateFilePath() + ".tmp";
@@ -142,7 +143,8 @@ namespace BibClient
 
                 if (!string.IsNullOrEmpty(state.SavedAtUtc) && DateTime.TryParse(state.SavedAtUtc, out var savedTime) && DateTime.UtcNow - savedTime > TimeSpan.FromHours(24))
                 { File.Delete(path); return null; }
-                if (state.PcNumber != SettingsManager.Current.PcNumber || state.ServerIp != SettingsManager.Current.ServerIp)
+                // ✅ Сравниваем только числовой идентификатор (не зависит от переименования)
+                if (state.PcNumberValue != SettingsManager.Current.PcNumberValue || state.ServerIp != SettingsManager.Current.ServerIp)
                 { File.Delete(path); return null; }
 
                 DateTime serverStart = DateTime.MinValue;

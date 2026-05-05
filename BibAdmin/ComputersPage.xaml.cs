@@ -1135,8 +1135,8 @@ namespace BibAdmin
         private async void ShowTransferDialog(ClientState pc)
         {
             var availablePcs = AdminHub.KnownClients.Values
-                .Where(c => c.PcNumber != pc.PcNumber && c.IsOnline && !c.IsSession)
-                .Select(c => c.PcNumber)
+                .Where(c => c.PcNumberValue != pc.PcNumberValue && c.IsOnline && !c.IsSession)
+                .Select(c => c.PcNumber)  // ✅ Для отображения используем полное имя (например, "Комп 1")
                 .OrderBy(n => n)
                 .ToList();
 
@@ -1164,7 +1164,15 @@ namespace BibAdmin
                     return;
                 }
 
-                var result = await _hub.InvokeAsync<string>("TransferSession", pc.PcNumber, dialog.SelectedPcNumber);
+                // ✅ Находим целевой ПК по PcNumberValue для передачи на сервер
+                var targetClient = AdminHub.KnownClients.Values.FirstOrDefault(c => c.PcNumber == dialog.SelectedPcNumber);
+                if (targetClient == null)
+                {
+                    MessageBox.Show("Целевой ПК не найден.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var result = await _hub.InvokeAsync<string>("TransferSession", pc.PcNumber, targetClient.PcNumber);
                 if (result != "OK")
                     MessageBox.Show(result, "Ошибка пересадки", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
