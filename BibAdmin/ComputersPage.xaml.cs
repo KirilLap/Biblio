@@ -113,11 +113,12 @@ namespace BibAdmin
             {
                 // Обновляем ссылку на _selected — RegisterClient создаёт новый объект
                 // в KnownClients, старая ссылка устаревает и команды (пауза и т.д.) теряются
-                if (_selected?.PcNumber == client.PcNumber)
+                // Используем PcNumberValue для сравнения, так как оно не меняется при переименовании
+                if (_selected?.PcNumberValue == client.PcNumberValue)
                     RefreshSelected();
 
                 UpdateStats();
-                if (_selected?.PcNumber == client.PcNumber)
+                if (_selected?.PcNumberValue == client.PcNumberValue)
                     UpdateBottomPanel(_selected!);
             });
         }
@@ -130,7 +131,9 @@ namespace BibAdmin
         private void RefreshSelected()
         {
             if (_selected == null) return;
-            if (AdminHub.KnownClients.TryGetValue(_selected.PcNumber, out var fresh))
+            // Ищем по PcNumberValue, так как PcNumber может измениться при переименовании
+            var fresh = AdminHub.KnownClients.Values.FirstOrDefault(c => c.PcNumberValue == _selected.PcNumberValue);
+            if (fresh != null)
                 _selected = fresh;
         }
 
@@ -293,7 +296,7 @@ namespace BibAdmin
                 ApplyCardStyle(btn, pc);
 
                 // Выделение выбранной карточки синей рамкой
-                if (_selected?.PcNumber == pc.PcNumber)
+                if (_selected?.PcNumberValue == pc.PcNumberValue)
                     btn.BorderBrush = new SolidColorBrush(Color.FromRgb(55, 138, 221));
 
                 var stack = new StackPanel
@@ -1031,24 +1034,28 @@ namespace BibAdmin
         // =====================
         // Индивидуальные настройки и утилиты
         // =====================
-        private void ShowRenameDialog(ClientState pc)
+        private async void ShowRenameDialog(ClientState pc)
         {
             var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя:", pc.CustomName);
             if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
             {
-                // Отправляем команду клиенту на изменение имени
-                _ = SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
-                // Обновляем сервер
-                _ = RenameOnServer(pc.PcNumber, dialog.Result);
+                // Сначала отправляем команду клиенту на изменение имени (пока ключ ещё актуален)
+                await SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
+                
+                // Затем обновляем сервер (это изменит ключ в KnownClients и вызовет ClientsChanged)
+                await RenameOnServer(pc.PcNumberValue, dialog.Result);
+                
+                // Обновляем _selected до актуального объекта после переименования
+                RefreshSelected();
             }
         }
 
-        private async Task RenameOnServer(string pcNumber, string newName)
+        private async Task RenameOnServer(int pcNumberValue, string newName)
         {
             try 
             { 
                 if (_hub?.State == HubConnectionState.Connected) 
-                    await _hub.InvokeAsync("SetClientCustomName", pcNumber, newName); 
+                    await _hub.InvokeAsync("SetClientCustomNameByValue", pcNumberValue, newName); 
             }
             catch (Exception ex) { Logger.Error($"Ошибка переименования: {ex.Message}"); }
         }
