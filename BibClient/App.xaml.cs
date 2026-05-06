@@ -33,6 +33,9 @@ namespace BibClient
                     var mainWindow = new MainWindow();
                     MainWindow = mainWindow;
                     mainWindow.Show();
+                    
+                    // Сразу блокируем экран после первоначальной настройки
+                    mainWindow.Lock();
                 }
                 else
                 {
