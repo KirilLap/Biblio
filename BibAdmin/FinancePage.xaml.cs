@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Forms;
 
 namespace BibAdmin
 {
@@ -13,6 +17,7 @@ namespace BibAdmin
         public string PcNumber { get; set; } = "";
         public string SessionType { get; set; } = "";
         public string UserName { get; set; } = "—";
+        public string ReaderId { get; set; } = "";
         public int DurationSeconds { get; set; }
         public int EarnedAmount { get; set; }
         public int PaidAmount { get; set; }
@@ -25,6 +30,12 @@ namespace BibAdmin
     {
         // Статическое хранилище сессий — доступно из ComputersPage
         public static List<SessionRecord> Sessions { get; } = new();
+        
+        // Путь к файлу истории: %APPDATA%\BibAdmin\finance_history.json
+        private static readonly string HistoryFilePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "BibAdmin",
+            "finance_history.json");
 
         public FinancePage()
         {
@@ -33,14 +44,61 @@ namespace BibAdmin
                 "dddd, d MMMM yyyy",
                 new System.Globalization.CultureInfo("ru-RU"));
 
+            LoadHistory(); // Загружаем историю при старте
             UpdateStats();
             RenderSessions(Sessions);
+        }
+        
+        // Загрузка истории из JSON-файла
+        public static void LoadHistory()
+        {
+            try
+            {
+                if (File.Exists(HistoryFilePath))
+                {
+                    var json = File.ReadAllText(HistoryFilePath);
+                    var records = JsonSerializer.Deserialize<List<SessionRecord>>(json);
+                    if (records != null)
+                    {
+                        Sessions.Clear();
+                        Sessions.AddRange(records.OrderByDescending(s => s.EndTime));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка загрузки истории финансов: {ex.Message}");
+            }
+        }
+        
+        // Сохранение истории в JSON-файл
+        public static void SaveHistory()
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(HistoryFilePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+                
+                var options = new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+                var json = JsonSerializer.Serialize(Sessions, options);
+                File.WriteAllText(HistoryFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка сохранения истории финансов: {ex.Message}");
+            }
         }
 
         // Добавить сессию (вызывается из ComputersPage)
         public static void AddSession(SessionRecord session)
         {
             Sessions.Insert(0, session);
+            SaveHistory(); // Автосохранение после добавления сессии
         }
 
         private void UpdateStats()
@@ -99,6 +157,7 @@ namespace BibAdmin
                 alternate = !alternate;
 
                 var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); // ID читателя
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -147,6 +206,17 @@ namespace BibAdmin
                 Grid.SetColumn(typeBadge, 1);
                 grid.Children.Add(typeBadge);
 
+                // ID читателя
+                var readerIdText = new TextBlock
+                {
+                    Text = string.IsNullOrEmpty(s.ReaderId) ? "—" : s.ReaderId,
+                    FontSize = 13,
+                    Foreground = new SolidColorBrush(Color.FromRgb(80, 80, 80)),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(readerIdText, 2);
+                grid.Children.Add(readerIdText);
+
                 // Пользователь
                 var userText = new TextBlock
                 {
@@ -155,7 +225,7 @@ namespace BibAdmin
                     Foreground = new SolidColorBrush(Color.FromRgb(80, 80, 80)),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(userText, 2);
+                Grid.SetColumn(userText, 3);
                 grid.Children.Add(userText);
 
                 // Длительность
@@ -169,7 +239,7 @@ namespace BibAdmin
                     Foreground = new SolidColorBrush(Color.FromRgb(80, 80, 80)),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(durationText, 3);
+                Grid.SetColumn(durationText, 4);
                 grid.Children.Add(durationText);
 
                 // Сумма
@@ -181,7 +251,7 @@ namespace BibAdmin
                     Foreground = new SolidColorBrush(Color.FromRgb(15, 110, 86)),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(amountText, 4);
+                Grid.SetColumn(amountText, 5);
                 grid.Children.Add(amountText);
 
                 // Дата и время
@@ -192,7 +262,7 @@ namespace BibAdmin
                     Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(dateText, 5);
+                Grid.SetColumn(dateText, 6);
                 grid.Children.Add(dateText);
 
                 row.Child = grid;
@@ -242,8 +312,58 @@ namespace BibAdmin
             {
                 Sessions.Clear();
                 ComputersPage.Revenue = 0;
+                SaveHistory(); // Сохраняем очистку на диск
                 UpdateStats();
                 RenderSessions(Sessions);
+            }
+        }
+        
+        // Экспорт в CSV (Excel)
+        private void ExportToCsv_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "CSV файлы (*.csv)|*.csv|Все файлы (*.*)|*.*",
+                DefaultExt = "csv",
+                FileName = $"finance_export_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+                Title = "Экспорт истории финансов в Excel (CSV)"
+            };
+            
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                try
+                {
+                    var sb = new StringBuilder();
+                    // Заголовок CSV
+                    sb.AppendLine("ПК;Тип сессии;ID читателя;Пользователь;Длительность (сек);Сумма (сум);Оплачено;Возврат;Начало;Конец");
+                    
+                    foreach (var s in Sessions)
+                    {
+                        int h = s.DurationSeconds / 3600;
+                        int m = (s.DurationSeconds % 3600) / 60;
+                        int sec = s.DurationSeconds % 60;
+                        string duration = $"{h:D2}:{m:D2}:{sec:D2}";
+                        
+                        sb.AppendLine($"{s.PcNumber};{s.SessionType};{s.ReaderId};{s.UserName};{duration};{s.EarnedAmount};{s.PaidAmount};{s.RefundAmount};{s.StartTime:dd.MM.yyyy HH:mm};{s.EndTime:dd.MM.yyyy HH:mm}");
+                    }
+                    
+                    // Пишем с BOM для корректного отображения кириллицы в Excel
+                    File.WriteAllText(dialog.FileName, sb.ToString(), Encoding.UTF8);
+                    
+                    MessageBox.Show(
+                        $"Экспорт выполнен успешно!\n\nФайл: {dialog.FileName}\nЗаписей: {Sessions.Count}",
+                        "Экспорт завершён",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        $"Ошибка экспорта: {ex.Message}",
+                        "Ошибка",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
             }
         }
     }

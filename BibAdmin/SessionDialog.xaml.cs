@@ -11,6 +11,7 @@ namespace BibAdmin
         public string SessionType { get; private set; } = "Лимит";
         public int LimitSeconds { get; private set; }
         public int PaidAmount { get; private set; }
+        public string ReaderId { get; private set; } = "";
 
         private bool _isSyncing = false;
         private bool _isVip = false;
@@ -162,6 +163,20 @@ namespace BibAdmin
 
         private void BtnStart_Click(object sender, RoutedEventArgs e)
         {
+            // Для платных сессий (Лимит) требуется ID читателя
+            if (!_isVip)
+            {
+                if (string.IsNullOrWhiteSpace(TxtReaderId.Text))
+                {
+                    MessageBox.Show("Введите ID читателя для платной сессии", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    TxtReaderId.Focus();
+                    return;
+                }
+                
+                ReaderId = TxtReaderId.Text.Trim();
+            }
+
             if (_isVip)
             {
                 SessionType = "VIP";
