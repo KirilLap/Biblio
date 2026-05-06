@@ -44,6 +44,18 @@ namespace BibAdmin
         public static void Warn(string msg) => Log(msg, LogLevel.Warn);
         public static void Error(string msg) => Log(msg, LogLevel.Error);
         public static void Error(Exception ex) => Error($"{ex.GetType().Name}: {ex.Message}");
-        public static void Debug(string msg) => Log(msg, LogLevel.Info); // Debug пишем как Info для отладки
+        
+        // Debug метод для отладки - пишет как Info
+        public static void Debug(string msg)
+        {
+            EnsureInit();
+            string entry = $"[{DateTime.Now:HH:mm:ss.fff}] [Debug] {msg}";
+            Debug.WriteLine(entry);
+            lock (_lock)
+            {
+                try { File.AppendAllText(_logFile, entry + Environment.NewLine); }
+                catch { }
+            }
+        }
     }
 }
