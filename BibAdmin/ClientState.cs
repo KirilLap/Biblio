@@ -64,6 +64,7 @@ namespace BibAdmin
         public int ElapsedSeconds { get; set; } = 0;
         public int PaidAmount { get; set; } = 0;
         public string? UserName { get; set; }
+        public string? ReaderId { get; set; }
 
         // ✅ Поля для паузы
         public bool IsPaused { get; set; } = false;

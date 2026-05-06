@@ -898,6 +898,7 @@ namespace BibAdmin
                 _selected.IsPaused = false;
                 _selected.LimitSeconds = dialog.LimitSeconds;
                 _selected.PaidAmount = dialog.PaidAmount;
+                _selected.ReaderId = dialog.ReaderId;  // Сохраняем ID читателя
                 _selected.ElapsedSeconds = 0;
 
                 _ = SendSessionCommandWithStartTime(
@@ -962,6 +963,7 @@ namespace BibAdmin
                 PcNumber = _selected.PcNumber,
                 SessionType = _selected.Status,
                 UserName = _selected.UserName ?? "—",
+                ReaderId = _selected.ReaderId ?? "",
                 DurationSeconds = _selected.ElapsedSeconds,
                 EarnedAmount = earned,
                 PaidAmount = _selected.PaidAmount,

@@ -33,24 +33,46 @@
                            Foreground="#888" FontSize="12"
                            Margin="0,4,0,0"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="🗑  Очистить историю"
-                    Click="ClearHistory_Click"
-                    Padding="14,8" FontSize="13" Cursor="Hand"
-                    BorderThickness="1" BorderBrush="#DDDDDD"
-                    Background="White" Foreground="#888">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="📊 Экспорт в Excel"
+                        Click="ExportToCsv_Click"
+                        Padding="14,8" FontSize="13" Cursor="Hand"
+                        BorderThickness="1" BorderBrush="#1D9E75"
+                        Background="#1D9E75" Foreground="White"
+                        Margin="0,0,8,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="7"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                
+                <Button Content="🗑  Очистить историю"
+                        Click="ClearHistory_Click"
+                        Padding="14,8" FontSize="13" Cursor="Hand"
+                        BorderThickness="1" BorderBrush="#DDDDDD"
+                        Background="White" Foreground="#888">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="7"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- Статистика -->
@@ -168,6 +190,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120"/>
                             <ColumnDefinition Width="100"/>
+                            <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="100"/>
@@ -179,16 +202,19 @@
                         <TextBlock Grid.Column="1" Text="Тип"
                                    Foreground="#888" FontSize="12"
                                    FontWeight="Medium"/>
-                        <TextBlock Grid.Column="2" Text="Пользователь"
+                        <TextBlock Grid.Column="2" Text="ID читателя"
                                    Foreground="#888" FontSize="12"
                                    FontWeight="Medium"/>
-                        <TextBlock Grid.Column="3" Text="Длительность"
+                        <TextBlock Grid.Column="3" Text="Пользователь"
                                    Foreground="#888" FontSize="12"
                                    FontWeight="Medium"/>
-                        <TextBlock Grid.Column="4" Text="Сумма"
+                        <TextBlock Grid.Column="4" Text="Длительность"
                                    Foreground="#888" FontSize="12"
                                    FontWeight="Medium"/>
-                        <TextBlock Grid.Column="5" Text="Дата и время"
+                        <TextBlock Grid.Column="5" Text="Сумма"
+                                   Foreground="#888" FontSize="12"
+                                   FontWeight="Medium"/>
+                        <TextBlock Grid.Column="6" Text="Дата и время"
                                    Foreground="#888" FontSize="12"
                                    FontWeight="Medium"/>
                     </Grid>

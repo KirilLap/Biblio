@@ -86,10 +86,23 @@
             <!-- Поля ввода — только для лимитированной -->
             <StackPanel x:Name="PanelFields">
 
+                <!-- ID читателя -->
+                <TextBlock Text="ID читателя *"
+                           Foreground="#AAAACC" FontSize="12"
+                           Margin="0,0,0,6"/>
+                <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                        CornerRadius="8" Margin="0,0,0,4">
+                    <TextBox x:Name="TxtReaderId"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"
+                             ToolTip="Введите ID читателя (обязательно)"/>
+                </Border>
+
                 <!-- Время -->
                 <TextBlock Text="Время (минуты)"
                            Foreground="#AAAACC" FontSize="12"
-                           Margin="0,0,0,6"/>
+                           Margin="0,12,0,6"/>
                 <Border BorderBrush="#3D3D6B" BorderThickness="1"
                         CornerRadius="8" Margin="0,0,0,4">
                     <TextBox x:Name="TxtMinutes"
