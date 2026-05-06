@@ -62,6 +62,7 @@ namespace BibAdmin
             TxtVipLabel.Foreground =
                 new SolidColorBrush(Color.FromRgb(102, 102, 136));
 
+            // Показываем поля времени и суммы
             PanelFields.Visibility = Visibility.Visible;
             TxtVipInfo.Visibility = Visibility.Collapsed;
         }
@@ -87,6 +88,7 @@ namespace BibAdmin
             TxtLimitedLabel.Foreground =
                 new SolidColorBrush(Color.FromRgb(102, 102, 136));
 
+            // Скрываем только поля времени и суммы, ID читателя остаётся
             PanelFields.Visibility = Visibility.Collapsed;
             TxtVipInfo.Visibility = Visibility.Visible;
 
@@ -163,19 +165,16 @@ namespace BibAdmin
 
         private void BtnStart_Click(object sender, RoutedEventArgs e)
         {
-            // Для платных сессий (Лимит) требуется ID читателя
-            if (!_isVip)
+            // Для ВСЕХ платных сессий (и Лимит, и VIP) требуется ID читателя
+            if (string.IsNullOrWhiteSpace(TxtReaderId.Text))
             {
-                if (string.IsNullOrWhiteSpace(TxtReaderId.Text))
-                {
-                    MessageBox.Show("Введите ID читателя для платной сессии", "Ошибка",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    TxtReaderId.Focus();
-                    return;
-                }
-                
-                ReaderId = TxtReaderId.Text.Trim();
+                MessageBox.Show("Введите ID читателя для платной сессии", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                TxtReaderId.Focus();
+                return;
             }
+            
+            ReaderId = TxtReaderId.Text.Trim();
 
             if (_isVip)
             {
