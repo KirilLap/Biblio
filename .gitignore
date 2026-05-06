@@ -1,1 +1,32 @@
-Nothing needs to be added to the .gitignore file since only a C# source file (SettingsManager.cs) was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
+```
+# Build artifacts
+*.obj
+*.exe
+*.dll
+*.pdb
+*.user
+*.suo
+*.cache
+*.manifest
+*.log
+
+# Dependencies
+packages/
+bin/
+obj/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vs/
+.vshistory/
+_ReSharper*/
+*.userprefs
+
+# OS
+.DS_Store
+Thumbs.db
+```

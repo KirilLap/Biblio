@@ -240,10 +240,27 @@ namespace BibClient
             SettingsManager.Load();
 
             // ── Номер ПК ─────────────────────────────────────────────────────────
-            TxtPcNumber.Visibility = _settings.ShowPcNumber ? Visibility.Visible : Visibility.Collapsed;
-            TxtPcNumber.Text = _settings.PcNumber;
+            // Формируем отображаемое имя на основе настроек ShowPcName и ShowPcNumber
+            string displayName = "";
+            if (_settings.ShowPcName && _settings.ShowPcNumber)
+            {
+                displayName = _settings.PcNumber;  // Полное имя: "ПК 1" или "Комп 1"
+            }
+            else if (_settings.ShowPcName)
+            {
+                // Только имя без номера
+                displayName = string.IsNullOrEmpty(_settings.CustomName) ? "ПК" : _settings.CustomName;
+            }
+            else if (_settings.ShowPcNumber)
+            {
+                // Только номер
+                displayName = _settings.PcNumberValue.ToString();
+            }
+            
+            TxtPcNumber.Visibility = (_settings.ShowPcName || _settings.ShowPcNumber) ? Visibility.Visible : Visibility.Collapsed;
+            TxtPcNumber.Text = displayName;
             TxtPcNumber.FontSize = _settings.PcNumberFontSize;
-            this.Title = $"BibClient - {_settings.PcNumber}";
+            this.Title = $"BibClient - {displayName}";
 
             // ── Текст "Компьютер заблокирован" ───────────────────────────────────
             TxtLocked.Visibility = _settings.ShowLockedText ? Visibility.Visible : Visibility.Collapsed;

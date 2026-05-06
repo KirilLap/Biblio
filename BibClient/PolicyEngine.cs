@@ -138,6 +138,12 @@ namespace BibClient
                         break;
 
                     // ── Настройки отображения экрана блокировки ───────────────────────────
+                    case "SHOW_PC_NAME":
+                        SettingsManager.Current.ShowPcName = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        SettingsChanged?.Invoke();
+                        break;
+
                     case "SHOW_PC_NUMBER":
                         SettingsManager.Current.ShowPcNumber = value.ToLower() == "true";
                         SettingsManager.Save();

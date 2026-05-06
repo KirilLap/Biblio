@@ -35,6 +35,7 @@ namespace BibAdmin
                 SliderOpacity.Value = _global.BackgroundOpacity * 100;
                 TxtOpacityValue.Text = $"{(int)(SliderOpacity.Value)}%";
 
+                ChkShowPcName.IsChecked = _global.ShowPcName;
                 ChkShowPcNumber.IsChecked = _global.ShowPcNumber;
                 SliderPcFontSize.Value = _global.PcNumberFontSize;
                 TxtPcFontValue.Text = $"{(int)_global.PcNumberFontSize}";
@@ -357,6 +358,7 @@ namespace BibAdmin
 
         private async void ApplyScreenSettingsAll_Click(object sender, RoutedEventArgs e)
         {
+            bool showPcName = ChkShowPcName.IsChecked == true;
             bool showPcNumber = ChkShowPcNumber.IsChecked == true;
             double opacity = SliderOpacity.Value / 100.0;
             string pcPos = GetSelectedTag(CmbPcNumberPosition);
@@ -389,6 +391,7 @@ namespace BibAdmin
                         AdminHub.ClearIndividualSettings(pc.PcNumber);
             }
 
+            _global.ShowPcName = showPcName;
             _global.ShowPcNumber = showPcNumber;
             _global.BackgroundOpacity = opacity;
             _global.PcNumberPosition = pcPos;
@@ -403,6 +406,7 @@ namespace BibAdmin
 
             var commands = new Dictionary<string, string>
             {
+                ["SHOW_PC_NAME"] = showPcName.ToString().ToLower(),
                 ["SHOW_PC_NUMBER"] = showPcNumber.ToString().ToLower(),
                 ["SET_BACKGROUND_OPACITY"] = opacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
                 ["SET_PC_NUMBER_POSITION"] = pcPos,
