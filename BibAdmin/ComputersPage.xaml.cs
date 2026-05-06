@@ -234,6 +234,29 @@ namespace BibAdmin
                         needRebuild = true;
                     }
 
+                    // 🔥 ПРОВЕРКА НА ИСТЕЧЕНИЕ ЛИМИТА: если время вышло — завершаем сессию
+                    if (!pc.IsPaused && pc.LimitSeconds > 0 && pc.ElapsedSeconds >= pc.LimitSeconds)
+                    {
+                        Logger.Info($"⏰ {pc.PcNumber}: Лимит времени истёк ({pc.ElapsedSeconds}с >= {pc.LimitSeconds}с)");
+                        // Сбрасываем сессию на стороне сервера
+                        pc.SessionType = "";
+                        pc.SessionStart = null;
+                        pc.LimitSeconds = 0;
+                        pc.ElapsedSeconds = 0;
+                        pc.AccumulatedSeconds = 0;
+                        pc.PaidAmount = 0;
+                        pc.Status = "Заблокирован";
+                        pc.IsPaused = false;
+                        needRebuild = true;
+                        AdminHub.SaveActiveSessions();
+                        // Отправляем команду клиенту на завершение сессии (если онлайн)
+                        if (pc.IsOnline && !string.IsNullOrEmpty(pc.ConnectionId))
+                        {
+                            _ = EndSessionOnClient(pc);
+                        }
+                        continue; // Пропускаем остальную логику для этого клиента
+                    }
+
                     // 🔄 УМНАЯ СИНХРОНИЗАЦИЯ: только при расхождении >10 сек ИЛИ раз в 30 секунд
                     if (!pc.IsPaused && _hub?.State == HubConnectionState.Connected && pc.IsOnline)
                     {
