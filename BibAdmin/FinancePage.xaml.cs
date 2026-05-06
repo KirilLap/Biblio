@@ -290,6 +290,7 @@ namespace BibAdmin
                 filtered = filtered.Where(s => s.EndTime.Date >= today.AddDays(-(int)today.DayOfWeek + 1));
             else if (RbMonth.IsChecked == true)
                 filtered = filtered.Where(s => s.EndTime.Date >= new DateTime(today.Year, today.Month, 1));
+            // RbAll не требует фильтрации - оставляем все записи
 
             // Фильтр по типу
             var selectedType = (CmbType.SelectedItem as ComboBoxItem)?.Content?.ToString();

@@ -77,6 +77,7 @@ namespace BibAdmin
         private void BtnFinance_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnFinance);
+            FinancePage.LoadHistory(); // Загружаем историю перед навигацией
             MainFrame.Navigate(new FinancePage());
         }
 
