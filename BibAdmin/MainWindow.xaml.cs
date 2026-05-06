@@ -77,7 +77,7 @@ namespace BibAdmin
         private void BtnFinance_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnFinance);
-            FinancePage.LoadHistory(); // Загружаем историю перед навигацией
+            // LoadHistory() вызывается в конструкторе FinancePage, здесь не нужно
             MainFrame.Navigate(new FinancePage());
         }
 
@@ -103,6 +103,10 @@ namespace BibAdmin
         {
             try
             {
+                // 💾 КРИТИЧНО: Сохраняем историю финансов перед закрытием
+                FinancePage.SaveHistory();
+                Logger.Info("💾 История финансов сохранена при закрытии");
+                
                 if (_server != null) await _server.StopAsync();
                 Logger.Info("Сервер остановлен");
             }
