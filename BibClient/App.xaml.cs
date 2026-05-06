@@ -34,8 +34,15 @@ namespace BibClient
                     MainWindow = mainWindow;
                     mainWindow.Show();
                     
-                    // Сразу блокируем экран после первоначальной настройки
-                    mainWindow.Lock();
+                    // Вызываем блокировку с небольшой задержкой, чтобы окно успело инициализироваться
+                    System.Windows.Threading.DispatcherTimer timer = new();
+                    timer.Interval = TimeSpan.FromMilliseconds(500);
+                    timer.Tick += (s, e) =>
+                    {
+                        timer.Stop();
+                        mainWindow.Lock();
+                    };
+                    timer.Start();
                 }
                 else
                 {
