@@ -34,31 +34,15 @@ namespace BibClient
                     MainWindow = mainWindow;
                     mainWindow.Show();
                     
-                    // Вызываем блокировку с задержкой, чтобы окно успело полностью инициализироваться
-                    System.Windows.Threading.DispatcherTimer timer = new();
-                    timer.Interval = TimeSpan.FromSeconds(2); // Увеличенная задержка для надёжности
-                    timer.Tick += (s, e) =>
-                    {
-                        timer.Stop();
-                        // Дополнительная проверка: убеждаемся, что окно готово
-                        if (mainWindow.GetType().GetField("_isReady", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(mainWindow) is bool isReady && isReady)
+                    // Вызываем блокировку после полной инициализации окна
+                    // Используем Dispatcher с низким приоритетом, чтобы окно успело полностью загрузиться
+                    mainWindow.Dispatcher.BeginInvoke(
+                        System.Windows.Threading.DispatcherPriority.Background,
+                        new Action(() =>
                         {
+                            Logger.Info("🔒 Инициализация завершена, блокируем ПК...");
                             mainWindow.Lock();
-                        }
-                        else
-                        {
-                            // Если ещё не готово, пробуем ещё раз через 500 мс
-                            System.Windows.Threading.DispatcherTimer retryTimer = new();
-                            retryTimer.Interval = TimeSpan.FromMilliseconds(500);
-                            retryTimer.Tick += (retryS, retryE) =>
-                            {
-                                retryTimer.Stop();
-                                mainWindow.Lock();
-                            };
-                            retryTimer.Start();
-                        }
-                    };
-                    timer.Start();
+                        }));
                 }
                 else
                 {
