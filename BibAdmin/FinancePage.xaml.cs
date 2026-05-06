@@ -44,7 +44,9 @@ namespace BibAdmin
                 "dddd, d MMMM yyyy",
                 new System.Globalization.CultureInfo("ru-RU"));
 
-            LoadHistory(); // Загружаем историю при старте
+            // ❌ УБРАНА загрузка истории здесь - она загружается только из MainWindow
+            // LoadHistory() больше не вызывается в конструкторе!
+            
             UpdateStats();
             RenderSessions(Sessions);
         }
@@ -60,20 +62,39 @@ namespace BibAdmin
                     var records = JsonSerializer.Deserialize<List<SessionRecord>>(json);
                     if (records != null)
                     {
-                        Sessions.Clear();
-                        // 🔥 Фильтруем пустые записи при загрузке
-                        var validRecords = records
-                            .Where(r => !string.IsNullOrEmpty(r.PcNumber) && r.EndTime != default)
-                            .OrderByDescending(s => s.EndTime)
-                            .ToList();
+                        // 🔥 КРИТИЧНО: Не очищаем Sessions.Clear() - это удаляет ранее добавленные сессии!
+                        // Вместо этого добавляем только отсутствующие записи
                         
-                        Logger.Info($"📂 Загружено {validRecords.Count} валидных записей из {records.Count} всего");
-                        Sessions.AddRange(validRecords);
+                        // Создаём HashSet ключей существующих записей (StartTime + PcNumber)
+                        var existingKeys = new HashSet<(DateTime, string)>(
+                            Sessions.Select(s => (s.StartTime, s.PcNumber)));
+                        
+                        int addedCount = 0;
+                        foreach (var record in records)
+                        {
+                            // Пропускаем пустые записи
+                            if (string.IsNullOrEmpty(record.PcNumber) || record.EndTime == default)
+                                continue;
+                                
+                            // Добавляем только если запись ещё не существует
+                            var key = (record.StartTime, record.PcNumber);
+                            if (!existingKeys.Contains(key))
+                            {
+                                Sessions.Add(record);
+                                existingKeys.Add(key);
+                                addedCount++;
+                            }
+                        }
+                        
+                        // Сортируем по времени окончания (новые сверху)
+                        Sessions.Sort((a, b) => b.EndTime.CompareTo(a.EndTime));
+                        
+                        Logger.Info($"📂 Загружено {Sessions.Count} записей (добавлено {addedCount} новых)");
                     }
                 }
                 else
                 {
-                    Logger.Info("📂 Файл истории финансов не найден, создаётся новая история");
+                    Logger.Info("📂 Файл истории финансов не найден");
                 }
             }
             catch (Exception ex)
