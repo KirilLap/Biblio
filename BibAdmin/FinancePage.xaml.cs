@@ -61,8 +61,19 @@ namespace BibAdmin
                     if (records != null)
                     {
                         Sessions.Clear();
-                        Sessions.AddRange(records.OrderByDescending(s => s.EndTime));
+                        // 🔥 Фильтруем пустые записи при загрузке
+                        var validRecords = records
+                            .Where(r => !string.IsNullOrEmpty(r.PcNumber) && r.EndTime != default)
+                            .OrderByDescending(s => s.EndTime)
+                            .ToList();
+                        
+                        Logger.Info($"📂 Загружено {validRecords.Count} валидных записей из {records.Count} всего");
+                        Sessions.AddRange(validRecords);
                     }
+                }
+                else
+                {
+                    Logger.Info("📂 Файл истории финансов не найден, создаётся новая история");
                 }
             }
             catch (Exception ex)
@@ -80,13 +91,19 @@ namespace BibAdmin
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
                 
+                // 🔥 Фильтруем только валидные записи перед сохранением
+                var validSessions = Sessions
+                    .Where(s => !string.IsNullOrEmpty(s.PcNumber) && s.EndTime != default)
+                    .ToList();
+                
                 var options = new JsonSerializerOptions 
                 { 
                     WriteIndented = true,
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 };
-                var json = JsonSerializer.Serialize(Sessions, options);
+                var json = JsonSerializer.Serialize(validSessions, options);
                 File.WriteAllText(HistoryFilePath, json);
+                Logger.Info($"💾 Сохранено {validSessions.Count} записей в {HistoryFilePath}");
             }
             catch (Exception ex)
             {
@@ -97,6 +114,15 @@ namespace BibAdmin
         // Добавить сессию (вызывается из ComputersPage)
         public static void AddSession(SessionRecord session)
         {
+            // 🔥 КРИТИЧНО: Проверяем что данные не пустые перед добавлением
+            if (string.IsNullOrEmpty(session.PcNumber))
+            {
+                Logger.Error($"⚠️ Попытка добавить сессию с пустым PcNumber. SessionType={session.SessionType}, ReaderId={session.ReaderId}");
+                return;
+            }
+            
+            Logger.Info($"💰 Добавлена сессия: ПК={session.PcNumber}, Тип={session.SessionType}, Пользователь={session.UserName}, Длительность={session.DurationSeconds}с, Сумма={session.EarnedAmount} сум");
+            
             Sessions.Insert(0, session);
             SaveHistory(); // Автосохранение после добавления сессии
         }

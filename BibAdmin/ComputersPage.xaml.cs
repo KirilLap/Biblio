@@ -238,6 +238,32 @@ namespace BibAdmin
                     if (!pc.IsPaused && pc.LimitSeconds > 0 && pc.ElapsedSeconds >= pc.LimitSeconds)
                     {
                         Logger.Info($"⏰ {pc.PcNumber}: Лимит времени истёк ({pc.ElapsedSeconds}с >= {pc.LimitSeconds}с)");
+                        
+                        // 🔥 КРИТИЧНО: Сохраняем тип сессии ДО любых изменений
+                        string sessionType = pc.SessionType;
+                        if (string.IsNullOrEmpty(sessionType))
+                            sessionType = pc.Status;
+                        
+                        int earned = CalcMoney(pc.ElapsedSeconds);
+                        int refund = Math.Max(0, pc.PaidAmount - earned);
+                        
+                        // Сохраняем сессию в историю финансов
+                        FinancePage.AddSession(new SessionRecord
+                        {
+                            PcNumber = pc.PcNumber,
+                            SessionType = sessionType,
+                            UserName = pc.UserName ?? "—",
+                            ReaderId = pc.ReaderId ?? "",
+                            DurationSeconds = pc.ElapsedSeconds,
+                            EarnedAmount = earned,
+                            PaidAmount = pc.PaidAmount,
+                            RefundAmount = refund,
+                            StartTime = pc.SessionStart ?? DateTime.Now,
+                            EndTime = DateTime.Now
+                        });
+                        
+                        Revenue += earned;
+                        
                         // Сбрасываем сессию на стороне сервера
                         pc.SessionType = "";
                         pc.SessionStart = null;
@@ -1013,7 +1039,7 @@ namespace BibAdmin
                 EndTime = DateTime.Now
             });
 
-            string msg = $"Сессия завершена\n\nПК: {_selected.PcNumber}\nТип: {_selected.Status}\nВремя: {FormatTime(_selected.ElapsedSeconds)}\nОплачено: {_selected.PaidAmount:N0} сум\nИспользовано: {earned:N0} сум";
+            string msg = $"Сессия завершена\n\nПК: {_selected.PcNumber}\nТип: {sessionType}\nВремя: {FormatTime(_selected.ElapsedSeconds)}\nОплачено: {_selected.PaidAmount:N0} сум\nИспользовано: {earned:N0} сум";
             if (refund > 0) msg += $"\n\n💵 Возврат пользователю: {refund:N0} сум";
             MessageBox.Show(msg, "Итог сессии", MessageBoxButton.OK, MessageBoxImage.Information);
 
