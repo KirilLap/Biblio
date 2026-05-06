@@ -972,6 +972,19 @@ namespace BibAdmin
             catch (Exception ex) { Logger.Error($"Ошибка продления: {ex.Message}"); }
         }
 
+        private async Task EndSessionOnClient(ClientState pc)
+        {
+            try
+            {
+                if (_hub?.State == HubConnectionState.Connected && !string.IsNullOrEmpty(pc.ConnectionId))
+                {
+                    await _hub.InvokeAsync("SendCommand", pc.PcNumber, 
+                        JsonSerializer.Serialize(new { Type = "END_SESSION", Value = "" }));
+                }
+            }
+            catch (Exception ex) { Logger.Error($"Ошибка завершения сессии на клиенте {pc.PcNumber}: {ex.Message}"); }
+        }
+
         private async void EndSession_Click(object sender, RoutedEventArgs e)
         {
             if (_selected == null) return;
