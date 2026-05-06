@@ -120,9 +120,10 @@ namespace BibClient
 
                     case "SET_PC_NAME":
                         // Обновляем отображаемое имя клиента
-                        SettingsManager.Current.CustomName = value;
+                        // value может быть пустым - это нормально (сброс на "ПК N")
+                        SettingsManager.Current.CustomName = value ?? "";
                         SettingsManager.Save();
-                        Logger.Info($"✅ Имя ПК изменено на: {value}");
+                        Logger.Info($"✅ Имя ПК изменено на: '{value}'");
                         // Мгновенно уведомляем UI об изменении
                         SettingsChanged?.Invoke();
                         break;

@@ -104,7 +104,34 @@ namespace BibClient
                 {
                     var json = File.ReadAllText(_path);
                     var loaded = JsonSerializer.Deserialize<ClientSettings>(json);
-                    if (loaded != null) Current = loaded;
+                    if (loaded != null) 
+                    {
+                        // Сохраняем текущий объект, обновляя только поля из файла
+                        Current.PcNumberValue = loaded.PcNumberValue;
+                        Current.CustomName = loaded.CustomName ?? "";
+                        Current.ServerIp = loaded.ServerIp;
+                        Current.ServerPort = loaded.ServerPort;
+                        Current.AdminPasswordHash = loaded.AdminPasswordHash;
+                        Current.ShowPcNumber = loaded.ShowPcNumber;
+                        Current.PcNumberFontSize = loaded.PcNumberFontSize;
+                        Current.PcNumberPosition = loaded.PcNumberPosition;
+                        Current.ShowLockedText = loaded.ShowLockedText;
+                        Current.LockedTextFontSize = loaded.LockedTextFontSize;
+                        Current.LockedTextPosition = loaded.LockedTextPosition;
+                        Current.TimePosition = loaded.TimePosition;
+                        Current.TimeFontSize = loaded.TimeFontSize;
+                        Current.BackgroundOpacity = loaded.BackgroundOpacity;
+                        Current.BackgroundImagePath = loaded.BackgroundImagePath ?? "";
+                        Current.Tariff = loaded.Tariff;
+                        Current.LockOnOffline = loaded.LockOnOffline;
+                        Current.UsbBlocked = loaded.UsbBlocked;
+                        Current.TaskMgrDisabled = loaded.TaskMgrDisabled;
+                        Current.BlockRegedit = loaded.BlockRegedit;
+                        Current.BlockCmd = loaded.BlockCmd;
+                        Current.BlockPowerShell = loaded.BlockPowerShell;
+                        Current.HideDriveC = loaded.HideDriveC;
+                        Current.BlockInstall = loaded.BlockInstall;
+                    }
                 }
             }
             catch { Current = new ClientSettings(); }

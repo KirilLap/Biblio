@@ -9,7 +9,7 @@ namespace BibAdmin
 {
     public class OfflineAlertWindow : Window
     {
-        private readonly string _pcNumber;
+        private readonly int _pcNumberValue;  // ✅ Используем числовой идентификатор вместо PcNumber
         private TextBlock? _titleText;   // для обновления заголовка при реконнекте
         private Border? _rootBorder;     // для смены цвета рамки при реконнекте
         private static readonly List<OfflineAlertWindow> _active = new();
@@ -20,7 +20,7 @@ namespace BibAdmin
 
         public OfflineAlertWindow(ClientState client, Func<System.Threading.Tasks.Task> onPause, Action onContinue)
         {
-            _pcNumber = client.PcNumber;
+            _pcNumberValue = client.PcNumberValue;
 
             Width = W;
             WindowStyle = WindowStyle.None;
@@ -62,7 +62,7 @@ namespace BibAdmin
             });
             _titleText = new TextBlock
             {
-                Text = $"{client.PcNumber} — потеря связи",
+                Text = $"{client.PcNumber} — потеря связи",  // ✅ Отображаем полное имя (например, "Комп 1")
                 Foreground = new SolidColorBrush(Color.FromRgb(226, 75, 74)),
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
@@ -120,7 +120,7 @@ namespace BibAdmin
 
         private void OnClientUpdated(ClientState updated)
         {
-            if (updated.PcNumber != _pcNumber) return;
+            if (updated.PcNumberValue != _pcNumberValue) return;  // ✅ Сравниваем по числовому идентификатору
 
             Dispatcher.Invoke(() =>
             {
@@ -129,7 +129,7 @@ namespace BibAdmin
                     // Связь восстановлена — меняем заголовок и цвет рамки, не закрываем
                     if (_titleText != null)
                     {
-                        _titleText.Text = $"{_pcNumber} — связь восстановлена";
+                        _titleText.Text = $"ПК {_pcNumberValue} — связь восстановлена";
                         _titleText.Foreground = new SolidColorBrush(Color.FromRgb(29, 158, 117));
                     }
                     if (_rootBorder != null)
@@ -140,7 +140,7 @@ namespace BibAdmin
                     // Снова оффлайн — возвращаем красный
                     if (_titleText != null)
                     {
-                        _titleText.Text = $"{_pcNumber} — потеря связи";
+                        _titleText.Text = $"ПК {_pcNumberValue} — потеря связи";
                         _titleText.Foreground = new SolidColorBrush(Color.FromRgb(226, 75, 74));
                     }
                     if (_rootBorder != null)

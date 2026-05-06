@@ -795,8 +795,8 @@ namespace BibAdmin
                 // Обновляем CustomName
                 client.CustomName = customName;
                 
-                // Вычисляем новое отображаемое имя
-                var newName = string.IsNullOrEmpty(customName) ? $"ПК {client.PcNumberValue}" : customName;
+                // Вычисляем новое отображаемое имя (теперь это "{CustomName} {PcNumberValue}" или "ПК {PcNumberValue}")
+                var newName = string.IsNullOrEmpty(customName) ? $"ПК {client.PcNumberValue}" : $"{customName} {client.PcNumberValue}";
                 
                 // Если имя изменилось - переносим в словаре
                 if (oldName != newName)
@@ -832,6 +832,7 @@ namespace BibAdmin
             if (client != null)
             {
                 var oldName = client.PcNumber;
+                var oldConnectionId = client.ConnectionId;
                 
                 // Обновляем CustomName
                 client.CustomName = customName;
@@ -860,6 +861,22 @@ namespace BibAdmin
                 SavePending();
                 ClientUpdated?.Invoke(client);  // ✅ Вызываем ClientUpdated для обновления UI
                 ClientsChanged?.Invoke();
+                
+                // Отправляем команду на клиент с новым именем сразу после обновления сервера
+                if (!string.IsNullOrEmpty(oldConnectionId))
+                {
+                    try
+                    {
+                        // Отправляем только CustomName (без номера), клиент сам сформирует полное имя
+                        var cmd = new { Type = "SET_PC_NAME", Value = customName ?? "" };
+                        await Clients.Client(oldConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+                        Logger.Info($"📤 Команда SET_PC_NAME отправлена клиенту: '{customName}' (PcNumberValue={pcNumberValue})");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"Ошибка отправки команды SET_PC_NAME: {ex.Message}");
+                    }
+                }
             }
         }
 

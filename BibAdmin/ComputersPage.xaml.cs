@@ -1041,13 +1041,13 @@ namespace BibAdmin
         {
             // Передаём только CustomName (без номера), так как диалог теперь принимает только имя
             var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя (без номера):", pc.CustomName);
-            if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.Result))
+            if (dialog.ShowDialog() == true)
             {
-                // Сначала отправляем команду клиенту на изменение имени (пока ключ ещё актуален)
-                await SendCommand(pc.PcNumber, "SET_PC_NAME", dialog.Result);
+                // Результат может быть пустым - это нормально (сброс на "ПК N")
+                var newName = dialog.Result.Trim();
                 
-                // Затем обновляем сервер (это изменит ключ в KnownClients и вызовет ClientsChanged)
-                await RenameOnServer(pc.PcNumberValue, dialog.Result);
+                // Обновляем сервер (это изменит ключ в KnownClients, вызовет ClientsChanged и отправит команду клиенту)
+                await RenameOnServer(pc.PcNumberValue, newName);
                 
                 // Обновляем _selected до актуального объекта после переименования
                 RefreshSelected();
@@ -1135,8 +1135,8 @@ namespace BibAdmin
         private async void ShowTransferDialog(ClientState pc)
         {
             var availablePcs = AdminHub.KnownClients.Values
-                .Where(c => c.PcNumber != pc.PcNumber && c.IsOnline && !c.IsSession)
-                .Select(c => c.PcNumber)
+                .Where(c => c.PcNumberValue != pc.PcNumberValue && c.IsOnline && !c.IsSession)
+                .Select(c => c.PcNumber)  // ✅ Для отображения используем полное имя (например, "Комп 1")
                 .OrderBy(n => n)
                 .ToList();
 
@@ -1164,7 +1164,15 @@ namespace BibAdmin
                     return;
                 }
 
-                var result = await _hub.InvokeAsync<string>("TransferSession", pc.PcNumber, dialog.SelectedPcNumber);
+                // ✅ Находим целевой ПК по PcNumberValue для передачи на сервер
+                var targetClient = AdminHub.KnownClients.Values.FirstOrDefault(c => c.PcNumber == dialog.SelectedPcNumber);
+                if (targetClient == null)
+                {
+                    MessageBox.Show("Целевой ПК не найден.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var result = await _hub.InvokeAsync<string>("TransferSession", pc.PcNumber, targetClient.PcNumber);
                 if (result != "OK")
                     MessageBox.Show(result, "Ошибка пересадки", MessageBoxButton.OK, MessageBoxImage.Warning);
             }

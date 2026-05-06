@@ -124,7 +124,9 @@ namespace BibClient
 
                 _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", info, info.MacAddress, IsRestoring, sessionId, offlineSeconds);
 
-                if (_pcNumber != SettingsManager.Current.PcNumber) { SettingsManager.Current.PcNumber = _pcNumber; SettingsManager.Save(); }
+                // При регистрации сервер возвращает полное имя (например, "Комп 10" или "ПК 10")
+                // Но нам НЕ нужно парсить его через сеттер PcNumber, чтобы избежать дублирования номера
+                // Вместо этого просто сохраняем для отображения, но не трогаем CustomName/PcNumberValue
                 Logger.Info($"✅ Зарегистрирован как: {_pcNumber}");
                 if (!IsRestoring) await SendStatusAsync("Заблокирован");
                 OnRegistered?.Invoke();
