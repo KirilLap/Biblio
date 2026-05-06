@@ -33,20 +33,13 @@ namespace BibClient
                     var mainWindow = new MainWindow();
                     MainWindow = mainWindow;
                     
-                    // Подписываемся на событие полной загрузки окна
-                    bool lockPending = true;
-                    mainWindow.ContentRendered += (s, e) =>
-                    {
-                        if (lockPending)
-                        {
-                            lockPending = false;
-                            Logger.Info("🔒 Окно загружено, блокируем ПК...");
-                            mainWindow.Lock();
-                        }
-                    };
-                    
+                    // ✅ Показываем окно
                     mainWindow.Show();
                     mainWindow.Activate();
+                    
+                    // ✅ Явно блокируем ПК сразу после показа окна
+                    // _isReady уже установлен в конструкторе MainWindow, поэтому Lock() сработает
+                    mainWindow.Lock();
                 }
                 else
                 {
@@ -63,7 +56,14 @@ namespace BibClient
 
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;
+                
+                // ✅ Показываем окно
                 mainWindow.Show();
+                mainWindow.Activate();
+                
+                // ✅ Явно блокируем ПК сразу после показа окна
+                // _isReady уже установлен в конструкторе MainWindow, поэтому Lock() сработает
+                mainWindow.Lock();
             }
         }
     }
