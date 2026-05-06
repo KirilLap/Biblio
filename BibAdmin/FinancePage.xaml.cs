@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace BibAdmin
 {
@@ -329,7 +329,7 @@ namespace BibAdmin
                 Title = "Экспорт истории финансов в Excel (CSV)"
             };
             
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true)
             {
                 try
                 {
