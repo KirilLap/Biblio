@@ -59,6 +59,9 @@ namespace BibAdmin
                 if (File.Exists(HistoryFilePath))
                 {
                     var json = File.ReadAllText(HistoryFilePath);
+                    Logger.Debug($"📄 Чтение файла истории: {HistoryFilePath}");
+                    Logger.Debug($"📄 Размер файла: {new FileInfo(HistoryFilePath).Length} байт");
+                    
                     var records = JsonSerializer.Deserialize<List<SessionRecord>>(json);
                     if (records != null && records.Count > 0)
                     {
@@ -66,19 +69,42 @@ namespace BibAdmin
                         // Это гарантирует что все сессии будут отображены после перезапуска
                         Sessions.Clear();
                         
+                        int validCount = 0;
+                        int invalidCount = 0;
+                        
                         foreach (var record in records)
                         {
+                            Logger.Debug($"🔍 Проверка записи: PcNumber='{record.PcNumber}', EndTime={record.EndTime}, SessionType='{record.SessionType}'");
+                            
                             // Пропускаем пустые записи
-                            if (string.IsNullOrEmpty(record.PcNumber) || record.EndTime == default)
+                            if (string.IsNullOrEmpty(record.PcNumber))
+                            {
+                                Logger.Info($"⚠️ Пропущена запись с пустым PcNumber");
+                                invalidCount++;
                                 continue;
+                            }
+                            
+                            // Проверяем EndTime более корректно
+                            if (record.EndTime.Year < 2020)
+                            {
+                                Logger.Info($"⚠️ Пропущена запись с некорректным EndTime: {record.EndTime} (PcNumber={record.PcNumber})");
+                                invalidCount++;
+                                continue;
+                            }
                             
                             Sessions.Add(record);
+                            validCount++;
+                            Logger.Debug($"✅ Добавлена валидная запись: {record.PcNumber}, {record.SessionType}, {record.EarnedAmount} сум");
                         }
                         
                         // Сортируем по времени окончания (новые сверху)
                         Sessions.Sort((a, b) => b.EndTime.CompareTo(a.EndTime));
                         
-                        Logger.Info($"📂 Загружено {Sessions.Count} записей из файла истории");
+                        Logger.Info($"📂 Загружено {validCount} валидных записей из {records.Count} всего (отфильтровано {invalidCount})");
+                    }
+                    else
+                    {
+                        Logger.Info("📂 Файл истории пуст или содержит null");
                     }
                 }
                 else
@@ -89,6 +115,7 @@ namespace BibAdmin
             catch (Exception ex)
             {
                 Logger.Error($"Ошибка загрузки истории финансов: {ex.Message}");
+                Logger.Error($"Стек: {ex.StackTrace}");
             }
         }
         
@@ -103,7 +130,7 @@ namespace BibAdmin
                 
                 // 🔥 Фильтруем только валидные записи перед сохранением
                 var validSessions = Sessions
-                    .Where(s => !string.IsNullOrEmpty(s.PcNumber) && s.EndTime != default)
+                    .Where(s => !string.IsNullOrEmpty(s.PcNumber) && s.EndTime.Year >= 2020)
                     .ToList();
                 
                 var options = new JsonSerializerOptions 
