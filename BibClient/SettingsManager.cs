@@ -36,8 +36,20 @@ namespace BibClient
                     }
                     else
                     {
-                        // Произвольное имя - сохраняем только буквенную часть
-                        CustomName = value;
+                        // Произвольное имя - сохраняем только буквенную часть, убирая цифры и пробелы с конца
+                        var trimmedValue = value.Trim();
+                        // Удаляем цифры с конца строки
+                        int endIndex = trimmedValue.Length;
+                        while (endIndex > 0 && char.IsDigit(trimmedValue[endIndex - 1]))
+                        {
+                            endIndex--;
+                        }
+                        // Удаляем пробелы, которые могли остаться перед цифрами
+                        while (endIndex > 0 && char.IsWhiteSpace(trimmedValue[endIndex - 1]))
+                        {
+                            endIndex--;
+                        }
+                        CustomName = endIndex > 0 ? trimmedValue.Substring(0, endIndex) : trimmedValue;
                     }
                 }
             }
