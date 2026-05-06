@@ -990,6 +990,11 @@ namespace BibAdmin
             if (_selected == null) return;
             RefreshSelected();
 
+            // 🔥 КРИТИЧНО: Сохраняем тип сессии ДО любых изменений
+            string sessionType = _selected.SessionType;
+            if (string.IsNullOrEmpty(sessionType))
+                sessionType = _selected.Status; // Резервный вариант
+
             int earned = CalcMoney(_selected.ElapsedSeconds);
             int refund = Math.Max(0, _selected.PaidAmount - earned);
 
@@ -997,7 +1002,7 @@ namespace BibAdmin
             FinancePage.AddSession(new SessionRecord
             {
                 PcNumber = _selected.PcNumber,
-                SessionType = _selected.SessionType,
+                SessionType = sessionType,
                 UserName = _selected.UserName ?? "—",
                 ReaderId = _selected.ReaderId ?? "",
                 DurationSeconds = _selected.ElapsedSeconds,
