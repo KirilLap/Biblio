@@ -86,23 +86,10 @@
             <!-- Поля ввода — только для лимитированной -->
             <StackPanel x:Name="PanelFields">
 
-                <!-- ID читателя -->
-                <TextBlock Text="ID читателя *"
-                           Foreground="#AAAACC" FontSize="12"
-                           Margin="0,0,0,6"/>
-                <Border BorderBrush="#3D3D6B" BorderThickness="1"
-                        CornerRadius="8" Margin="0,0,0,4">
-                    <TextBox x:Name="TxtReaderId"
-                             Background="#2A2A3E" Foreground="White"
-                             BorderThickness="0" FontSize="14"
-                             Padding="12,10" CaretBrush="White"
-                             ToolTip="Введите ID читателя (обязательно)"/>
-                </Border>
-
                 <!-- Время -->
                 <TextBlock Text="Время (минуты)"
                            Foreground="#AAAACC" FontSize="12"
-                           Margin="0,12,0,6"/>
+                           Margin="0,0,0,6"/>
                 <Border BorderBrush="#3D3D6B" BorderThickness="1"
                         CornerRadius="8" Margin="0,0,0,4">
                     <TextBox x:Name="TxtMinutes"
@@ -132,13 +119,26 @@
                            Margin="0,4,0,0"/>
             </StackPanel>
 
+            <!-- ID читателя (для всех типов сессий) -->
+            <TextBlock Text="ID читателя *"
+                       Foreground="#AAAACC" FontSize="12"
+                       Margin="0,12,0,6"/>
+            <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                    CornerRadius="8" Margin="0,0,0,4">
+                <TextBox x:Name="TxtReaderId"
+                         Background="#2A2A3E" Foreground="White"
+                         BorderThickness="0" FontSize="14"
+                         Padding="12,10" CaretBrush="White"
+                         ToolTip="Введите ID читателя (обязательно)"/>
+            </Border>
+
             <!-- Сообщение для VIP -->
             <TextBlock x:Name="TxtVipInfo"
                        Text="Безлимитный доступ без ограничений по времени"
                        Foreground="#666688" FontSize="12"
                        HorizontalAlignment="Center"
                        TextWrapping="Wrap"
-                       Visibility="Collapsed"/>
+                       Visibility="Collapsed" Margin="0,12,0,0"/>
         </StackPanel>
 
         <!-- Кнопки -->
