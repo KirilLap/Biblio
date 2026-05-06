@@ -33,13 +33,10 @@ namespace BibClient
                     var mainWindow = new MainWindow();
                     MainWindow = mainWindow;
                     
-                    // ✅ Показываем окно
+                    // ✅ Сначала блокируем, потом показываем
+                    mainWindow.Lock();
                     mainWindow.Show();
                     mainWindow.Activate();
-                    
-                    // ✅ Явно блокируем ПК сразу после показа окна
-                    // _isReady уже установлен в конструкторе MainWindow, поэтому Lock() сработает
-                    mainWindow.Lock();
                 }
                 else
                 {
@@ -57,13 +54,10 @@ namespace BibClient
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;
                 
-                // ✅ Показываем окно
+                // ✅ Сначала блокируем, потом показываем
+                mainWindow.Lock();
                 mainWindow.Show();
                 mainWindow.Activate();
-                
-                // ✅ Явно блокируем ПК сразу после показа окна
-                // _isReady уже установлен в конструкторе MainWindow, поэтому Lock() сработает
-                mainWindow.Lock();
             }
         }
     }

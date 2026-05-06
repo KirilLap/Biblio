@@ -40,6 +40,9 @@ namespace BibClient
 
         public MainWindow()
         {
+            // ✅ Устанавливаем флаг готовности СРАЗУ, чтобы Lock() мог быть вызван сразу после создания объекта
+            _isReady = true;
+
             InitializeComponent();
             _originalContent = (UIElement?)this.Content;
 
@@ -79,8 +82,6 @@ namespace BibClient
                 if (paused) PauseLock();
                 else PauseUnlock();
             });
-
-            _isReady = true;
         }
 
         private void StartNetwork()
@@ -571,10 +572,14 @@ namespace BibClient
 
         public void Lock()
         {
-            if (!_isReady) return;
+            if (!_isReady) 
+            {
+                Logger.Warn("⚠️ Lock() вызван до _isReady, откладываем...");
+                return; 
+            }
 
             _isUnlocked = false;
-            _isPauseLocked = false;  // REMOTE_LOCK сбрасывает состояние паузы
+            _isPauseLocked = false;
             Logger.Info("ПК блокируется...");
 
             // 1. Останавливаем сессию если активна
@@ -587,7 +592,7 @@ namespace BibClient
             if (PanelPassword != null) PanelPassword.Visibility = Visibility.Collapsed;
             if (TxtError != null) TxtError.Visibility = Visibility.Collapsed;
 
-            // 3. Возвращаем свойства окна блокировки
+            // ✅ 3. Сначала настраиваем свойства окна, ПОТОМ показываем
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
             this.Topmost = true;
@@ -596,14 +601,28 @@ namespace BibClient
             this.Height = double.NaN;
             this.WindowStartupLocation = WindowStartupLocation.Manual;
 
-            this.Content = _originalContent;
+            // ✅ 4. Проверяем _originalContent
+            if (_originalContent != null)
+            {
+                this.Content = _originalContent;
+            }
+            else
+            {
+                // Фолбэк: загружаем контент из XAML явно
+                this.Content = null;
+                InitializeComponent(); // Перезагружаем контент
+                _originalContent = (UIElement?)this.Content;
+            }
 
+            // ✅ 5. Пересоздаём хук
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            Logger.Info("🔐 KeyboardHook установлен в режиме LockScreen");
 
-            // 4. Показываем окно блокировки
+            // ✅ 6. Показываем и активируем
             this.Show();
             this.Activate();
+            this.Focus(); // ← Добавь явный фокус
 
             StartClock();
             ApplySettings();
