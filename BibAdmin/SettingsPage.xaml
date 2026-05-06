@@ -296,9 +296,16 @@
                                        Foreground="#1E1E2E"
                                        Margin="0,0,0,16"/>
 
+                            <!-- Показ имени ПК -->
+                            <CheckBox x:Name="ChkShowPcName"
+                                      Content="Показывать имя ПК (например, «ПК»)"
+                                      FontSize="13" Foreground="#333"
+                                      IsChecked="True"
+                                      Margin="0,0,0,6"/>
+
                             <!-- Показ номера ПК -->
                             <CheckBox x:Name="ChkShowPcNumber"
-                                      Content="Показывать номер ПК"
+                                      Content="Показывать номер ПК (например, «1»)"
                                       FontSize="13" Foreground="#333"
                                       IsChecked="True"
                                       Margin="0,0,0,12"/>

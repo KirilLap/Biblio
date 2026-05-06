@@ -56,6 +56,7 @@ namespace BibClient
                 // ✅ Теперь это работает: пароль хешируется автоматически
                 AdminPassword = "1234",
 
+                ShowPcName = true,
                 ShowPcNumber = true
                 // Остальные свойства берут значения по умолчанию
             };

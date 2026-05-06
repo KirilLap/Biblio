@@ -11,8 +11,9 @@ namespace BibAdmin
         // Экран блокировки
         // =====================
         public double BackgroundOpacity { get; set; } = 0.3;
-        public bool ShowPcNumber { get; set; } = true;
-        public string PcNumberPosition { get; set; } = "MiddleCenter";
+        public bool ShowPcName { get; set; } = true;      // Показывать кастомное имя (например, "ПК" или "Комп")
+        public bool ShowPcNumber { get; set; } = true;    // Показывать цифровой номер (например, "1")
+        public string PcNumberPosition { get; set; } = "MiddleCenter";  // Общая позиция для имени и номера
         public double PcNumberFontSize { get; set; } = 52;
         public bool ShowLockedText { get; set; } = true;
         public string LockedTextPosition { get; set; } = "MiddleCenter";
@@ -100,6 +101,7 @@ namespace BibAdmin
         {
             var cmds = new List<PendingCommand>
             {
+                new("SHOW_PC_NAME", ShowPcName.ToString().ToLower()),
                 new("SHOW_PC_NUMBER", ShowPcNumber.ToString().ToLower()),
                 new("SET_BACKGROUND_OPACITY", BackgroundOpacity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
                 new("SET_PC_NUMBER_POSITION", PcNumberPosition),

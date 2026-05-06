@@ -67,7 +67,8 @@ namespace BibClient
             set { AdminPasswordHash = HashPassword(value); }
         }
 
-        public bool ShowPcNumber { get; set; } = true;
+        public bool ShowPcName { get; set; } = true;       // Показывать имя (например, "ПК" или "Комп")
+        public bool ShowPcNumber { get; set; } = true;      // Показывать цифровой номер (например, "1")
         public double PcNumberFontSize { get; set; } = 52;
         public string PcNumberPosition { get; set; } = "MiddleCenter";
         public bool ShowLockedText { get; set; } = true;
@@ -124,6 +125,7 @@ namespace BibClient
                         Current.ServerIp = loaded.ServerIp;
                         Current.ServerPort = loaded.ServerPort;
                         Current.AdminPasswordHash = loaded.AdminPasswordHash;
+                        Current.ShowPcName = loaded.ShowPcName;
                         Current.ShowPcNumber = loaded.ShowPcNumber;
                         Current.PcNumberFontSize = loaded.PcNumberFontSize;
                         Current.PcNumberPosition = loaded.PcNumberPosition;
