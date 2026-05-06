@@ -32,17 +32,21 @@ namespace BibClient
                     // Запускаем главное окно
                     var mainWindow = new MainWindow();
                     MainWindow = mainWindow;
-                    mainWindow.Show();
                     
-                    // Вызываем блокировку после полной инициализации окна
-                    // Используем Dispatcher с низким приоритетом, чтобы окно успело полностью загрузиться
-                    mainWindow.Dispatcher.BeginInvoke(
-                        System.Windows.Threading.DispatcherPriority.Background,
-                        new Action(() =>
+                    // Подписываемся на событие полной загрузки окна
+                    bool lockPending = true;
+                    mainWindow.ContentRendered += (s, e) =>
+                    {
+                        if (lockPending)
                         {
-                            Logger.Info("🔒 Инициализация завершена, блокируем ПК...");
+                            lockPending = false;
+                            Logger.Info("🔒 Окно загружено, блокируем ПК...");
                             mainWindow.Lock();
-                        }));
+                        }
+                    };
+                    
+                    mainWindow.Show();
+                    mainWindow.Activate();
                 }
                 else
                 {
