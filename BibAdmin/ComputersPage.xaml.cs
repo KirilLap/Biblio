@@ -997,7 +997,7 @@ namespace BibAdmin
             FinancePage.AddSession(new SessionRecord
             {
                 PcNumber = _selected.PcNumber,
-                SessionType = _selected.Status,
+                SessionType = _selected.SessionType,
                 UserName = _selected.UserName ?? "—",
                 ReaderId = _selected.ReaderId ?? "",
                 DurationSeconds = _selected.ElapsedSeconds,
