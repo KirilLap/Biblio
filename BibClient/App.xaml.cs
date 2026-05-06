@@ -47,7 +47,7 @@ namespace BibClient
                         mainWindow.Activate();
 
                         // Вызываем блокировку через Dispatcher, чтобы гарантировать полную отрисовку окна
-                        Application.Current.Dispatcher.BeginInvoke(
+                        System.Windows.Application.Current.Dispatcher.BeginInvoke(
                             new Action(() =>
                             {
                                 Logger.Info("🔒 Вызов Lock() после полной загрузки окна...");
@@ -82,7 +82,7 @@ namespace BibClient
                 mainWindow.Activate();
                 
                 // Вызываем блокировку через Dispatcher
-                Application.Current.Dispatcher.BeginInvoke(
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(
                     new Action(() => mainWindow.Lock()), 
                     System.Windows.Threading.DispatcherPriority.Background);
             }
