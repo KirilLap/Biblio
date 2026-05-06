@@ -50,7 +50,7 @@ namespace BibAdmin
         {
             EnsureInit();
             string entry = $"[{DateTime.Now:HH:mm:ss.fff}] [Debug] {msg}";
-            Debug.WriteLine(entry);
+            System.Diagnostics.Debug.WriteLine(entry);
             lock (_lock)
             {
                 try { File.AppendAllText(_logFile, entry + Environment.NewLine); }
