@@ -18,6 +18,7 @@ namespace BibClient
             // 🔹 Если настроек нет — показываем окно первоначальной настройки
             if (!File.Exists(settingsPath))
             {
+                Logger.Info("⚙️ Настроек нет, запускаем окно настройки...");
                 var setup = new SetupWindow();
 
                 // Показываем модально (главное окно не откроется, пока не завершим настройку)
@@ -27,21 +28,43 @@ namespace BibClient
                     SettingsManager.Current = setup.Result;
                     SettingsManager.Save();
 
-                    Logger.Info("✅ Настройки сохранены, запуск основного окна");
+                    Logger.Info("✅ Настройки сохранены в файл.");
 
-                    // Запускаем главное окно
-                    var mainWindow = new MainWindow();
-                    MainWindow = mainWindow;
-                    
-                    // ✅ Сначала блокируем, потом показываем
-                    mainWindow.Lock();
-                    mainWindow.Show();
-                    mainWindow.Activate();
+                    // 🔥 ВАЖНО: Проверяем, что файл реально создан, и запускаем главное окно вручную
+                    // Это эмулирует поведение "второго запуска", но внутри текущего процесса
+                    if (File.Exists(settingsPath))
+                    {
+                        Logger.Info("📁 Файл настроек найден, немедленный запуск основного окна...");
+                        
+                        // Перезагружаем настройки из файла, чтобы быть уверенными в актуальности
+                        SettingsManager.Load(); 
+
+                        var mainWindow = new MainWindow();
+                        MainWindow = mainWindow;
+
+                        // Показываем окно
+                        mainWindow.Show();
+                        mainWindow.Activate();
+
+                        // Вызываем блокировку через Dispatcher, чтобы гарантировать полную отрисовку окна
+                        System.Windows.Threading.Dispatcher.Current.BeginInvoke(
+                            new Action(() =>
+                            {
+                                Logger.Info("🔒 Вызов Lock() после полной загрузки окна...");
+                                mainWindow.Lock();
+                            }), 
+                            System.Windows.Threading.DispatcherPriority.Background);
+                    }
+                    else
+                    {
+                        Logger.Error("❌ Ошибка: файл настроек не создан после сохранения!");
+                        Shutdown();
+                    }
                 }
                 else
                 {
                     // Пользователь отменил настройку — выходим
-                    Logger.Warn("⚠️ Настройка отменена, выход");
+                    Logger.Warn("⚠️ Настройка отменена пользователем, выход");
                     Shutdown();
                 }
             }
@@ -54,10 +77,14 @@ namespace BibClient
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;
                 
-                // ✅ Сначала блокируем, потом показываем
-                mainWindow.Lock();
+                // Показываем окно
                 mainWindow.Show();
                 mainWindow.Activate();
+                
+                // Вызываем блокировку через Dispatcher
+                System.Windows.Threading.Dispatcher.Current.BeginInvoke(
+                    new Action(() => mainWindow.Lock()), 
+                    System.Windows.Threading.DispatcherPriority.Background);
             }
         }
     }
