@@ -1,57 +1,52 @@
 ```
-# Compiled and build artifacts
+# Build artifacts
+bin/
+obj/
 *.exe
 *.dll
 *.pdb
+*.userprefs
+*.suo
+*.user
+*.aps
+*.ncb
 *.obj
-*.lib
-*.so
-*.dylib
-*.class
-*.jar
-*.war
-*.ear
-bin/
-obj/
-Debug/
-Release/
-x64/
-x86/
-build/
-dist/
-out/
-
-# Dependencies
-node_modules/
-packages/
-.nuget/
-packages.lock.json
-
-# Logs and temp files
 *.log
-*.tmp
-*.temp
-*.cache
+*.pch
+*.ilk
+*.exp
+*.lib
+*.sdf
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+[Bb]in/
+[Oo]bj/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Visual Studio Code
+.vscode/
 
 # Environment
 .env
 .env.local
 .env.*
+!.env.example
 
-# Editors
-.vs/
-.vscode/
-.idea/
-*.userprefs
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
-ehthumbs.db
-Icon?
+*.nupkg
+[Nn]u[Pp]kg/
 ```

@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -24,17 +24,42 @@ namespace BibClient
             {
                 // Получаем полный путь к исполняемому файлу
                 string exePath = GetExePath();
-                
+
+                // Проверяем что файл существует
+                if (!File.Exists(exePath))
+                {
+                    Logger.Error($"❌ Файл не найден для автозапуска: {exePath}");
+                    return;
+                }
+
                 using var key = Registry.CurrentUser.OpenSubKey(
                     @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
 
-                // Регистрируем с полным путем в кавычках
-                key?.SetValue("BibClient", $"\"{exePath}\"");
-                Logger.Info($"✅ Автозапуск зарегистрирован: {exePath}");
+                if (key == null)
+                {
+                    Logger.Error("❌ Не удалось открыть ключ реестра для автозапуска");
+                    return;
+                }
+
+                // Регистрируем с полным путем в кавычках (для путей с пробелами)
+                string registryValue = $""{exePath}"";
+                key.SetValue("BibClient", registryValue, RegistryValueKind.String);
+                
+                // Проверяем что значение записалось
+                var savedValue = key.GetValue("BibClient");
+                if (savedValue != null && savedValue.ToString() == registryValue)
+                {
+                    Logger.Info($"✅ Автозапуск зарегистрирован: {exePath}");
+                }
+                else
+                {
+                    Logger.Warn($"⚠️ Автозапуск записан, но значение отличается: {savedValue}");
+                }
             }
             catch (Exception ex)
             {
                 Logger.Error($"❌ Ошибка регистрации автозапуска: {ex.Message}");
+                Logger.Error($"StackTrace: {ex.StackTrace}");
             }
         }
 
