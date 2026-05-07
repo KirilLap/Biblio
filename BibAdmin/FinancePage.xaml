@@ -164,8 +164,7 @@
                           SelectionChanged="Filter_Changed">
                     <ComboBoxItem Content="Все типы" IsSelected="True"/>
                     <ComboBoxItem Content="VIP"/>
-                    <ComboBoxItem Content="По времени"/>
-                    <ComboBoxItem Content="По деньгам"/>
+                    <ComboBoxItem Content="Лимит"/>
                 </ComboBox>
 
                 <TextBlock x:Name="TxtFilterResult"
