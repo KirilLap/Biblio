@@ -66,8 +66,21 @@ namespace BibAdmin
                 if (File.Exists(HistoryFilePath))
                 {
                     var json = File.ReadAllText(HistoryFilePath);
-                    var records = JsonSerializer.Deserialize<List<SessionRecord>>(json);
-                    if (records != null)
+                    
+                    // 🔥 Проверяем что файл не пустой
+                    if (string.IsNullOrWhiteSpace(json) || json.Trim() == "[]" || json.Trim() == "")
+                    {
+                        Logger.Info("📂 Файл истории финансов пустой");
+                        return;
+                    }
+                    
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    };
+                    var records = JsonSerializer.Deserialize<List<SessionRecord>>(json, options);
+                    if (records != null && records.Count > 0)
                     {
                         // 🔥 КРИТИЧНО: Не очищаем Sessions.Clear() - это удаляет ранее добавленные сессии!
                         // Вместо этого добавляем только отсутствующие записи
@@ -97,6 +110,10 @@ namespace BibAdmin
                         Sessions.Sort((a, b) => b.EndTime.CompareTo(a.EndTime));
                         
                         Logger.Info($"📂 Загружено {Sessions.Count} записей (добавлено {addedCount} новых)");
+                    }
+                    else
+                    {
+                        Logger.Info("📂 Файл истории финансов не содержит записей");
                     }
                 }
                 else
@@ -130,7 +147,16 @@ namespace BibAdmin
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 };
                 var json = JsonSerializer.Serialize(validSessions, options);
-                File.WriteAllText(HistoryFilePath, json);
+                
+                // 🔥 КРИТИЧНО: Используем атомарную запись через временный файл (как в SaveActiveSessions)
+                // Это предотвращает повреждение файла при сбое питания или аварийном завершении
+                var tempPath = HistoryFilePath + ".tmp";
+                File.WriteAllText(tempPath, json);
+                if (File.Exists(HistoryFilePath))
+                    File.Replace(tempPath, HistoryFilePath, null);
+                else
+                    File.Move(tempPath, HistoryFilePath);
+                    
                 Logger.Info($"💾 Сохранено {validSessions.Count} записей в {HistoryFilePath}");
             }
             catch (Exception ex)
