@@ -48,6 +48,13 @@ namespace BibAdmin
                 FinancePage.LoadHistory();
                 Logger.Info("✅ История финансов загружена");
 
+                // 🔄 Обновляем UI если вкладка Финансы уже активна
+                if (MainFrame.Content is FinancePage financePage)
+                {
+                    financePage.RefreshUI();
+                    Logger.Info("🔄 UI финансов обновлён");
+                }
+
                 Dispatcher.Invoke(() =>
                 {
                     TxtServerStatus.Text = "Сервер запущен :8080";
@@ -83,8 +90,16 @@ namespace BibAdmin
         private void BtnFinance_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnFinance);
-            // История уже загружена при старте приложения, просто показываем страницу
-            MainFrame.Navigate(new FinancePage());
+            // Проверяем, не открыта ли уже страница финансов
+            if (MainFrame.Content is not FinancePage)
+            {
+                MainFrame.Navigate(new FinancePage());
+            }
+            else
+            {
+                // Если страница уже открыта, просто обновляем UI
+                ((FinancePage)MainFrame.Content).RefreshUI();
+            }
         }
 
         // Навигация: Настройки
