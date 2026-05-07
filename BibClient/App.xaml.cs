@@ -10,6 +10,15 @@ namespace BibClient
         {
             base.OnStartup(e);
 
+            // Проверка на запуск в режиме Guardian
+            if (e.Args.Length > 0 && e.Args[0] == "--guardian")
+            {
+                Logger.Info("🛡️ Запуск в режиме Guardian");
+                Watchdog.RunGuardian();
+                Shutdown();
+                return;
+            }
+
             // Путь к файлу настроек
             string settingsPath = Path.Combine(
                 AppDomain.CurrentDomain.BaseDirectory,

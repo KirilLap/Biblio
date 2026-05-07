@@ -311,6 +311,13 @@ namespace BibClient
                         SettingsManager.Current.PreventClose = value.ToLower() == "true";
                         SettingsManager.Save();
                         Logger.Info($"🔒 PreventClose = {SettingsManager.Current.PreventClose}");
+                                                // Перезапускаем Guardian если настройка изменилась
+                        if (SettingsManager.Current.PreventClose)
+                            Watchdog.StartGuardian(true);
+                        else
+                            Watchdog.StopGuardian();
+                        
+                        SettingsChanged?.Invoke();
                         break;
 
                     case "AUTOSTART_WITH_USER":
@@ -326,6 +333,7 @@ namespace BibClient
                             Watchdog.UnregisterAutostart();
                             Logger.Info("❌ Автозапуск с пользователем выключен");
                         }
+                        SettingsChanged?.Invoke();
                         break;
 
                     case "SHUTDOWN":

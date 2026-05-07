@@ -55,6 +55,18 @@ namespace BibClient
             StartClock();
             StartNetwork();
 
+            // Запускаем Guardian если включена защита от закрытия
+            if (_settings.PreventClose)
+            {
+                Watchdog.StartGuardian(true);
+            }
+            
+            // Регистрируем автозапуск если включено
+            if (_settings.AutoStartWithUser)
+            {
+                Watchdog.RegisterAutostart();
+            }
+
             // Подписки на удалённые команды
             PolicyEngine.RemoteUnlockRequested += () => Dispatcher.Invoke(Unlock);
             PolicyEngine.RemoteLockRequested += () => Dispatcher.Invoke(Lock);
@@ -517,6 +529,10 @@ namespace BibClient
             this.Show();
 
             _ = _networkManager?.SendStatusAsync("Свободный");
+            
+            // При разблокировке администратором - позволяем закрыть приложение
+            // (Window_Closing проверит флаг _isUnlocked и разрешит закрытие)
+            Logger.Info("🔓 Администратор разблокировал ПК - закрытие разрешено");
         }
 
         private Border CreateUnlockedPanel()
@@ -649,14 +665,32 @@ namespace BibClient
             e.Cancel = false;
 #else
             // Защита от закрытия: если включена настройка PreventClose, отменяем закрытие
-            if (_settings.PreventClose) 
+            // Исключение: администратор разблокировал ПК паролем (_isUnlocked = true)
+            if (_settings.PreventClose && !_isUnlocked) 
             {
                 Logger.Info("🚫 Закрытие окна заблокировано настройкой PreventClose");
+                
+                // Сигнал для Guardian что мы ещё работаем (если процесс пытаются убить)
+                // Но это не поможет против Task Manager, поэтому полагаемся на Guardian
+                
                 e.Cancel = true;
             }
             else
             {
-                e.Cancel = true;
+                // Легальное закрытие (администратор разблокировал или PreventClose выключен)
+                Logger.Info("✅ Разрешено легальное закрытие приложения");
+                
+                // Сигнализируем Guardian что закрытие легальное
+                Watchdog.SignalLegalClose();
+                
+                // Останавливаем guardian процесс
+                Watchdog.StopGuardian();
+                
+                // Отменяем автозапуск если нужно
+                if (!_settings.AutoStartWithUser)
+                    Watchdog.UnregisterAutostart();
+                
+                e.Cancel = false;
             }
 #endif
         }
