@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -76,31 +77,83 @@ namespace BibClient
         }
         
         // Получаем полный путь к exe файлу приложения
+        // Этот метод должен работать надежно даже когда основной процесс завершен
         public static string GetExePath()
         {
-            // Пробуем получить путь разными способами
+            // Способ 1: Через MainModule (наиболее надежный для текущего процесса)
             try
             {
-                // Способ 1: Через MainModule (наиболее надежный)
-                var path = Process.GetCurrentProcess().MainModule?.FileName;
+                var currentProcess = Process.GetCurrentProcess();
+                var path = currentProcess.MainModule?.FileName;
                 if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                    return Path.GetFullPath(path);
+                {
+                    var fullPath = Path.GetFullPath(path);
+                    Logger.Info($"📍 GetExePath (MainModule): {fullPath}");
+                    return fullPath;
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Warn($"⚠️ GetExePath способ 1 (MainModule) не сработал: {ex.Message}");
+            }
             
+            // Способ 2: Через BaseDirectory + имя процесса
             try
             {
-                // Способ 2: Через BaseDirectory + процесс
                 var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                var exeName = Process.GetCurrentProcess().ProcessName + ".exe";
-                var path = Path.Combine(baseDir, exeName);
-                if (File.Exists(path))
-                    return Path.GetFullPath(path);
+                if (!string.IsNullOrEmpty(baseDir) && Directory.Exists(baseDir))
+                {
+                    var exeName = Process.GetCurrentProcess().ProcessName + ".exe";
+                    var path = Path.Combine(baseDir, exeName);
+                    if (File.Exists(path))
+                    {
+                        var fullPath = Path.GetFullPath(path);
+                        Logger.Info($"📍 GetExePath (BaseDirectory): {fullPath}");
+                        return fullPath;
+                    }
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Warn($"⚠️ GetExePath способ 2 (BaseDirectory) не сработал: {ex.Message}");
+            }
             
-            // Если ничего не помогло, возвращаем путь из аргументов командной строки
-            return Process.GetCurrentProcess().StartInfo.FileName;
+            // Способ 3: Через Assembly.Location (для .NET Framework / .NET Core)
+            try
+            {
+                var assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                if (!string.IsNullOrEmpty(assemblyPath) && File.Exists(assemblyPath))
+                {
+                    var fullPath = Path.GetFullPath(assemblyPath);
+                    Logger.Info($"📍 GetExePath (Assembly.Location): {fullPath}");
+                    return fullPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"⚠️ GetExePath способ 3 (Assembly.Location) не сработал: {ex.Message}");
+            }
+            
+            // Способ 4: Через Environment.ProcessPath (.NET 5+)
+            try
+            {
+                var path = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    var fullPath = Path.GetFullPath(path);
+                    Logger.Info($"📍 GetExePath (Environment.ProcessPath): {fullPath}");
+                    return fullPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"⚠️ GetExePath способ 4 (Environment.ProcessPath) не сработал: {ex.Message}");
+            }
+            
+            // Фоллбэк: возвращаем что есть
+            var fallbackPath = Process.GetCurrentProcess().StartInfo.FileName;
+            Logger.Warn($"⚠️ GetExePath использует фоллбэк: {fallbackPath}");
+            return fallbackPath;
         }
         
         // Проверка, является ли текущий процесс единственным экземпляром
@@ -234,9 +287,31 @@ namespace BibClient
         {
             Logger.Info("🛡️ Guardian процесс запущен");
             
-            // Получаем путь к основному приложению (используем тот же exe файл)
-            string clientExePath = GetExePath();
+            // КРИТИЧЕСКИ ВАЖНО: Получаем и кэшируем путь к основному приложению СРАЗУ при старте
+            // Пока процесс Guardian еще существует и может получить свой MainModule.FileName
+            string clientExePath;
+            try
+            {
+                clientExePath = GetExePath();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"❌ Guardian не смог определить путь к BibClient: {ex.Message}");
+                return;
+            }
+            
+            // Проверяем что файл существует
+            if (!File.Exists(clientExePath))
+            {
+                Logger.Error($"❌ Файл BibClient не найден по пути: {clientExePath}");
+                return;
+            }
+            
             Logger.Info($"🛡️ Guardian следит за: {clientExePath}");
+            
+            // Сохраняем рабочую директорию
+            string workingDir = Path.GetDirectoryName(clientExePath) ?? "";
+            Logger.Info($"🛡️ Рабочая директория: {workingDir}");
             
             // Проверяем мьютекс легального закрытия при старте
             bool legalCloseSignaled = false;
@@ -253,6 +328,10 @@ namespace BibClient
                 Logger.Info("🔓 Обнаружен сигнал легального закрытия при старте Guardian - завершение работы");
                 return;
             }
+            
+            // Флаг чтобы избежать множественных попыток перезапуска
+            bool restartAttempted = false;
+            DateTime lastRestartAttempt = DateTime.MinValue;
             
             while (true)
             {
@@ -272,61 +351,108 @@ namespace BibClient
                 }
 
                 // Проверяем, существует ли основной процесс BibClient (не guardian)
-                var allProcesses = Process.GetProcesses();
                 Process? mainProcess = null;
                 
-                foreach (var p in allProcesses)
+                try
                 {
-                    try
+                    var allProcesses = Process.GetProcesses();
+                    
+                    foreach (var p in allProcesses)
                     {
-                        // Пропускаем самого себя (guardian)
-                        if (p.Id == Process.GetCurrentProcess().Id)
-                            continue;
-                        
-                        // Проверяем что это тот же самый exe файл
                         try
                         {
-                            var otherPath = p.MainModule?.FileName;
+                            // Пропускаем самого себя (guardian)
+                            if (p.Id == Process.GetCurrentProcess().Id)
+                                continue;
                             
-                            if (!string.IsNullOrEmpty(otherPath) && 
-                                otherPath.Equals(clientExePath, StringComparison.OrdinalIgnoreCase))
+                            // Проверяем что это тот же самый exe файл
+                            try
                             {
-                                mainProcess = p;
-                                break;
+                                var otherPath = p.MainModule?.FileName;
+                                
+                                if (!string.IsNullOrEmpty(otherPath) && 
+                                    otherPath.Equals(clientExePath, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    mainProcess = p;
+                                    break;
+                                }
                             }
+                            catch (Win32Exception)
+                            {
+                                // Процесс может быть недоступен для чтения MainModule (AccessDenied)
+                                // В этом случае проверяем по имени процесса как фоллбэк
+                                if (p.ProcessName.Equals("BibClient", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    mainProcess = p;
+                                    break;
+                                }
+                            }
+                            catch { }
                         }
-                        catch { }
+                        finally
+                        {
+                            p?.Dispose();
+                        }
                     }
-                    catch { }
-                    finally
-                    {
-                        p?.Dispose();
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"⚠️ Ошибка enumeration процессов: {ex.Message}");
                 }
 
                 if (mainProcess == null)
                 {
                     // Основной процесс убит — перезапускаем
-                    Logger.Info("⚠️ BibClient не найден, перезапуск...");
-                    try
+                    // Но не чаще чем раз в 10 секунд чтобы избежать цикла перезапусков
+                    if (!restartAttempted || (DateTime.Now - lastRestartAttempt).TotalSeconds > 10)
                     {
-                        var startInfo = new ProcessStartInfo
-                        {
-                            FileName = clientExePath,
-                            UseShellExecute = true,
-                            WorkingDirectory = Path.GetDirectoryName(clientExePath) ?? ""
-                        };
+                        Logger.Info("⚠️ BibClient не найден, перезапуск...");
+                        restartAttempted = true;
+                        lastRestartAttempt = DateTime.Now;
                         
-                        Process.Start(startInfo);
-                        Logger.Info("✅ BibClient перезапущен");
+                        try
+                        {
+                            // Явно указываем FileName и WorkingDirectory
+                            var startInfo = new ProcessStartInfo
+                            {
+                                FileName = clientExePath,
+                                Arguments = "", // Запускаем без аргументов - это будет основной процесс
+                                UseShellExecute = true,
+                                WorkingDirectory = workingDir,
+                                CreateNoWindow = false
+                            };
+                            
+                            // Проверяем что файл все еще существует перед запуском
+                            if (!File.Exists(clientExePath))
+                            {
+                                Logger.Error($"❌ Файл BibClient исчез: {clientExePath}");
+                            }
+                            else
+                            {
+                                Process.Start(startInfo);
+                                Logger.Info($"✅ BibClient перезапущен: {clientExePath}");
+                                
+                                // Сбрасываем флаг после успешного запуска
+                                restartAttempted = false;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error($"❌ Ошибка перезапуска BibClient: {ex.Message}");
+                            Logger.Error($"   StackTrace: {ex.StackTrace}");
+                            Logger.Error($"   FileName: {clientExePath}");
+                            Logger.Error($"   WorkingDirectory: {workingDir}");
+                        }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Logger.Error($"Ошибка перезапуска BibClient: {ex.Message}");
+                        Logger.Info("⏳ Предыдущий перезапуск был менее 10 секунд назад, пропускаем");
                     }
                 }
                 else
                 {
+                    // Процесс найден - сбрасываем флаг перезапуска
+                    restartAttempted = false;
                     mainProcess.Dispose();
                 }
             }
