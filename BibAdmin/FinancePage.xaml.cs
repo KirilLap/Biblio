@@ -51,6 +51,13 @@ namespace BibAdmin
             RenderSessions(Sessions);
         }
         
+        // Метод для обновления UI после загрузки истории
+        public void RefreshUI()
+        {
+            UpdateStats();
+            RenderSessions(Sessions);
+        }
+        
         // Загрузка истории из JSON-файла
         public static void LoadHistory()
         {
