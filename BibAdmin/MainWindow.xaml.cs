@@ -42,6 +42,12 @@ namespace BibAdmin
                 AdminHub.LoadActiveSessions();
                 Logger.Info("✅ Активные сессии восстановлены");
 
+                // ✅ 3. ЗАГРУЖАЕМ ИСТОРИЮ ФИНАНСОВ ПРИ ЗАПУСКЕ
+                // Критически важно: загружаем историю сразу при старте приложения,
+                // чтобы данные были доступны даже до перехода на вкладку "Финансы"
+                FinancePage.LoadHistory();
+                Logger.Info("✅ История финансов загружена");
+
                 Dispatcher.Invoke(() =>
                 {
                     TxtServerStatus.Text = "Сервер запущен :8080";
@@ -77,7 +83,9 @@ namespace BibAdmin
         private void BtnFinance_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnFinance);
-            FinancePage.LoadHistory(); // Загружаем историю перед навигацией
+            // Загружаем историю перед навигацией (если ещё не загружена)
+            // Примечание: история также загружается при старте приложения в MainWindow
+            FinancePage.LoadHistory();
             MainFrame.Navigate(new FinancePage());
         }
 
