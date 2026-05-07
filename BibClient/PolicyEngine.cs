@@ -109,6 +109,13 @@ namespace BibClient
                         EndSessionRequested?.Invoke();
                         break;
 
+                    // Завершение сессии по истечению времени (вызывается из SessionManager)
+                    case "SESSION_EXPIRED":
+                        ActiveSessionType = "";
+                        ActiveElapsedSeconds = 0;
+                        EndSessionRequested?.Invoke();
+                        break;
+
                     case "SESSION_TIME_SYNC":
                         if (int.TryParse(value, out int serverTime))
                         {
