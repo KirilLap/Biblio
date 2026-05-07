@@ -42,7 +42,7 @@ namespace BibClient
                 }
 
                 // Регистрируем с полным путем в кавычках (для путей с пробелами)
-                string registryValue = $""{exePath}"";
+                string registryValue = $"\"{exePath}\"";
                 key.SetValue("BibClient", registryValue, RegistryValueKind.String);
                 
                 // Проверяем что значение записалось
