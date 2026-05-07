@@ -10,6 +10,10 @@ namespace BibClient
         {
             base.OnStartup(e);
 
+            // 🔥 Запускаем механизм авто-перезапуска (Guardian)
+            // Это обеспечивает перезапуск приложения после закрытия через диспетчер задач
+            Watchdog.StartGuardian();
+
             // Путь к файлу настроек
             string settingsPath = Path.Combine(
                 AppDomain.CurrentDomain.BaseDirectory,
