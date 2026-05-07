@@ -57,12 +57,6 @@ namespace BibClient
             ApplySettings();
             StartClock();
             StartNetwork();
-
-            // Запускаем Guardian если включена защита от закрытия (по умолчанию true)
-            if (_settings.PreventClose)
-            {
-                Watchdog.StartGuardian(true);
-            }
             
             // Регистрируем автозапуск если включено (по умолчанию true)
             if (_settings.AutoStartWithUser)
@@ -395,51 +389,59 @@ namespace BibClient
 
         private void OnSessionExpired()
         {
-            Dispatcher.Invoke(() =>
+            // Метод может быть вызван из другого потока (событие PolicyEngine), поэтому используем Dispatcher
+            if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
             {
-                Logger.Info("Сессия завершена — блокируем ПК");
+                System.Windows.Application.Current.Dispatcher.Invoke(() => OnSessionExpiredInternal());
+                return;
+            }
+            OnSessionExpiredInternal();
+        }
 
-                // 1. Очищаем менеджер сессии
-                _sessionManager?.Dispose();
-                _sessionManager = null;
+        private void OnSessionExpiredInternal()
+        {
+            Logger.Info("Сессия завершена — блокируем ПК");
 
-                // 2. Сбрасываем состояние
-                _isUnlocked = false;
+            // 1. Очищаем менеджер сессии
+            _sessionManager?.Dispose();
+            _sessionManager = null;
 
-                // 3. Восстанавливаем хук блокировки
-                _lockHook?.Dispose();
-                _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            // 2. Сбрасываем состояние
+            _isUnlocked = false;
 
-                // 4. Возвращаем оригинальный контент (экран блокировки)
-                this.Content = _originalContent;
+            // 3. Восстанавливаем хук блокировки
+            _lockHook?.Dispose();
+            _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
 
-                // 5. Возвращаем свойства окна блокировки
-                this.WindowStyle = WindowStyle.None;
-                this.WindowState = WindowState.Maximized;
-                this.Topmost = true;
-                this.ResizeMode = ResizeMode.NoResize;
-                this.Width = double.NaN;
-                this.Height = double.NaN;
+            // 4. Возвращаем оригинальный контент (экран блокировки)
+            this.Content = _originalContent;
 
-                // 6. Показываем экран блокировки
-                this.Show();
-                this.Activate();
-                this.Focus();
+            // 5. Возвращаем свойства окна блокировки
+            this.WindowStyle = WindowStyle.None;
+            this.WindowState = WindowState.Maximized;
+            this.Topmost = true;
+            this.ResizeMode = ResizeMode.NoResize;
+            this.Width = double.NaN;
+            this.Height = double.NaN;
 
-                StartClock();
-                ApplySettings();
+            // 6. Показываем экран блокировки
+            this.Show();
+            this.Activate();
+            this.Focus();
 
-                // 7. Очищаем поле пароля
-                if (PbPassword != null) PbPassword.Clear();
-                if (PanelPassword != null) PanelPassword.Visibility = Visibility.Collapsed;
+            StartClock();
+            ApplySettings();
 
-                // 8. Обновляем видимость кнопок в трее (сессия завершена - кнопки должны появиться)
-                PolicyEngine.ResetSession();
+            // 7. Очищаем поле пароля
+            if (PbPassword != null) PbPassword.Clear();
+            if (PanelPassword != null) PanelPassword.Visibility = Visibility.Collapsed;
 
-                _ = _networkManager?.SendStatusAsync("Заблокирован");
+            // 8. Обновляем видимость кнопок в трее (сессия завершена - кнопки должны появиться)
+            PolicyEngine.ResetSession();
 
-                Logger.Info("Экран блокировки восстановлен");
-            });
+            _ = _networkManager?.SendStatusAsync("Заблокирован");
+
+            Logger.Info("Экран блокировки восстановлен");
         }
 
         // =====================

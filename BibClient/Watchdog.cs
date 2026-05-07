@@ -153,15 +153,7 @@ namespace BibClient
             // Получаем полный путь к exe файлу
             string exePath = GetExePath();
             
-            // Проверяем, не запущен ли уже guardian
-            var existing = Process.GetProcessesByName("BibClientGuardian");
-            if (existing.Length > 0)
-            {
-                Logger.Info("🛡️ Guardian уже запущен");
-                return;
-            }
-            
-            // Дополнительно проверяем по имени процесса с флагом --guardian
+            // Проверяем, не запущен ли уже guardian - ищем процессы с тем же exe путем
             var allProcesses = Process.GetProcesses();
             bool guardianRunning = false;
             foreach (var p in allProcesses)
@@ -175,14 +167,10 @@ namespace BibClient
                     if (!string.IsNullOrEmpty(otherPath) && 
                         otherPath.Equals(exePath, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Проверяем аргументы командной строки
-                        // Если процесс был запущен с --guardian, пропускаем
-                        // (простая эвристика: если имя процесса содержит "Guardian" или это второй экземпляр)
-                        if (p.ProcessName.Contains("Guardian", StringComparison.OrdinalIgnoreCase))
-                        {
-                            guardianRunning = true;
-                            break;
-                        }
+                        // Проверяем аргументы командной строки через WMI или эвристику
+                        // Если это второй экземпляр того же exe - считаем его guardian'ом
+                        guardianRunning = true;
+                        break;
                     }
                 }
                 catch { }
@@ -293,10 +281,6 @@ namespace BibClient
                     {
                         // Пропускаем самого себя (guardian)
                         if (p.Id == Process.GetCurrentProcess().Id)
-                            continue;
-                        
-                        // Пропускаем другие guardian процессы
-                        if (p.ProcessName.Contains("Guardian", StringComparison.OrdinalIgnoreCase))
                             continue;
                         
                         // Проверяем что это тот же самый exe файл
