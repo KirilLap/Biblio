@@ -13,6 +13,13 @@ namespace BibClient
         public static string ActiveSessionType { get; private set; } = "";
         public static int ActiveElapsedSeconds { get; private set; } = 0;
 
+        // Метод для сброса активной сессии (вызывается из MainWindow при разблокировке)
+        public static void ResetSession()
+        {
+            ActiveSessionType = "";
+            ActiveElapsedSeconds = 0;
+        }
+
         // Блокировать ли ПК при потере связи во время сессии.
         // Значение читается из SettingsManager, чтобы пережить перезапуск.
         public static bool LockOnOffline

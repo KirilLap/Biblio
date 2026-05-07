@@ -428,7 +428,7 @@ namespace BibClient
                 if (PanelPassword != null) PanelPassword.Visibility = Visibility.Collapsed;
 
                 // 8. Обновляем видимость кнопок в трее (сессия завершена - кнопки должны появиться)
-                PolicyEngine.ActiveSessionType = "";
+                PolicyEngine.ResetSession();
 
                 _ = _networkManager?.SendStatusAsync("Заблокирован");
 
