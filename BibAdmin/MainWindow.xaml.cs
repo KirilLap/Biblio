@@ -83,9 +83,7 @@ namespace BibAdmin
         private void BtnFinance_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnFinance);
-            // Загружаем историю перед навигацией (если ещё не загружена)
-            // Примечание: история также загружается при старте приложения в MainWindow
-            FinancePage.LoadHistory();
+            // История уже загружена при старте приложения, просто показываем страницу
             MainFrame.Navigate(new FinancePage());
         }
 
