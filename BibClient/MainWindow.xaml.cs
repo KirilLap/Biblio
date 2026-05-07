@@ -418,13 +418,6 @@ namespace BibClient
                 // 6. Показываем экран блокировки
                 this.Show();
                 this.Activate();
-                
-                // 7. Обновляем видимость кнопок в трее (сессия завершена - кнопки должны появиться)
-                PolicyEngine.ActiveSessionType = "";
-                
-                _ = _networkManager?.SendStatusAsync("Заблокирован");
-            });
-        }
                 this.Focus();
 
                 StartClock();
@@ -433,6 +426,9 @@ namespace BibClient
                 // 7. Очищаем поле пароля
                 if (PbPassword != null) PbPassword.Clear();
                 if (PanelPassword != null) PanelPassword.Visibility = Visibility.Collapsed;
+
+                // 8. Обновляем видимость кнопок в трее (сессия завершена - кнопки должны появиться)
+                PolicyEngine.ActiveSessionType = "";
 
                 _ = _networkManager?.SendStatusAsync("Заблокирован");
 
