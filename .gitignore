@@ -1,23 +1,70 @@
-```
-# Build artifacts
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
 *.obj
 *.exe
 *.dll
-*.pdb
-*.userprefs
-*.cache
-*.tmp
+*.so
+*.class
+*.out
+*.a
 
 # Dependencies
-packages/
-bin/
-obj/
+node_modules/
+venv/
+.venv/
+.env
+.env.local
+.env.*
 
-# Logs
+# Build directories
+dist/
+build/
+target/
+*.egg-info/
+
+# Logs and temp files
 *.log
+*.tmp
+*.swp
+*.swo
 
-# User-specific files
-.vs/
-*.user
-*.suo
-```
+# Editors
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Testing and coverage
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Archives
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst

@@ -26,14 +26,8 @@ namespace BibClient
             var contextMenu = new ContextMenuStrip();
             contextMenu.Items.Add("Показать", null, (s, e) => ShowPopupRequested?.Invoke());
             contextMenu.Items.Add("Заблокировать", null, (s, e) => PolicyEngine.RemoteLockRequested?.Invoke());
-            // 🔥 При выходе через меню — сначала отключаем Guardian, затем завершаем приложение
-            contextMenu.Items.Add("Выход", null, (s, e) => 
-            {
-                Watchdog.Stop();
-                Watchdog.UnregisterAutostart();
-                SessionManager.ClearStateFile();
-                Application.Current.Shutdown();
-            });
+            // 🔥 Кнопка "Выход" удалена — клиент не может завершить приложение самостоятельно
+            // Выход возможен только через разблокировку администратором
             _notifyIcon.ContextMenuStrip = contextMenu;
         }
 
