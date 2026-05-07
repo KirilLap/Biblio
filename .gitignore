@@ -1,1 +1,35 @@
-Nothing needs to be added to .gitignore since only a single source code file (Watchdog.cs) was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
+```
+# Build artifacts
+*.obj
+*.exe
+*.dll
+*.pdb
+*.userprefs
+
+# Dependencies
+packages/
+bin/
+obj/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+```

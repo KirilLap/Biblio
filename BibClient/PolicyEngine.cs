@@ -54,6 +54,8 @@ namespace BibClient
                 {
                     // ── Управление блокировкой / разблокировкой ───────────────────────────
                     case "REMOTE_UNLOCK":
+                        ActiveSessionType = "";
+                        ActiveElapsedSeconds = 0;
                         RemoteUnlockRequested?.Invoke();
                         break;
 
