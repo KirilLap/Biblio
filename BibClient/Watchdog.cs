@@ -252,12 +252,11 @@ namespace BibClient
             
             // Проверяем мьютекс легального закрытия при старте
             bool legalCloseSignaled = false;
-            using (var mutex = Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var m))
+            if (Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var m))
             {
-                if (m != null)
+                using (m)
                 {
                     legalCloseSignaled = m.WaitOne(0);
-                    m.Dispose();
                 }
             }
             
@@ -272,15 +271,16 @@ namespace BibClient
                 Thread.Sleep(3000);
                 
                 // Периодически проверяем сигнал легального закрытия
-                using (var mutex = Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var m))
+                if (Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var m))
                 {
-                    if (m != null && m.WaitOne(0))
+                    using (m)
                     {
-                        Logger.Info("🔓 Получен сигнал легального закрытия - завершение работы Guardian");
-                        m.Dispose();
-                        return;
+                        if (m.WaitOne(0))
+                        {
+                            Logger.Info("🔓 Получен сигнал легального закрытия - завершение работы Guardian");
+                            return;
+                        }
                     }
-                    m?.Dispose();
                 }
 
                 // Проверяем, существует ли основной процесс BibClient (не guardian)
