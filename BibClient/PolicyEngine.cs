@@ -20,6 +20,12 @@ namespace BibClient
             ActiveElapsedSeconds = 0;
         }
 
+        // Метод для уведомления о завершении сессии (вызывается из SessionManager)
+        public static void NotifySessionEnded()
+        {
+            EndSessionRequested?.Invoke();
+        }
+
         // Блокировать ли ПК при потере связи во время сессии.
         // Значение читается из SettingsManager, чтобы пережить перезапуск.
         public static bool LockOnOffline

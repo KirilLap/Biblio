@@ -218,7 +218,7 @@ namespace BibClient
                 ClearStateFile(); 
                 SessionExpired?.Invoke(); 
                 // Сигнализируем PolicyEngine о завершении сессии для обновления UI (кнопки в трее)
-                PolicyEngine.EndSessionRequested?.Invoke();
+                PolicyEngine.NotifySessionEnded();
             } // ✅ Ставим _isFinished = true
         }
 
@@ -255,7 +255,7 @@ namespace BibClient
                 ClearStateFile(); 
                 SessionExpired?.Invoke(); 
                 // Сигнализируем PolicyEngine о завершении сессии для обновления UI (кнопки в трее)
-                PolicyEngine.EndSessionRequested?.Invoke();
+                PolicyEngine.NotifySessionEnded();
             }); 
         } // ✅ Ставим _isFinished = true
 
