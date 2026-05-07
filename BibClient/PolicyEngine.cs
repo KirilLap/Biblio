@@ -306,6 +306,28 @@ namespace BibClient
                         SettingsChanged?.Invoke();
                         break;
 
+                    // ── Защита и автозапуск ───────────────────────────────────────
+                    case "PREVENT_CLOSE":
+                        SettingsManager.Current.PreventClose = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        Logger.Info($"🔒 PreventClose = {SettingsManager.Current.PreventClose}");
+                        break;
+
+                    case "AUTOSTART_WITH_USER":
+                        SettingsManager.Current.AutoStartWithUser = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        if (SettingsManager.Current.AutoStartWithUser)
+                        {
+                            Watchdog.RegisterAutostart();
+                            Logger.Info("✅ Автозапуск с пользователем включён");
+                        }
+                        else
+                        {
+                            Watchdog.UnregisterAutostart();
+                            Logger.Info("❌ Автозапуск с пользователем выключен");
+                        }
+                        break;
+
                     case "SHUTDOWN":
                         Logger.Info("💤 Выключение ПК по команде сервера");
                         Process.Start("shutdown", "/s /f /t 0");

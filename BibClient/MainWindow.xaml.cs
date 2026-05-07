@@ -648,7 +648,16 @@ namespace BibClient
             _sessionManager?.Dispose();
             e.Cancel = false;
 #else
-            if (true) e.Cancel = true;
+            // Защита от закрытия: если включена настройка PreventClose, отменяем закрытие
+            if (_settings.PreventClose) 
+            {
+                Logger.Info("🚫 Закрытие окна заблокировано настройкой PreventClose");
+                e.Cancel = true;
+            }
+            else
+            {
+                e.Cancel = true;
+            }
 #endif
         }
     }

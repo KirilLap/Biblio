@@ -1,1 +1,32 @@
-Nothing should be ignored based on the provided file changes. The only modified file is 'BibAdmin/FinancePage.xaml', which appears to be a source code file (XAML UI markup) and not a build artifact, dependency, or temporary file.
+```
+# Build artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.userprefs
+
+# Dependencies
+packages/
+node_modules/
+.nuget/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+```

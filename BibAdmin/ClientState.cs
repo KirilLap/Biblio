@@ -85,6 +85,8 @@ namespace BibAdmin
         public bool UsbBlocked { get; set; } = false;
         public bool TaskMgrDisabled { get; set; } = false;
         public bool ShowPcNumber { get; set; } = true;
+        public bool PreventClose { get; set; } = false;
+        public bool AutoStartWithUser { get; set; } = false;
 
         // =====================
         // Индивидуальные настройки

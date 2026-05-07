@@ -55,6 +55,8 @@ namespace BibAdmin
                 ChkHideDriveC.IsChecked = _global.HideDriveC;
                 ChkBlockInstall.IsChecked = _global.BlockInstall;
                 ChkLockOnOffline.IsChecked = _global.LockOnOffline;
+                ChkPreventClose.IsChecked = _global.PreventClose;
+                ChkAutoStartWithUser.IsChecked = _global.AutoStartWithUser;
 
                 SelectComboByTag(CmbPcNumberPosition, _global.PcNumberPosition);
                 SelectComboByTag(CmbLockedTextPosition, _global.LockedTextPosition);
@@ -164,6 +166,8 @@ namespace BibAdmin
             bool blockPowerShell = ChkBlockPowerShell.IsChecked == true;
             bool hideDriveC = ChkHideDriveC.IsChecked == true;
             bool blockInstall = ChkBlockInstall.IsChecked == true;
+            bool preventClose = ChkPreventClose.IsChecked == true;
+            bool autoStartWithUser = ChkAutoStartWithUser.IsChecked == true;
 
             var r = MessageBox.Show(
                 $"Применить ограничения ко всем ПК?\n\n" +
@@ -173,7 +177,9 @@ namespace BibAdmin
                 $"CMD: {(blockCmd ? "Заблокировать" : "Разрешить")}\n" +
                 $"PowerShell: {(blockPowerShell ? "Заблокировать" : "Разрешить")}\n" +
                 $"Диск C: {(hideDriveC ? "Скрыть" : "Показать")}\n" +
-                $"Установка программ: {(blockInstall ? "Запретить" : "Разрешить")}",
+                $"Установка программ: {(blockInstall ? "Запретить" : "Разрешить")}\n" +
+                $"Защита от закрытия: {(preventClose ? "Включить" : "Выключить")}\n" +
+                $"Автозапуск с пользователем: {(autoStartWithUser ? "Включить" : "Выключить")}",
                 "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (r != MessageBoxResult.Yes) return;
@@ -185,6 +191,8 @@ namespace BibAdmin
             _global.BlockPowerShell = blockPowerShell;
             _global.HideDriveC = hideDriveC;
             _global.BlockInstall = blockInstall;
+            _global.PreventClose = preventClose;
+            _global.AutoStartWithUser = autoStartWithUser;
             _global.Save();
 
             await ApplyCommandToAll("USB_BLOCK", blockUsb.ToString().ToLower());
@@ -194,11 +202,15 @@ namespace BibAdmin
             await ApplyCommandToAll("BLOCK_POWERSHELL", blockPowerShell.ToString().ToLower());
             await ApplyCommandToAll("HIDE_DRIVE_C", hideDriveC.ToString().ToLower());
             await ApplyCommandToAll("BLOCK_INSTALL_UNINSTALL", blockInstall.ToString().ToLower());
+            await ApplyCommandToAll("PREVENT_CLOSE", preventClose.ToString().ToLower());
+            await ApplyCommandToAll("AUTOSTART_WITH_USER", autoStartWithUser.ToString().ToLower());
 
             foreach (var pc in AdminHub.KnownClients.Values)
             {
                 pc.UsbBlocked = blockUsb;
                 pc.TaskMgrDisabled = disableTaskMgr;
+                pc.PreventClose = preventClose;
+                pc.AutoStartWithUser = autoStartWithUser;
             }
 
             ShowSaved(TxtRestrictionsSaved);
