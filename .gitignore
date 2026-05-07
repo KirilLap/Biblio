@@ -1,21 +1,16 @@
 ```
 # Build artifacts
+bin/
+obj/
 *.exe
 *.dll
 *.pdb
 *.userprefs
 *.cache
-bin/
-obj/
-Debug/
-Release/
-x64/
-x86/
+*.tmp
 
 # Dependencies
 packages/
-node_modules/
-vendor/
 
 # Logs
 *.log
@@ -27,8 +22,13 @@ vendor/
 
 # Editors
 .vs/
-.idea/
+.vscode/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
 Thumbs.db
 ```

@@ -21,14 +21,18 @@ namespace BibClient
         {
             try
             {
-                _exePath = Process.GetCurrentProcess().MainModule!.FileName;
+                string exePath = Process.GetCurrentProcess().MainModule!.FileName;
 
                 using var key = Registry.CurrentUser.OpenSubKey(
                     @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
 
-                key?.SetValue("BibClient", $"\"{_exePath}\"");
+                key?.SetValue("BibClient", $"\"{exePath}\"");
+                Logger.Info($"✅ Автозапуск зарегистрирован: {exePath}");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"❌ Ошибка регистрации автозапуска: {ex.Message}");
+            }
         }
 
         // Убираем автозапуск из реестра
@@ -104,7 +108,7 @@ namespace BibClient
                 return;
             }
 
-            _exePath = Process.GetCurrentProcess().MainModule!.FileName;
+            string exePath = Process.GetCurrentProcess().MainModule!.FileName;
             
             // Проверяем, не запущен ли уже guardian
             var existing = Process.GetProcessesByName("BibClientGuardian");
@@ -114,7 +118,7 @@ namespace BibClient
             // Запускаем guardian как отдельный процесс с флагом --guardian
             var startInfo = new ProcessStartInfo
             {
-                FileName = _exePath,
+                FileName = exePath,
                 Arguments = "--guardian",
                 UseShellExecute = true,
                 CreateNoWindow = true
@@ -160,6 +164,13 @@ namespace BibClient
         {
             Logger.Info("🛡️ Guardian процесс запущен");
             
+            // Получаем путь к текущему exe файлу (это тот же файл что и BibClient.exe)
+            string guardianExePath = Process.GetCurrentProcess().MainModule?.FileName 
+                ?? throw new InvalidOperationException("Не удалось получить путь к процессу");
+            
+            // Путь к основному приложению (такой же как у guardian)
+            string clientExePath = guardianExePath;
+            
             while (true)
             {
                 Thread.Sleep(3000);
@@ -198,7 +209,7 @@ namespace BibClient
                     {
                         Process.Start(new ProcessStartInfo
                         {
-                            FileName = _exePath,
+                            FileName = clientExePath,
                             UseShellExecute = true
                         });
                         Logger.Info("✅ BibClient перезапущен");

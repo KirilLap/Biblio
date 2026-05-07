@@ -83,6 +83,18 @@ namespace BibClient
                 Logger.Info("📁 Настройки найдены, загрузка");
                 SettingsManager.Load();
 
+                // Запускаем Guardian если включена защита от закрытия
+                if (SettingsManager.Current.PreventClose)
+                {
+                    Watchdog.StartGuardian(true);
+                }
+                
+                // Регистрируем автозапуск если включено
+                if (SettingsManager.Current.AutoStartWithUser)
+                {
+                    Watchdog.RegisterAutostart();
+                }
+
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;
                 
