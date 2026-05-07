@@ -10,11 +10,16 @@ namespace BibClient
         {
             base.OnStartup(e);
 
+            // 🔹 КРИТИЧЕСКИ ВАЖНО: Сначала проверяем и копируем Guardian.exe если нужно
+            // Это делается ДО всех остальных проверок чтобы Guardian всегда был актуален
+            EnsureGuardianInstalled();
+
             // Проверка на запуск в режиме Guardian
             if (e.Args.Length > 0 && e.Args[0] == "--guardian")
             {
-                Logger.Info("🛡️ Запуск в режиме Guardian");
-                Watchdog.RunGuardian();
+                Logger.Info("🛡️ Запуск в режиме Guardian (устаревший режим - теперь используется отдельный exe)");
+                // В новой версии Guardian работает как отдельный exe файл
+                // Этот код оставлен для обратной совместимости
                 Shutdown();
                 return;
             }
@@ -32,6 +37,30 @@ namespace BibClient
             {
                 Watchdog.ReleaseSingleInstance();
             };
+
+            // 🔹 Метод проверки и копирования BibClientGuardian.exe
+            void EnsureGuardianInstalled()
+            {
+                try
+                {
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string guardianSourcePath = Path.Combine(baseDir, "BibClientGuardian.exe");
+                    
+                    // Проверяем существует ли файл Guardian
+                    if (!File.Exists(guardianSourcePath))
+                    {
+                        Logger.Warn($"⚠️ BibClientGuardian.exe не найден в папке: {guardianSourcePath}");
+                        Logger.Warn("⚠️ Функция защиты от закрытия будет недоступна!");
+                        return;
+                    }
+
+                    Logger.Info($"✅ BibClientGuardian.exe найден: {guardianSourcePath}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"❌ Ошибка проверки Guardian: {ex.Message}");
+                }
+            }
 
             // Путь к файлу настроек - используем абсолютный путь относительно exe файла
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;

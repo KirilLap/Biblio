@@ -9,6 +9,14 @@
 	<UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
+  <!-- Post-build event: копируем BibClientGuardian.exe в папку вывода BibClient после сборки -->
+  <Target Name="CopyGuardianAfterBuild" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)..\BibClientGuardian\bin\$(Configuration)\net10.0-windows\BibClientGuardian.exe" 
+          DestinationFolder="$(OutDir)" 
+          SkipUnchangedFiles="true" />
+    <Message Text="✅ BibClientGuardian.exe скопирован в $(OutDir)" Importance="high" />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.7" />
