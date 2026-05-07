@@ -38,6 +38,9 @@ namespace BibClient
 
         private ClientSettings _settings => SettingsManager.Current;
 
+        // Публичное свойство для проверки готовности окна
+        public bool IsReady => _isReady;
+
         public MainWindow()
         {
             // ✅ Устанавливаем флаг готовности СРАЗУ, чтобы Lock() мог быть вызван сразу после создания объекта
@@ -87,6 +90,9 @@ namespace BibClient
             // Подписка на запуск сессии (initialElapsed > 0 при восстановлении после реконнекта)
             PolicyEngine.StartSessionRequested += (type, limit, paid, initialElapsed) =>
                 Dispatcher.Invoke(() => StartSession(type, limit, paid, initialElapsed));
+
+            // Подписка на завершение сессии - блокируем ПК
+            PolicyEngine.EndSessionRequested += () => Dispatcher.Invoke(() => OnSessionExpired());
 
             // Блокировка экрана при паузе: пользователь не может работать пока сессия на паузе
             PolicyEngine.SessionPaused += (paused) => Dispatcher.Invoke(() =>

@@ -123,9 +123,31 @@ namespace BibClient
                 mainWindow.Show();
                 mainWindow.Activate();
                 
-                // Вызываем блокировку через Dispatcher
+                // Вызываем блокировку через Dispatcher с повторной попыткой если _isReady ещё false
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(
-                    new Action(() => mainWindow.Lock()), 
+                    new Action(() => 
+                    {
+                        // Ждём пока окно будет готово (максимум 5 секунд)
+                        int attempts = 0;
+                        while (!mainWindow.IsReady && attempts < 50)
+                        {
+                            System.Threading.Thread.Sleep(100);
+                            attempts++;
+                        }
+                        
+                        if (mainWindow.IsReady)
+                        {
+                            mainWindow.Lock();
+                        }
+                        else
+                        {
+                            Logger.Warn("⚠️ Окно не готово к блокировке после 5 секунд, повторяем попытку...");
+                            // Повторная попытка через 1 секунду
+                            System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                                new Action(() => mainWindow.Lock()), 
+                                System.Windows.Threading.DispatcherPriority.Background);
+                        }
+                    }), 
                     System.Windows.Threading.DispatcherPriority.Background);
             }
         }

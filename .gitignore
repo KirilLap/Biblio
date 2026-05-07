@@ -1,1 +1,48 @@
-Nothing should be ignored since only source code files (.cs files) were modified and no build artifacts, dependencies, or temporary files were detected in the changes.
+```
+# Compiled and build artifacts
+*.exe
+*.dll
+*.pdb
+*.obj
+*.lib
+*.so
+*.dylib
+bin/
+obj/
+Debug/
+Release/
+x64/
+x86/
+
+# Dependencies
+packages/
+node_modules/
+.nuget/
+.nvs/
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vs/
+.vshost.exe
+.userprefs
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+```

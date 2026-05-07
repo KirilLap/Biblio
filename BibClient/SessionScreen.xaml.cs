@@ -211,7 +211,15 @@ namespace BibClient
             if (_elapsedSeconds % 5 == 0) { UpdateTrayTooltip(); SaveHeartbeat(); }
             ElapsedUpdated?.Invoke(_elapsedSeconds); // ✅ Отправляем каждую секунду
             CheckWarnings();
-            if (_limitSeconds > 0 && _elapsedSeconds >= _limitSeconds) { _isFinished = true; _timer.Stop(); ClearStateFile(); SessionExpired?.Invoke(); } // ✅ Ставим _isFinished = true
+            if (_limitSeconds > 0 && _elapsedSeconds >= _limitSeconds) 
+            { 
+                _isFinished = true; 
+                _timer.Stop(); 
+                ClearStateFile(); 
+                SessionExpired?.Invoke(); 
+                // Сигнализируем PolicyEngine о завершении сессии для обновления UI (кнопки в трее)
+                PolicyEngine.EndSessionRequested?.Invoke();
+            } // ✅ Ставим _isFinished = true
         }
 
         private void UpdateTrayTooltip()
@@ -238,7 +246,18 @@ namespace BibClient
             System.Windows.Application.Current.Dispatcher.Invoke(() => { _limitSeconds += addSeconds; int remaining = _limitSeconds - _elapsedSeconds; if (remaining > 300) { _warningShown5 = _warningShown4 = _warningShown3 = _warningShown2 = _warningShown1 = false; } _trayIcon?.ShowNotification("Сессия продлена", $"Добавлено {addSeconds / 60} мин"); UpdateTrayTooltip(); SaveSessionState(); });
         }
 
-        private void OnEnd() { System.Windows.Application.Current.Dispatcher.Invoke(() => { _isFinished = true; _timer.Stop(); ClearStateFile(); SessionExpired?.Invoke(); }); } // ✅ Ставим _isFinished = true
+        private void OnEnd() 
+        { 
+            System.Windows.Application.Current.Dispatcher.Invoke(() => 
+            { 
+                _isFinished = true; 
+                _timer.Stop(); 
+                ClearStateFile(); 
+                SessionExpired?.Invoke(); 
+                // Сигнализируем PolicyEngine о завершении сессии для обновления UI (кнопки в трее)
+                PolicyEngine.EndSessionRequested?.Invoke();
+            }); 
+        } // ✅ Ставим _isFinished = true
 
         public int GetElapsedSeconds() => _elapsedSeconds;
         public string GetSessionType() => _sessionType;

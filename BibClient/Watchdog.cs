@@ -160,6 +160,40 @@ namespace BibClient
                 Logger.Info("🛡️ Guardian уже запущен");
                 return;
             }
+            
+            // Дополнительно проверяем по имени процесса с флагом --guardian
+            var allProcesses = Process.GetProcesses();
+            bool guardianRunning = false;
+            foreach (var p in allProcesses)
+            {
+                try
+                {
+                    if (p.Id == Process.GetCurrentProcess().Id)
+                        continue;
+                    
+                    var otherPath = p.MainModule?.FileName;
+                    if (!string.IsNullOrEmpty(otherPath) && 
+                        otherPath.Equals(exePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Проверяем аргументы командной строки
+                        // Если процесс был запущен с --guardian, пропускаем
+                        // (простая эвристика: если имя процесса содержит "Guardian" или это второй экземпляр)
+                        if (p.ProcessName.Contains("Guardian", StringComparison.OrdinalIgnoreCase))
+                        {
+                            guardianRunning = true;
+                            break;
+                        }
+                    }
+                }
+                catch { }
+                finally { p?.Dispose(); }
+            }
+            
+            if (guardianRunning)
+            {
+                Logger.Info("🛡️ Guardian уже запущен (проверка по процессам)");
+                return;
+            }
 
             // Запускаем guardian как отдельный процесс с флагом --guardian
             var startInfo = new ProcessStartInfo
@@ -216,9 +250,38 @@ namespace BibClient
             string clientExePath = GetExePath();
             Logger.Info($"🛡️ Guardian следит за: {clientExePath}");
             
+            // Проверяем мьютекс легального закрытия при старте
+            bool legalCloseSignaled = false;
+            using (var mutex = Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var m))
+            {
+                if (m != null)
+                {
+                    legalCloseSignaled = m.WaitOne(0);
+                    m.Dispose();
+                }
+            }
+            
+            if (legalCloseSignaled)
+            {
+                Logger.Info("🔓 Обнаружен сигнал легального закрытия при старте Guardian - завершение работы");
+                return;
+            }
+            
             while (true)
             {
                 Thread.Sleep(3000);
+                
+                // Периодически проверяем сигнал легального закрытия
+                using (var mutex = Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var m))
+                {
+                    if (m != null && m.WaitOne(0))
+                    {
+                        Logger.Info("🔓 Получен сигнал легального закрытия - завершение работы Guardian");
+                        m.Dispose();
+                        return;
+                    }
+                    m?.Dispose();
+                }
 
                 // Проверяем, существует ли основной процесс BibClient (не guardian)
                 var allProcesses = Process.GetProcesses();
