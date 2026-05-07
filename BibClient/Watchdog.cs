@@ -203,57 +203,47 @@ namespace BibClient
                 return;
             }
 
-            // Получаем полный путь к exe файлу
-            string exePath = GetExePath();
+            // Получаем полный путь к exe файлу основного приложения
+            string clientExePath = GetExePath();
+            string baseDir = Path.GetDirectoryName(clientExePath) ?? "";
+            string guardianExePath = Path.Combine(baseDir, "BibClientGuardian.exe");
             
-            // Проверяем, не запущен ли уже guardian - ищем процессы с тем же exe путем
-            var allProcesses = Process.GetProcesses();
-            bool guardianRunning = false;
-            foreach (var p in allProcesses)
+            // Проверяем существует ли файл Guardian
+            if (!File.Exists(guardianExePath))
             {
-                try
-                {
-                    if (p.Id == Process.GetCurrentProcess().Id)
-                        continue;
-                    
-                    var otherPath = p.MainModule?.FileName;
-                    if (!string.IsNullOrEmpty(otherPath) && 
-                        otherPath.Equals(exePath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Проверяем аргументы командной строки через WMI или эвристику
-                        // Если это второй экземпляр того же exe - считаем его guardian'ом
-                        guardianRunning = true;
-                        break;
-                    }
-                }
-                catch { }
-                finally { p?.Dispose(); }
+                Logger.Error($"❌ BibClientGuardian.exe не найден по пути: {guardianExePath}");
+                Logger.Error("⚠️ Защита от закрытия не будет работать!");
+                return;
             }
             
-            if (guardianRunning)
+            // Проверяем, не запущен ли уже guardian
+            var guardianProcesses = Process.GetProcessesByName("BibClientGuardian");
+            if (guardianProcesses.Length > 0)
             {
-                Logger.Info("🛡️ Guardian уже запущен (проверка по процессам)");
+                Logger.Info("🛡️ Guardian уже запущен");
+                foreach (var p in guardianProcesses) p?.Dispose();
                 return;
             }
 
-            // Запускаем guardian как отдельный процесс с флагом --guardian
+            // Запускаем Guardian как отдельный процесс
             var startInfo = new ProcessStartInfo
             {
-                FileName = exePath,
-                Arguments = "--guardian",
+                FileName = guardianExePath,
                 UseShellExecute = true,
                 CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(exePath) ?? ""
+                WorkingDirectory = baseDir,
+                WindowStyle = ProcessWindowStyle.Hidden
             };
             
             try
             {
                 Process.Start(startInfo);
-                Logger.Info("🛡️ Guardian запущен");
+                Logger.Info($"🛡️ Guardian запущен: {guardianExePath}");
             }
             catch (Exception ex)
             {
-                Logger.Error($"Ошибка запуска Guardian: {ex.Message}");
+                Logger.Error($"❌ Ошибка запуска Guardian: {ex.Message}");
+                Logger.Error($"   StackTrace: {ex.StackTrace}");
             }
         }
 
@@ -271,10 +261,14 @@ namespace BibClient
                 {
                     try
                     {
-                        g.Kill();
-                        g.WaitForExit(1000);
+                        if (!g.HasExited)
+                        {
+                            g.Kill();
+                            g.WaitForExit(1000);
+                        }
                     }
                     catch { }
+                    finally { g?.Dispose(); }
                 }
                 
                 Logger.Info("🔓 Guardian остановлен");
@@ -282,180 +276,11 @@ namespace BibClient
             catch { }
         }
 
-        // Точка входа для guardian процесса
+        // Точка входа для guardian процесса (устаревший метод - теперь используется отдельный exe)
+        [Obsolete("Теперь Guardian работает как отдельный процесс BibClientGuardian.exe")]
         public static void RunGuardian()
         {
-            Logger.Info("🛡️ Guardian процесс запущен");
-            
-            // КРИТИЧЕСКИ ВАЖНО: Получаем и кэшируем путь к основному приложению СРАЗУ при старте
-            // Пока процесс Guardian еще существует и может получить свой MainModule.FileName
-            string clientExePath;
-            try
-            {
-                clientExePath = GetExePath();
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"❌ Guardian не смог определить путь к BibClient: {ex.Message}");
-                return;
-            }
-            
-            // Проверяем что файл существует
-            if (!File.Exists(clientExePath))
-            {
-                Logger.Error($"❌ Файл BibClient не найден по пути: {clientExePath}");
-                return;
-            }
-            
-            Logger.Info($"🛡️ Guardian следит за: {clientExePath}");
-            
-            // Сохраняем рабочую директорию
-            string workingDir = Path.GetDirectoryName(clientExePath) ?? "";
-            Logger.Info($"🛡️ Рабочая директория: {workingDir}");
-            
-            // Проверяем мьютекс легального закрытия при старте
-            bool legalCloseSignaled = false;
-            if (Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var existingMutex))
-            {
-                using (existingMutex)
-                {
-                    legalCloseSignaled = existingMutex.WaitOne(0);
-                }
-            }
-            
-            if (legalCloseSignaled)
-            {
-                Logger.Info("🔓 Обнаружен сигнал легального закрытия при старте Guardian - завершение работы");
-                return;
-            }
-            
-            // Флаг чтобы избежать множественных попыток перезапуска
-            bool restartAttempted = false;
-            DateTime lastRestartAttempt = DateTime.MinValue;
-            
-            while (true)
-            {
-                Thread.Sleep(3000);
-                
-                // Периодически проверяем сигнал легального закрытия
-                if (Mutex.TryOpenExisting(LEGAL_CLOSE_MUTEX_NAME, out var existingMutex2))
-                {
-                    using (existingMutex2)
-                    {
-                        if (existingMutex2.WaitOne(0))
-                        {
-                            Logger.Info("🔓 Получен сигнал легального закрытия - завершение работы Guardian");
-                            return;
-                        }
-                    }
-                }
-
-                // Проверяем, существует ли основной процесс BibClient (не guardian)
-                Process? mainProcess = null;
-                
-                try
-                {
-                    var allProcesses = Process.GetProcesses();
-                    
-                    foreach (var p in allProcesses)
-                    {
-                        try
-                        {
-                            // Пропускаем самого себя (guardian)
-                            if (p.Id == Process.GetCurrentProcess().Id)
-                                continue;
-                            
-                            // Проверяем что это тот же самый exe файл
-                            try
-                            {
-                                var otherPath = p.MainModule?.FileName;
-                                
-                                if (!string.IsNullOrEmpty(otherPath) && 
-                                    otherPath.Equals(clientExePath, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    mainProcess = p;
-                                    break;
-                                }
-                            }
-                            catch (Win32Exception)
-                            {
-                                // Процесс может быть недоступен для чтения MainModule (AccessDenied)
-                                // В этом случае проверяем по имени процесса как фоллбэк
-                                if (p.ProcessName.Equals("BibClient", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    mainProcess = p;
-                                    break;
-                                }
-                            }
-                            catch { }
-                        }
-                        finally
-                        {
-                            p?.Dispose();
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"⚠️ Ошибка enumeration процессов: {ex.Message}");
-                }
-
-                if (mainProcess == null)
-                {
-                    // Основной процесс убит — перезапускаем
-                    // Но не чаще чем раз в 10 секунд чтобы избежать цикла перезапусков
-                    if (!restartAttempted || (DateTime.Now - lastRestartAttempt).TotalSeconds > 10)
-                    {
-                        Logger.Info("⚠️ BibClient не найден, перезапуск...");
-                        restartAttempted = true;
-                        lastRestartAttempt = DateTime.Now;
-                        
-                        try
-                        {
-                            // Явно указываем FileName и WorkingDirectory
-                            var startInfo = new ProcessStartInfo
-                            {
-                                FileName = clientExePath,
-                                Arguments = "", // Запускаем без аргументов - это будет основной процесс
-                                UseShellExecute = true,
-                                WorkingDirectory = workingDir,
-                                CreateNoWindow = false
-                            };
-                            
-                            // Проверяем что файл все еще существует перед запуском
-                            if (!File.Exists(clientExePath))
-                            {
-                                Logger.Error($"❌ Файл BibClient исчез: {clientExePath}");
-                            }
-                            else
-                            {
-                                Process.Start(startInfo);
-                                Logger.Info($"✅ BibClient перезапущен: {clientExePath}");
-                                
-                                // Сбрасываем флаг после успешного запуска
-                                restartAttempted = false;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Error($"❌ Ошибка перезапуска BibClient: {ex.Message}");
-                            Logger.Error($"   StackTrace: {ex.StackTrace}");
-                            Logger.Error($"   FileName: {clientExePath}");
-                            Logger.Error($"   WorkingDirectory: {workingDir}");
-                        }
-                    }
-                    else
-                    {
-                        Logger.Info("⏳ Предыдущий перезапуск был менее 10 секунд назад, пропускаем");
-                    }
-                }
-                else
-                {
-                    // Процесс найден - сбрасываем флаг перезапуска
-                    restartAttempted = false;
-                    mainProcess.Dispose();
-                }
-            }
+            Logger.Info("⚠️ RunGuardian вызван - этот метод устарел, используйте отдельный BibClientGuardian.exe");
         }
         
         // Сигнал о легальном закрытии (после ввода пароля администратором)
