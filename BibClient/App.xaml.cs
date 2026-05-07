@@ -110,18 +110,19 @@ namespace BibClient
                     Logger.Info("ℹ️ Автозапуск отключен, запись удалена из реестра");
                 }
                 
-                // Запускаем Guardian если включена защита от закрытия (по умолчанию true)
-                if (SettingsManager.Current.PreventClose)
-                {
-                    Watchdog.StartGuardian(true);
-                }
-
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;
                 
                 // Показываем окно
                 mainWindow.Show();
                 mainWindow.Activate();
+                
+                // Запускаем Guardian ПОСЛЕ создания главного окна
+                // Это критично для восстановления после закрытия через диспетчер задач
+                if (SettingsManager.Current.PreventClose)
+                {
+                    Watchdog.StartGuardian(true);
+                }
                 
                 // Вызываем блокировку через Dispatcher с повторной попыткой если _isReady ещё false
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(
