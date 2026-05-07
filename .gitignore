@@ -1,48 +1,70 @@
-```
-# Compiled and build artifacts
-*.exe
-*.dll
-*.pdb
-*.obj
-*.lib
-*.so
-*.dylib
-bin/
-obj/
-Debug/
-Release/
+```csharp
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
 x64/
 x86/
+[Dd]epends/
+intermediate/
+bin/
+obj/
 
-# Dependencies
-packages/
-node_modules/
-.nuget/
-.nvs/
+# Visual Studio files
+*.user
+*.userosscache
+*.suo
+*.csproj.user
+*.vbproj.user
+*.fsproj.user
+*.userprefs
 
-# Logs and temp files
+# Visual Studio Code files
+.vscode/
+
+# Rider files
+.idea/
+
+# Compiled binaries
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.exe.config
+*.dll.config
+*.nupkg
+*.msi
+*.msp
+*.msm
+
+# Logs
 *.log
-*.tmp
-*.temp
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Editors
-.vs/
-.vshost.exe
-.userprefs
-*.user
-*.userosscache
-*.suo
-*.userprefs
-.vscode/
-
 # OS generated files
 .DS_Store
 Thumbs.db
 ehthumbs.db
 Icon?
+desktop.ini
+
+# Temp files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+*.swp
+*.swo
+
+# User-specific files
+.vs/
+.user
+.userosscache
+.lock
 ```
