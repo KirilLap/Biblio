@@ -55,13 +55,13 @@ namespace BibClient
             StartClock();
             StartNetwork();
 
-            // Запускаем Guardian если включена защита от закрытия
+            // Запускаем Guardian если включена защита от закрытия (по умолчанию true)
             if (_settings.PreventClose)
             {
                 Watchdog.StartGuardian(true);
             }
             
-            // Регистрируем автозапуск если включено
+            // Регистрируем автозапуск если включено (по умолчанию true)
             if (_settings.AutoStartWithUser)
             {
                 Watchdog.RegisterAutostart();

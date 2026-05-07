@@ -33,10 +33,10 @@ namespace BibAdmin
         public bool BlockInstall { get; set; } = false;
 
         // =====================
-        // Защита и автозапуск
+        // Защита и автозапуск (включены по умолчанию для безопасности)
         // =====================
-        public bool PreventClose { get; set; } = false;  // Защита от закрытия
-        public bool AutoStartWithUser { get; set; } = false;  // Автозапуск с пользователем
+        public bool PreventClose { get; set; } = true;  // Защита от закрытия - включена по умолчанию
+        public bool AutoStartWithUser { get; set; } = true;  // Автозапуск с пользователем - включен по умолчанию
 
         // =====================
         // Фон

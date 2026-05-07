@@ -1,34 +1,55 @@
 ```
 # Build artifacts
-bin/
-obj/
+*.obj
 *.exe
 *.dll
+*.so
+*.a
+*.lib
 *.pdb
-*.userprefs
-*.cache
-*.tmp
+*.ilk
+*.exp
+*.manifest
+*.res
 
 # Dependencies
 packages/
+bin/
+obj/
+Debug/
+Release/
+x64/
+x86/
 
 # Logs
 *.log
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.userprefs
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Editors
-.vs/
-.vscode/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Editor backups
+*.bak
+*.swp
+*.swo
+
+# Testing
+TestResults/
 ```

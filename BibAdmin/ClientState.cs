@@ -85,8 +85,8 @@ namespace BibAdmin
         public bool UsbBlocked { get; set; } = false;
         public bool TaskMgrDisabled { get; set; } = false;
         public bool ShowPcNumber { get; set; } = true;
-        public bool PreventClose { get; set; } = false;
-        public bool AutoStartWithUser { get; set; } = false;
+        public bool PreventClose { get; set; } = true;  // Защита от закрытия - включена по умолчанию
+        public bool AutoStartWithUser { get; set; } = true;  // Автозапуск с пользователем - включен по умолчанию
 
         // =====================
         // Индивидуальные настройки

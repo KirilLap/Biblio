@@ -306,7 +306,7 @@ namespace BibClient
                         SettingsChanged?.Invoke();
                         break;
 
-                    // ── Защита и автозапуск ───────────────────────────────────────
+                    // ── Защита и автозапуск (включены по умолчанию) ───────────────────────────────────────
                     case "PREVENT_CLOSE":
                         SettingsManager.Current.PreventClose = value.ToLower() == "true";
                         SettingsManager.Save();
