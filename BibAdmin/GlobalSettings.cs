@@ -33,6 +33,12 @@ namespace BibAdmin
         public bool BlockInstall { get; set; } = false;
 
         // =====================
+        // Защита и автозапуск (включены по умолчанию для безопасности)
+        // =====================
+        public bool PreventClose { get; set; } = true;  // Защита от закрытия - включена по умолчанию
+        public bool AutoStartWithUser { get; set; } = true;  // Автозапуск с пользователем - включен по умолчанию
+
+        // =====================
         // Фон
         // =====================
         public string BackgroundFileName { get; set; } = "";
@@ -122,7 +128,10 @@ namespace BibAdmin
                 new("BLOCK_POWERSHELL", BlockPowerShell.ToString().ToLower()),
                 new("HIDE_DRIVE_C", HideDriveC.ToString().ToLower()),
                 new("BLOCK_INSTALL_UNINSTALL", BlockInstall.ToString().ToLower()),
-                new("LOCK_ON_OFFLINE", LockOnOffline.ToString().ToLower())
+                new("LOCK_ON_OFFLINE", LockOnOffline.ToString().ToLower()),
+                // 🔒 Защита и автозапуск
+                new("PREVENT_CLOSE", PreventClose.ToString().ToLower()),
+                new("AUTOSTART_WITH_USER", AutoStartWithUser.ToString().ToLower())
             };
 
             if (!string.IsNullOrEmpty(BackgroundFileName))

@@ -10,10 +10,32 @@ namespace BibClient
         {
             base.OnStartup(e);
 
-            // Путь к файлу настроек
-            string settingsPath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "settings.json");
+            // Проверка на запуск в режиме Guardian
+            if (e.Args.Length > 0 && e.Args[0] == "--guardian")
+            {
+                Logger.Info("🛡️ Запуск в режиме Guardian");
+                Watchdog.RunGuardian();
+                Shutdown();
+                return;
+            }
+
+            // Проверяем что это единственный экземпляр основного приложения (не guardian)
+            if (!Watchdog.EnsureSingleInstance())
+            {
+                Logger.Warn("⚠️ Приложение уже запущено, завершаем дубликат");
+                Shutdown();
+                return;
+            }
+
+            // Подписываемся на событие закрытия приложения для освобождения мьютекса
+            Exit += (s, args) =>
+            {
+                Watchdog.ReleaseSingleInstance();
+            };
+
+            // Путь к файлу настроек - используем абсолютный путь относительно exe файла
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string settingsPath = Path.Combine(baseDir, "settings.json");
 
             // 🔹 Если настроек нет — показываем окно первоначальной настройки
             if (!File.Exists(settingsPath))
@@ -73,6 +95,26 @@ namespace BibClient
                 // 🔹 Настройки есть — загружаем и запускаем главное окно
                 Logger.Info("📁 Настройки найдены, загрузка");
                 SettingsManager.Load();
+
+                // Регистрируем автозапуск если включено (по умолчанию true)
+                // Делаем это в первую очередь, чтобы при следующем старте из автозапуска всё работало
+                if (SettingsManager.Current.AutoStartWithUser)
+                {
+                    Watchdog.RegisterAutostart();
+                    Logger.Info($"✅ Автозапуск проверен/обновлен: {Watchdog.GetExePath()}");
+                }
+                else
+                {
+                    // Если автозапуск выключен - убираем из реестра
+                    Watchdog.UnregisterAutostart();
+                    Logger.Info("ℹ️ Автозапуск отключен, запись удалена из реестра");
+                }
+                
+                // Запускаем Guardian если включена защита от закрытия (по умолчанию true)
+                if (SettingsManager.Current.PreventClose)
+                {
+                    Watchdog.StartGuardian(true);
+                }
 
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;

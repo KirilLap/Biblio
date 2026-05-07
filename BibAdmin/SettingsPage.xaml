@@ -155,7 +155,29 @@
 
                             <CheckBox x:Name="ChkBlockInstall" 
                                       Content="Запретить установку/удаление программ" 
+                                      Margin="0,0,0,10"/>
+
+                            <!-- Защита и автозапуск -->
+                            <TextBlock Text="Защита и автозапуск"
+                                       FontSize="14" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,16,0,8"/>
+                            
+                            <CheckBox x:Name="ChkPreventClose" 
+                                      Content="Защита от закрытия клиента" 
+                                      Margin="0,0,0,10"/>
+                            <TextBlock Text="Если включено — клиент нельзя закрыть через диспетчер задач или Alt+F4"
+                                       Foreground="#888" FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="20,0,0,10"/>
+
+                            <CheckBox x:Name="ChkAutoStartWithUser" 
+                                      Content="Автозапуск с пользователем Windows" 
                                       Margin="0,0,0,16"/>
+                            <TextBlock Text="Клиент будет автоматически запускаться при входе любого пользователя"
+                                       Foreground="#888" FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="20,0,0,10"/>
 
                             <Button Content="Применить ко всем ПК"
                                     Style="{StaticResource SettingsBtn}"

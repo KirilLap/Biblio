@@ -306,6 +306,36 @@ namespace BibClient
                         SettingsChanged?.Invoke();
                         break;
 
+                    // ── Защита и автозапуск (включены по умолчанию) ───────────────────────────────────────
+                    case "PREVENT_CLOSE":
+                        SettingsManager.Current.PreventClose = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        Logger.Info($"🔒 PreventClose = {SettingsManager.Current.PreventClose}");
+                                                // Перезапускаем Guardian если настройка изменилась
+                        if (SettingsManager.Current.PreventClose)
+                            Watchdog.StartGuardian(true);
+                        else
+                            Watchdog.StopGuardian();
+                        
+                        SettingsChanged?.Invoke();
+                        break;
+
+                    case "AUTOSTART_WITH_USER":
+                        SettingsManager.Current.AutoStartWithUser = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        if (SettingsManager.Current.AutoStartWithUser)
+                        {
+                            Watchdog.RegisterAutostart();
+                            Logger.Info("✅ Автозапуск с пользователем включён");
+                        }
+                        else
+                        {
+                            Watchdog.UnregisterAutostart();
+                            Logger.Info("❌ Автозапуск с пользователем выключен");
+                        }
+                        SettingsChanged?.Invoke();
+                        break;
+
                     case "SHUTDOWN":
                         Logger.Info("💤 Выключение ПК по команде сервера");
                         Process.Start("shutdown", "/s /f /t 0");

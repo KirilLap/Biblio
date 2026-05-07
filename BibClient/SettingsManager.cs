@@ -91,6 +91,12 @@ namespace BibClient
         public bool BlockPowerShell { get; set; } = false;
         public bool HideDriveC { get; set; } = false;
         public bool BlockInstall { get; set; } = false;
+        
+        // =====================
+        // Защита и автозапуск (включены по умолчанию для безопасности)
+        // =====================
+        public bool PreventClose { get; set; } = true;  // Защита от закрытия - включена по умолчанию
+        public bool AutoStartWithUser { get; set; } = true;  // Автозапуск с пользователем - включен по умолчанию
 
         public static string HashPassword(string password)
         {
@@ -145,6 +151,8 @@ namespace BibClient
                         Current.BlockPowerShell = loaded.BlockPowerShell;
                         Current.HideDriveC = loaded.HideDriveC;
                         Current.BlockInstall = loaded.BlockInstall;
+                        Current.PreventClose = loaded.PreventClose;
+                        Current.AutoStartWithUser = loaded.AutoStartWithUser;
                     }
                 }
             }
