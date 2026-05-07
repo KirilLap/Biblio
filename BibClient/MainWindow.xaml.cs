@@ -418,6 +418,13 @@ namespace BibClient
                 // 6. Показываем экран блокировки
                 this.Show();
                 this.Activate();
+                
+                // 7. Обновляем видимость кнопок в трее (сессия завершена - кнопки должны появиться)
+                PolicyEngine.ActiveSessionType = "";
+                
+                _ = _networkManager?.SendStatusAsync("Заблокирован");
+            });
+        }
                 this.Focus();
 
                 StartClock();
@@ -533,6 +540,12 @@ namespace BibClient
             // При разблокировке администратором - позволяем закрыть приложение
             // (Window_Closing проверит флаг _isUnlocked и разрешит закрытие)
             Logger.Info("🔓 Администратор разблокировал ПК - закрытие разрешено");
+            
+            // Сигнализируем Guardian что закрытие легальное
+            Watchdog.SignalLegalClose();
+            
+            // Останавливаем guardian процесс
+            Watchdog.StopGuardian();
         }
 
         private Border CreateUnlockedPanel()
