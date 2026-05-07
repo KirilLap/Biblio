@@ -1,31 +1,34 @@
 ﻿using Microsoft.Win32;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using System.Windows;
 
 namespace BibClient
 {
     public static class Watchdog
     {
-        private static Thread? _thread;
-        private static bool _running = false;
-        private static string _exePath = "";
-        
         // Имя мьютекса для сигнала легального закрытия
         private const string LEGAL_CLOSE_MUTEX_NAME = "Global\\BibClient_LegalClose";
+        
+        // Мьютекс для предотвращения множественного запуска основного приложения
+        private const string APP_MUTEX_NAME = "Global\\BibClient_SingleInstance";
+        
+        private static Mutex? _appMutex;
 
-        // Прописываем автозапуск в реестр
+        // Прописываем автозапуск в реестр с полным путем
         public static void RegisterAutostart()
         {
             try
             {
-                string exePath = Process.GetCurrentProcess().MainModule!.FileName;
-
+                // Получаем полный путь к исполняемому файлу
+                string exePath = GetExePath();
+                
                 using var key = Registry.CurrentUser.OpenSubKey(
                     @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
 
+                // Регистрируем с полным путем в кавычках
                 key?.SetValue("BibClient", $"\"{exePath}\"");
                 Logger.Info($"✅ Автозапуск зарегистрирован: {exePath}");
             }
@@ -46,56 +49,70 @@ namespace BibClient
             }
             catch { }
         }
-
-        // Запускаем watchdog в отдельном потоке внутри основного процесса
-        public static void Start()
+        
+        // Получаем полный путь к exe файлу приложения
+        public static string GetExePath()
         {
-            _running = true;
-            _exePath = Process.GetCurrentProcess().MainModule!.FileName;
-
-            _thread = new Thread(WatchdogLoop)
+            // Пробуем получить путь разными способами
+            try
             {
-                IsBackground = true,
-                Name = "BibClientWatchdog"
-            };
-            _thread.Start();
-        }
-
-        public static void Stop()
-        {
-            _running = false;
-        }
-
-        private static void WatchdogLoop()
-        {
-            // Watchdog следит за файлом-флагом
-            // Если файл исчез — значит нас убили, перезапускаемся
-            string flagPath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "running.flag");
-
-            // Создаём флаг
-            File.WriteAllText(flagPath, Process.GetCurrentProcess().Id.ToString());
-
-            while (_running)
-            {
-                Thread.Sleep(2000);
-
-                // Проверяем что наш процесс ещё жив
-                // Если нет — перезапускаем
-                try
-                {
-                    var currentId = Process.GetCurrentProcess().Id;
-                    var flagContent = File.Exists(flagPath)
-                        ? File.ReadAllText(flagPath) : "";
-
-                    if (flagContent != currentId.ToString())
-                    {
-                        // Флаг изменился — нас перезапустили
-                        break;
-                    }
-                }
-                catch { break; }
+                // Способ 1: Через MainModule (наиболее надежный)
+                var path = Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    return Path.GetFullPath(path);
             }
+            catch { }
+            
+            try
+            {
+                // Способ 2: Через BaseDirectory + процесс
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var exeName = Process.GetCurrentProcess().ProcessName + ".exe";
+                var path = Path.Combine(baseDir, exeName);
+                if (File.Exists(path))
+                    return Path.GetFullPath(path);
+            }
+            catch { }
+            
+            // Если ничего не помогло, возвращаем путь из аргументов командной строки
+            return Process.GetCurrentProcess().StartInfo.FileName;
+        }
+        
+        // Проверка, является ли текущий процесс единственным экземпляром
+        public static bool EnsureSingleInstance()
+        {
+            try
+            {
+                _appMutex = new Mutex(true, APP_MUTEX_NAME, out bool createdNew);
+                
+                if (!createdNew)
+                {
+                    // Другой экземпляр уже работает
+                    Logger.Info("⚠️ Обнаружен другой работающий экземпляр BibClient");
+                    _appMutex?.Dispose();
+                    _appMutex = null;
+                    return false;
+                }
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка проверки одиночного экземпляра: {ex.Message}");
+                return true; // В случае ошибки разрешаем запуск
+            }
+        }
+        
+        // Освобождаем мьютекс при корректном закрытии
+        public static void ReleaseSingleInstance()
+        {
+            try
+            {
+                _appMutex?.ReleaseMutex();
+                _appMutex?.Dispose();
+                _appMutex = null;
+            }
+            catch { }
         }
 
         // Запускает внешний процесс-наблюдатель (Guardian)
@@ -108,12 +125,16 @@ namespace BibClient
                 return;
             }
 
-            string exePath = Process.GetCurrentProcess().MainModule!.FileName;
+            // Получаем полный путь к exe файлу
+            string exePath = GetExePath();
             
             // Проверяем, не запущен ли уже guardian
             var existing = Process.GetProcessesByName("BibClientGuardian");
             if (existing.Length > 0)
+            {
+                Logger.Info("🛡️ Guardian уже запущен");
                 return;
+            }
 
             // Запускаем guardian как отдельный процесс с флагом --guardian
             var startInfo = new ProcessStartInfo
@@ -121,7 +142,8 @@ namespace BibClient
                 FileName = exePath,
                 Arguments = "--guardian",
                 UseShellExecute = true,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? ""
             };
             
             try
@@ -150,6 +172,7 @@ namespace BibClient
                     try
                     {
                         g.Kill();
+                        g.WaitForExit(1000);
                     }
                     catch { }
                 }
@@ -164,23 +187,19 @@ namespace BibClient
         {
             Logger.Info("🛡️ Guardian процесс запущен");
             
-            // Получаем путь к текущему exe файлу (это тот же файл что и BibClient.exe)
-            string guardianExePath = Process.GetCurrentProcess().MainModule?.FileName 
-                ?? throw new InvalidOperationException("Не удалось получить путь к процессу");
-            
-            // Путь к основному приложению (такой же как у guardian)
-            string clientExePath = guardianExePath;
+            // Получаем путь к основному приложению (используем тот же exe файл)
+            string clientExePath = GetExePath();
+            Logger.Info($"🛡️ Guardian следит за: {clientExePath}");
             
             while (true)
             {
                 Thread.Sleep(3000);
 
-                // Проверяем, существует ли основной процесс BibClient
-                var processes = Process.GetProcessesByName("BibClient");
+                // Проверяем, существует ли основной процесс BibClient (не guardian)
+                var allProcesses = Process.GetProcesses();
+                Process? mainProcess = null;
                 
-                // Фильтруем только основные процессы (не guardian)
-                var mainProcesses = new List<Process>();
-                foreach (var p in processes)
+                foreach (var p in allProcesses)
                 {
                     try
                     {
@@ -188,36 +207,55 @@ namespace BibClient
                         if (p.Id == Process.GetCurrentProcess().Id)
                             continue;
                         
-                        // Проверяем что это тот же самый exe файл
-                        var currentPath = Process.GetCurrentProcess().MainModule?.FileName;
-                        var otherPath = p.MainModule?.FileName;
+                        // Пропускаем другие guardian процессы
+                        if (p.ProcessName.Contains("Guardian", StringComparison.OrdinalIgnoreCase))
+                            continue;
                         
-                        if (currentPath != null && otherPath != null && 
-                            currentPath.Equals(otherPath, StringComparison.OrdinalIgnoreCase))
+                        // Проверяем что это тот же самый exe файл
+                        try
                         {
-                            mainProcesses.Add(p);
+                            var otherPath = p.MainModule?.FileName;
+                            
+                            if (!string.IsNullOrEmpty(otherPath) && 
+                                otherPath.Equals(clientExePath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                mainProcess = p;
+                                break;
+                            }
                         }
+                        catch { }
                     }
                     catch { }
+                    finally
+                    {
+                        p?.Dispose();
+                    }
                 }
 
-                if (mainProcesses.Count == 0)
+                if (mainProcess == null)
                 {
                     // Основной процесс убит — перезапускаем
                     Logger.Info("⚠️ BibClient не найден, перезапуск...");
                     try
                     {
-                        Process.Start(new ProcessStartInfo
+                        var startInfo = new ProcessStartInfo
                         {
                             FileName = clientExePath,
-                            UseShellExecute = true
-                        });
+                            UseShellExecute = true,
+                            WorkingDirectory = Path.GetDirectoryName(clientExePath) ?? ""
+                        };
+                        
+                        Process.Start(startInfo);
                         Logger.Info("✅ BibClient перезапущен");
                     }
                     catch (Exception ex)
                     {
                         Logger.Error($"Ошибка перезапуска BibClient: {ex.Message}");
                     }
+                }
+                else
+                {
+                    mainProcess.Dispose();
                 }
             }
         }

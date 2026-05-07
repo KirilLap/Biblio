@@ -670,9 +670,6 @@ namespace BibClient
             {
                 Logger.Info("🚫 Закрытие окна заблокировано настройкой PreventClose");
                 
-                // Сигнал для Guardian что мы ещё работаем (если процесс пытаются убить)
-                // Но это не поможет против Task Manager, поэтому полагаемся на Guardian
-                
                 e.Cancel = true;
             }
             else
@@ -685,6 +682,9 @@ namespace BibClient
                 
                 // Останавливаем guardian процесс
                 Watchdog.StopGuardian();
+                
+                // Освобождаем мьютекс одиночного экземпляра
+                Watchdog.ReleaseSingleInstance();
                 
                 // Отменяем автозапуск если нужно
                 if (!_settings.AutoStartWithUser)

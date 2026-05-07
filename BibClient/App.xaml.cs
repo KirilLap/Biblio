@@ -19,6 +19,20 @@ namespace BibClient
                 return;
             }
 
+            // Проверяем что это единственный экземпляр основного приложения (не guardian)
+            if (!Watchdog.EnsureSingleInstance())
+            {
+                Logger.Warn("⚠️ Приложение уже запущено, завершаем дубликат");
+                Shutdown();
+                return;
+            }
+
+            // Подписываемся на событие закрытия приложения для освобождения мьютекса
+            Exit += (s, args) =>
+            {
+                Watchdog.ReleaseSingleInstance();
+            };
+
             // Путь к файлу настроек
             string settingsPath = Path.Combine(
                 AppDomain.CurrentDomain.BaseDirectory,
@@ -83,16 +97,16 @@ namespace BibClient
                 Logger.Info("📁 Настройки найдены, загрузка");
                 SettingsManager.Load();
 
-                // Запускаем Guardian если включена защита от закрытия (по умолчанию true)
-                if (SettingsManager.Current.PreventClose)
-                {
-                    Watchdog.StartGuardian(true);
-                }
-                
                 // Регистрируем автозапуск если включено (по умолчанию true)
                 if (SettingsManager.Current.AutoStartWithUser)
                 {
                     Watchdog.RegisterAutostart();
+                }
+                
+                // Запускаем Guardian если включена защита от закрытия (по умолчанию true)
+                if (SettingsManager.Current.PreventClose)
+                {
+                    Watchdog.StartGuardian(true);
                 }
 
                 var mainWindow = new MainWindow();
