@@ -45,4 +45,11 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.7" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- deploy.cmd копируется в папку публикации автоматически -->
+    <Content Include="deploy.cmd">
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
