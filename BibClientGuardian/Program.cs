@@ -8,7 +8,7 @@ namespace BibClientGuardian
 {
     internal class Program
     {
-        // Имя мьютекса для сигнала легального закрытия
+        // Имя мьютекса для сигнала легального закрытия (должно совпадать с Watchdog.cs)
         private const string LEGAL_CLOSE_MUTEX_NAME = "Global\\BibClient_LegalClose";
         
         // Путь к основному приложению BibClient.exe
@@ -17,17 +17,17 @@ namespace BibClientGuardian
             "BibClient.exe"
         );
 
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
 
         [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
         private const int SW_HIDE = 0;
 
         static void Main(string[] args)
         {
-            // Скрываем консольное окно если оно есть
+            // Скрываем консольное окно СРАЗУ при запуске
             HideConsoleWindow();
 
             // Проверяем что основной файл существует
@@ -96,7 +96,7 @@ namespace BibClientGuardian
                         }
                         catch
                         {
-                            // Процесс может быть недоступен
+                            // Процесс может быть недоступен (например, если это другой пользователь или системный процесс)
                         }
                         finally
                         {
@@ -109,12 +109,14 @@ namespace BibClientGuardian
                     Log($"⚠️ Ошибка поиска процесса: {ex.Message}");
                 }
 
-                if (mainProcess == null)
+                if (mainProcess == null || mainProcess.HasExited)
                 {
-                    // Основной процесс не найден - перезапускаем
+                    mainProcess?.Dispose();
+                    
+                    // Основной процесс не найден или завершился - перезапускаем
                     if (!restartAttempted || (DateTime.Now - lastRestartAttempt).TotalSeconds > 10)
                     {
-                        Log("⚠️ BibClient не найден, перезапуск...");
+                        Log("⚠️ BibClient не найден или завершился, перезапуск...");
                         restartAttempted = true;
                         lastRestartAttempt = DateTime.Now;
 
@@ -141,7 +143,7 @@ namespace BibClientGuardian
                         }
                         catch (Exception ex)
                         {
-                            Log($"❌ Ошибка перезапуска BibClient: {ex.Message}");
+                            Log($"❌ Ошибка перезапуска BibClient: {ex.Message}\n{ex.StackTrace}");
                         }
                     }
                     else
@@ -151,7 +153,7 @@ namespace BibClientGuardian
                 }
                 else
                 {
-                    // Процесс найден - сбрасываем флаг
+                    // Процесс найден и работает - сбрасываем флаг
                     restartAttempted = false;
                     mainProcess.Dispose();
                 }
@@ -162,15 +164,21 @@ namespace BibClientGuardian
         {
             try
             {
-                var handle = Process.GetCurrentProcess().MainWindowHandle;
-                if (handle != IntPtr.Zero)
+                // Получаем дескриптор консольного окна и скрываем его
+                IntPtr consoleHandle = GetConsoleWindow();
+                if (consoleHandle != IntPtr.Zero)
                 {
-                    ShowWindow(handle, SW_HIDE);
+                    ShowWindow(consoleHandle, SW_HIDE);
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Игнорируем ошибки скрытия окна
+                try
+                {
+                    Log($"⚠️ Не удалось скрыть консоль: {ex.Message}");
+                }
+                catch { }
             }
         }
 

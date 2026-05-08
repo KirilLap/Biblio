@@ -9,6 +9,8 @@ obj/
 
 # Dependencies
 packages/
+node_modules/
+vendor/
 
 # Logs
 *.log
@@ -19,16 +21,12 @@ packages/
 *.env.*
 
 # Editors
-.vs/
 .vscode/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
+.idea/
+*.swp
+*.swo
 
 # OS generated files
 .DS_Store
 Thumbs.db
-ehthumbs.db
-Icon?
 ```

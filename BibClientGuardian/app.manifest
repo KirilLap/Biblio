@@ -4,8 +4,10 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Запрашиваем права администратора для защиты от закрытия -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- Убрали requireAdministrator, чтобы не было второго окна UAC. 
+             Guardian наследует права от BibClient. Если BibClient запущен как админ, 
+             то и Guardian будет иметь права на защиту процесса. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
