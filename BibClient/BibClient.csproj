@@ -8,6 +8,8 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
   </PropertyGroup>
 
   <!-- Post-build: копируем BibClientGuardian.exe и все файлы BibClientService в папку вывода.
