@@ -401,8 +401,10 @@ namespace BibAdmin
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);
             SaveRegistry();
 
-            // Сбрасываем дедуп оффлайн-уведомлений — при следующем разрыве уведомление появится снова
-            _lastOfflineAlert.TryRemove(finalName, out _);
+            // НЕ сбрасываем _lastOfflineAlert при реконнекте: если сеть нестабильна,
+            // клиент может успеть зарегистрироваться и тут же упасть снова — что даёт
+            // дублирующее уведомление. 60-секундное окно дедупа истечёт само.
+            // Уведомление при следующем стабильном обрыве будет сгенерировано корректно.
 
             ClientUpdated?.Invoke(state);
             ClientsChanged?.Invoke();
