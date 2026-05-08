@@ -127,7 +127,8 @@ namespace BibClientGuardian
                                 FileName = ClientExePath,
                                 UseShellExecute = true,
                                 WorkingDirectory = Path.GetDirectoryName(ClientExePath) ?? "",
-                                CreateNoWindow = false
+                                CreateNoWindow = false,
+                                Verb = "runas" // Запуск с правами администратора
                             };
 
                             if (!File.Exists(ClientExePath))
@@ -137,7 +138,7 @@ namespace BibClientGuardian
                             else
                             {
                                 Process.Start(startInfo);
-                                Log($"✅ BibClient перезапущен");
+                                Log($"✅ BibClient перезапущен с правами администратора");
                                 restartAttempted = false;
                             }
                         }
