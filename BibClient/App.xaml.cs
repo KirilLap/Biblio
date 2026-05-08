@@ -8,6 +8,16 @@ namespace BibClient
     {
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Аварийный лог до инициализации Logger — пишет в %TEMP%\BibClient_startup.txt.
+            // Позволяет поймать крашт до того как Logger создаст папку logs\.
+            string emergencyCrashLog = Path.Combine(Path.GetTempPath(), "BibClient_startup.txt");
+            void EmergencyLog(string msg) { try { File.AppendAllText(emergencyCrashLog, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\r\n"); } catch { } }
+            AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+                EmergencyLog($"UNHANDLED: {args.ExceptionObject}");
+            DispatcherUnhandledException += (_, args) =>
+                EmergencyLog($"WPF DISPATCHER: {args.Exception}");
+            EmergencyLog("OnStartup начало");
+
             base.OnStartup(e);
 
             // Проверяем что это единственный экземпляр основного приложения

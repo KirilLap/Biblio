@@ -10,17 +10,30 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
-  <!-- После publish: копируем BibClientService (self-contained) в папку публикации.
-       Вызывается командой: dotnet publish -p:PublishProfile=win-x64 -->
+  <!-- После publish: сначала публикуем зависимые проекты, затем копируем их в папку публикации.
+       Вызывается командой: dotnet publish -p:PublishProfile=win-x64
+       ВАЖНО: MSBuild сам определяет порядок — PublishDependencies запускается перед CopyDependenciesAfterPublish. -->
+  <Target Name="PublishDependencies" BeforeTargets="CopyDependenciesAfterPublish" AfterTargets="Publish">
+    <MSBuild Projects="$(ProjectDir)..\BibClientService\BibClientService.csproj"
+             Targets="Publish"
+             Properties="Configuration=Release;RuntimeIdentifier=win-x64;SelfContained=true" />
+    <MSBuild Projects="$(ProjectDir)..\BibClientGuardian\BibClientGuardian.csproj"
+             Targets="Publish"
+             Properties="Configuration=Release;RuntimeIdentifier=win-x64;SelfContained=true" />
+    <Message Text="✅ BibClientService и BibClientGuardian опубликованы" Importance="high" />
+  </Target>
+
   <Target Name="CopyDependenciesAfterPublish" AfterTargets="Publish">
     <ItemGroup>
-      <ServiceFiles Include="$(ProjectDir)..\BibClientService\bin\Release\net10.0-windows\win-x64\*.*" />
+      <!-- dotnet publish кладёт файлы в …\win-x64\publish\ (не в \win-x64\ как dotnet build) -->
+      <ServiceFiles Include="$(ProjectDir)..\BibClientService\bin\Release\net10.0-windows\win-x64\publish\*.*" />
+      <GuardianFiles Include="$(ProjectDir)..\BibClientGuardian\bin\Release\net10.0-windows\win-x64\publish\BibClientGuardian.exe" />
     </ItemGroup>
     <Copy SourceFiles="@(ServiceFiles)"
           DestinationFolder="$(PublishDir)"
           SkipUnchangedFiles="true"
           ContinueOnError="true" />
-    <Copy SourceFiles="$(ProjectDir)..\BibClientGuardian\bin\Release\net10.0-windows\BibClientGuardian.exe"
+    <Copy SourceFiles="@(GuardianFiles)"
           DestinationFolder="$(PublishDir)"
           SkipUnchangedFiles="true"
           ContinueOnError="true" />
