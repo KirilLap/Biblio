@@ -34,6 +34,9 @@ namespace BibAdmin
         // MACs для которых конфликт уже показан в этой сессии (не показывать повторно)
         private static readonly HashSet<string> _shownConflicts = new();
 
+        // Ожидание решения администратора по конфликту имён
+        private static readonly ConcurrentDictionary<string, TaskCompletionSource<(int PcNumberValue, string CustomName)?>> _conflictDecisions = new();
+
         // Лог удалённых ПК
         private static readonly string _deletedPcsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "deleted_pcs.json");
         public static List<DeletedPcRecord> DeletedPcs { get; } = new();
@@ -56,32 +59,16 @@ namespace BibAdmin
             catch { }
         }
 
-        public static void ClearConflict(string mac) => _shownConflicts.Remove(mac);
-
-        public static void UpdateClientIdentityStatic(string registeredPcName, int newPcNumberValue, string newCustomName)
+        // Вызывается из UI: "Да" → передаём новые данные, "Нет" → null
+        public static void ResolveConflict(string mac, int? newPcNumberValue, string? newCustomName)
         {
-            if (!KnownClients.TryGetValue(registeredPcName, out var client)) return;
-
-            client.PcNumberValue = newPcNumberValue;
-            client.CustomName = newCustomName;
-
-            var newPcNumber = string.IsNullOrEmpty(newCustomName)
-                ? $"ПК {newPcNumberValue}"
-                : $"{newCustomName} {newPcNumberValue}";
-
-            if (registeredPcName != newPcNumber)
+            if (_conflictDecisions.TryRemove(mac, out var tcs))
             {
-                KnownClients.TryRemove(registeredPcName, out _);
-                KnownClients[newPcNumber] = client;
-                if (_pendingCommands.TryRemove(registeredPcName, out var cmds))
-                    _pendingCommands[newPcNumber] = cmds;
+                if (newPcNumberValue.HasValue)
+                    tcs.TrySetResult((newPcNumberValue.Value, newCustomName ?? ""));
+                else
+                    tcs.TrySetResult(null);
             }
-
-            SaveRegistry();
-            SavePending();
-            ClientUpdated?.Invoke(client);
-            ClientsChanged?.Invoke();
-            Logger.Info($"✅ Идентификатор ПК обновлён: '{registeredPcName}' → '{newPcNumber}'");
         }
 
         public static bool DeleteClientStatic(string pcNumber)
@@ -419,7 +406,7 @@ namespace BibAdmin
                 finalPcNumberValue = existingByMac.PcNumberValue;
                 finalCustomName = existingByMac.CustomName;
 
-                // Если клиент подключился под другим именем — уведомляем администратора
+                // Если клиент подключился под другим именем — ждём решения администратора
                 string requestedName = string.IsNullOrEmpty(info.CustomName)
                     ? $"ПК {info.PcNumberValue}"
                     : $"{info.CustomName} {info.PcNumberValue}";
@@ -427,7 +414,32 @@ namespace BibAdmin
                 {
                     _shownConflicts.Add(macAddress);
                     Logger.Warn($"⚠️ Конфликт имён: MAC {macAddress} был '{existingByMac.PcNumber}', подключается как '{requestedName}'");
+
+                    var tcs = new TaskCompletionSource<(int PcNumberValue, string CustomName)?>();
+                    _conflictDecisions[macAddress] = tcs;
                     ClientNameConflict?.Invoke(existingByMac.PcNumber, requestedName, macAddress, info.PcNumberValue, info.CustomName);
+
+                    try
+                    {
+                        // Ждём пока администратор нажмёт Да/Нет (макс 60 сек)
+                        var decision = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                        if (decision.HasValue)
+                        {
+                            finalPcNumberValue = decision.Value.PcNumberValue;
+                            finalCustomName = decision.Value.CustomName;
+                            _shownConflicts.Remove(macAddress); // сняли конфликт — сброс, имя будет правильным
+                            Logger.Info($"✅ Администратор принял: MAC {macAddress} → ПК {finalPcNumberValue}");
+                        }
+                        else
+                        {
+                            Logger.Info($"🚫 Администратор отклонил переименование MAC {macAddress}");
+                        }
+                    }
+                    catch (TimeoutException)
+                    {
+                        Logger.Warn($"⏰ Тайм-аут ожидания решения по конфликту {macAddress}, используем старое имя");
+                        _conflictDecisions.TryRemove(macAddress, out _);
+                    }
                 }
             }
             

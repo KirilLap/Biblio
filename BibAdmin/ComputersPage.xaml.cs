@@ -77,9 +77,9 @@ namespace BibAdmin
                     MessageBoxImage.Question);
 
                 if (result == MessageBoxResult.Yes)
-                    AdminHub.UpdateClientIdentityStatic(registeredName, requestedPcNumberValue, requestedCustomName);
-
-                AdminHub.ClearConflict(mac);
+                    AdminHub.ResolveConflict(mac, requestedPcNumberValue, requestedCustomName);
+                else
+                    AdminHub.ResolveConflict(mac, null, null);
             });
         }
 
