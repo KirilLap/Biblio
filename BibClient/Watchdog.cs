@@ -67,9 +67,10 @@ namespace BibClient
                 // Создаём новую задачу с правами администратора
                 // /ru SYSTEM - запуск от имени системы (максимальные права, без UAC)
                 // /rl HIGHEST - максимальный уровень прав
-                // /tr - путь к задаче
-                // /tr "\"{exePath}\"" - кавычки обязательны для путей с пробелами
-                string taskCommand = $"/create /tn \"{TASK_NAME}\" /tr \"\\\"{exePath}\\\"\" /ru SYSTEM /rl HIGHEST /sc onlogon /delay 00:05 /f";
+                // /sc onlogon - запуск при входе любого пользователя
+                // /f - форсировать создание
+                // Примечание: параметр /delay удалён для совместимости со всеми версиями Windows
+                string taskCommand = $"/create /tn \"{TASK_NAME}\" /tr \"\\\"{exePath}\\\"\" /ru SYSTEM /rl HIGHEST /sc onlogon /f";
                 
                 var result = RunSchTasks(taskCommand, false);
                 
