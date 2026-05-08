@@ -83,7 +83,8 @@ namespace BibAdmin
         private void BtnComputers_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnComputers);
-            MainFrame.Navigate(new ComputersPage());
+            if (MainFrame.Content is not ComputersPage)
+                MainFrame.Navigate(new ComputersPage());
         }
 
         // Навигация: Финансы

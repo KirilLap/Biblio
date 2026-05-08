@@ -37,6 +37,7 @@ namespace BibAdmin
             AdminHub.ClientOfflineWithSession += OnClientOfflineWithSession;
             AdminHub.ClientTimeMismatch += OnClientTimeMismatch;
             AdminHub.ClientTimeDrift += OnClientTimeDrift;
+            Unloaded += OnUnloaded;
 
             // Загружаем сохранённый режим сортировки
             LoadSortMode();
@@ -51,6 +52,16 @@ namespace BibAdmin
             ConnectToHub();
         }
         
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            AdminHub.ClientUpdated -= OnClientUpdated;
+            AdminHub.ClientsChanged -= OnClientsChanged;
+            AdminHub.ClientOfflineWithSession -= OnClientOfflineWithSession;
+            AdminHub.ClientTimeMismatch -= OnClientTimeMismatch;
+            AdminHub.ClientTimeDrift -= OnClientTimeDrift;
+            _timer.Stop();
+        }
+
         private void LoadSortMode()
         {
             var settings = GlobalSettings.Load();
