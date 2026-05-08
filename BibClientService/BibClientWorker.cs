@@ -133,7 +133,8 @@ namespace BibClientService
                 if (launched)
                     _logger.LogInformation("BibClient успешно запущен в сеансе {SessionId}", sessionId);
                 else
-                    _logger.LogError("Не удалось запустить BibClient в сеансе {SessionId}", sessionId);
+                    _logger.LogError("Не удалось запустить BibClient в сеансе {SessionId} (Win32Error={Error})",
+                        sessionId, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
             }
             catch (Exception ex)
             {
@@ -160,21 +161,38 @@ namespace BibClientService
         private static bool LaunchProcessInSession(string exePath, int sessionId)
         {
             IntPtr userToken = IntPtr.Zero;
+            IntPtr elevatedToken = IntPtr.Zero;
             IntPtr duplicatedToken = IntPtr.Zero;
+            IntPtr envBlock = IntPtr.Zero;
 
             try
             {
-                // Получаем токен пользователя из сеанса
+                // Получаем токен пользователя из сеанса (фильтрованный — без полных прав admin)
                 if (!NativeMethods.WTSQueryUserToken((uint)sessionId, out userToken))
                     return false;
+
+                // BibClient.exe требует requireAdministrator. CreateProcessAsUser с фильтрованным
+                // токеном вернёт ERROR_ELEVATION_REQUIRED (740). Получаем linked elevated токен.
+                IntPtr linkedToken = IntPtr.Zero;
+                if (NativeMethods.GetTokenInformation(userToken, NativeMethods.TokenLinkedToken,
+                    ref linkedToken, IntPtr.Size, out _) && linkedToken != IntPtr.Zero)
+                {
+                    elevatedToken = linkedToken; // полный admin-токен той же сессии
+                }
+
+                IntPtr tokenForProcess = elevatedToken != IntPtr.Zero ? elevatedToken : userToken;
 
                 // Дублируем токен для CreateProcessAsUser
                 var sa = new NativeMethods.SECURITY_ATTRIBUTES();
                 sa.nLength = System.Runtime.InteropServices.Marshal.SizeOf(sa);
-                if (!NativeMethods.DuplicateTokenEx(userToken, NativeMethods.TOKEN_ALL_ACCESS, ref sa,
+                if (!NativeMethods.DuplicateTokenEx(tokenForProcess, NativeMethods.TOKEN_ALL_ACCESS, ref sa,
                     NativeMethods.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
                     NativeMethods.TOKEN_TYPE.TokenPrimary, out duplicatedToken))
                     return false;
+
+                // Создаём пользовательское окружение (USERPROFILE, TEMP, APPDATA и т.д.)
+                // Без этого процесс получает системное окружение SYSTEM, что ломает WPF
+                NativeMethods.CreateEnvironmentBlock(out envBlock, duplicatedToken, false);
 
                 var si = new NativeMethods.STARTUPINFO();
                 si.cb = System.Runtime.InteropServices.Marshal.SizeOf(si);
@@ -190,7 +208,7 @@ namespace BibClientService
                     IntPtr.Zero,
                     false,
                     NativeMethods.CREATE_UNICODE_ENVIRONMENT,
-                    IntPtr.Zero,
+                    envBlock,
                     workDir,
                     ref si,
                     out var pi
@@ -206,8 +224,10 @@ namespace BibClientService
             }
             finally
             {
-                if (userToken != IntPtr.Zero) NativeMethods.CloseHandle(userToken);
+                if (envBlock != IntPtr.Zero) NativeMethods.DestroyEnvironmentBlock(envBlock);
                 if (duplicatedToken != IntPtr.Zero) NativeMethods.CloseHandle(duplicatedToken);
+                if (elevatedToken != IntPtr.Zero) NativeMethods.CloseHandle(elevatedToken);
+                if (userToken != IntPtr.Zero) NativeMethods.CloseHandle(userToken);
             }
         }
     }

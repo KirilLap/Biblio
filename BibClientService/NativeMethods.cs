@@ -70,5 +70,31 @@ namespace BibClientService
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool CloseHandle(IntPtr hObject);
+
+        // Получает linked (elevated) токен из фильтрованного токена пользователя.
+        // TokenLinkedToken = 19: нужен чтобы запустить requireAdministrator-процесс из сервиса SYSTEM.
+        // WTSQueryUserToken возвращает фильтрованный токен — CreateProcessAsUser с ним
+        // отклоняется Windows с ERROR_ELEVATION_REQUIRED (740) для elevated-манифестов.
+        [DllImport("advapi32.dll", SetLastError = true)]
+        public static extern bool GetTokenInformation(
+            IntPtr TokenHandle,
+            int TokenInformationClass,
+            ref IntPtr TokenInformation,
+            int TokenInformationLength,
+            out int ReturnLength);
+
+        public const int TokenLinkedToken = 19;
+
+        // Создаёт блок переменных окружения пользователя (USERPROFILE, TEMP, APPDATA и т.д.).
+        // Без него запущенный из SYSTEM-сервиса процесс получит системное окружение вместо пользовательского,
+        // что ломает WPF-инициализацию и запись логов в профиль пользователя.
+        [DllImport("userenv.dll", SetLastError = true)]
+        public static extern bool CreateEnvironmentBlock(
+            out IntPtr lpEnvironment,
+            IntPtr hToken,
+            bool bInherit);
+
+        [DllImport("userenv.dll", SetLastError = true)]
+        public static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
     }
 }
