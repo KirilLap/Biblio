@@ -10,17 +10,21 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
-  <!-- Post-build: копируем BibClientGuardian.exe и BibClientService.exe в папку вывода -->
+  <!-- Post-build: копируем BibClientGuardian.exe и все файлы BibClientService в папку вывода.
+       BibClientService.exe — нативный лаунчер .NET, ему нужны .dll и runtimeconfig.json рядом. -->
   <Target Name="CopyDependenciesAfterBuild" AfterTargets="Build">
     <Copy SourceFiles="$(ProjectDir)..\BibClientGuardian\bin\$(Configuration)\net10.0-windows\BibClientGuardian.exe"
           DestinationFolder="$(OutDir)"
           SkipUnchangedFiles="true"
           ContinueOnError="true" />
-    <Copy SourceFiles="$(ProjectDir)..\BibClientService\bin\$(Configuration)\net10.0-windows\win-x64\BibClientService.exe"
+    <ItemGroup>
+      <ServiceFiles Include="$(ProjectDir)..\BibClientService\bin\$(Configuration)\net10.0-windows\win-x64\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ServiceFiles)"
           DestinationFolder="$(OutDir)"
           SkipUnchangedFiles="true"
           ContinueOnError="true" />
-    <Message Text="✅ BibClientGuardian.exe и BibClientService.exe скопированы в $(OutDir)" Importance="high" />
+    <Message Text="✅ BibClientGuardian.exe и BibClientService (все файлы) скопированы в $(OutDir)" Importance="high" />
   </Target>
 
   <ItemGroup>
