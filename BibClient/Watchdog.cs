@@ -64,13 +64,11 @@ namespace BibClient
                 // Удаляем старую задачу если существует
                 RunSchTasks($"/delete /tn \"{TASK_NAME}\" /f", true);
 
-                // Создаём новую задачу с правами администратора
-                // /ru SYSTEM - запуск от имени системы (максимальные права, без UAC)
-                // /rl HIGHEST - максимальный уровень прав
-                // /sc onlogon - запуск при входе любого пользователя
+                // Создаём задачу для текущего пользователя (без /ru SYSTEM — SYSTEM не показывает UI)
+                // /rl HIGHEST - максимальный уровень прав текущего пользователя
+                // /sc onlogon - запуск при входе пользователя, создавшего задачу
                 // /f - форсировать создание
-                // Примечание: параметр /delay удалён для совместимости со всеми версиями Windows
-                string taskCommand = $"/create /tn \"{TASK_NAME}\" /tr \"\\\"{exePath}\\\"\" /ru SYSTEM /rl HIGHEST /sc onlogon /f";
+                string taskCommand = $"/create /tn \"{TASK_NAME}\" /tr \"\\\"{exePath}\\\"\" /rl HIGHEST /sc onlogon /f";
                 
                 var result = RunSchTasks(taskCommand, false);
                 

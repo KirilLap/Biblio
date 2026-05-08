@@ -10,10 +10,13 @@ namespace BibClientGuardian
     {
         // Имя мьютекса для сигнала легального закрытия (должно совпадать с Watchdog.cs)
         private const string LEGAL_CLOSE_MUTEX_NAME = "Global\\BibClient_LegalClose";
-        
+
+        // Мьютекс единственного экземпляра Guardian
+        private const string GUARDIAN_MUTEX_NAME = "Global\\BibClientGuardian_SingleInstance";
+
         // Путь к основному приложению BibClient.exe
         private static readonly string ClientExePath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, 
+            AppDomain.CurrentDomain.BaseDirectory,
             "BibClient.exe"
         );
 
@@ -29,6 +32,14 @@ namespace BibClientGuardian
         {
             // Скрываем консольное окно СРАЗУ при запуске
             HideConsoleWindow();
+
+            // Проверяем единственность экземпляра Guardian
+            var guardianMutex = new Mutex(true, GUARDIAN_MUTEX_NAME, out bool isFirstInstance);
+            if (!isFirstInstance)
+            {
+                Log("⚠️ Guardian уже запущен (обнаружен другой экземпляр) - завершение");
+                return;
+            }
 
             // Проверяем что основной файл существует
             if (!File.Exists(ClientExePath))
@@ -128,7 +139,9 @@ namespace BibClientGuardian
                                 UseShellExecute = true,
                                 WorkingDirectory = Path.GetDirectoryName(ClientExePath) ?? "",
                                 CreateNoWindow = false,
-                                Verb = "runas" // Запуск с правами администратора
+                                // Verb = "runas" убран: Guardian наследует права от BibClient.
+                                // Если BibClient запущен как администратор, Guardian тоже.
+                                // Явный runas вызывает диалог UAC, который никто не подтверждает.
                             };
 
                             if (!File.Exists(ClientExePath))
