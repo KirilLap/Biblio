@@ -46,8 +46,8 @@ namespace BibClient
                 else
                 {
                     Logger.Info("✅ Служба BibClientWatchdog уже установлена");
-                    // Обновляем binPath на случай если exe переместили
-                    RunSc($"config {ServiceName} binPath= \"{ServiceExePath}\"");
+                    // Обновляем binPath на случай если exe переместили (те же правила кавычек)
+                    RunSc($"config {ServiceName} binPath= \"\\\"{ServiceExePath}\\\"\"");
                 }
 
                 StartService();
@@ -108,8 +108,10 @@ namespace BibClient
 
         private static void InstallService()
         {
-            // Создаём службу с автозапуском
-            int exitCode = RunSc($"create {ServiceName} binPath= \"{ServiceExePath}\" start= auto DisplayName= \"{ServiceDisplayName}\"");
+            // binPath должен содержать кавычки ВНУТРИ значения если путь содержит пробелы.
+            // SCM сохраняет строку binPath дословно в реестре и использует её для запуска.
+            // Без внутренних кавычек "C:\Program Files\..." → SCM запускает "C:\Program" → ошибка 1053.
+            int exitCode = RunSc($"create {ServiceName} binPath= \"\\\"{ServiceExePath}\\\"\" start= auto DisplayName= \"{ServiceDisplayName}\"");
             if (exitCode != 0)
             {
                 Logger.Error($"❌ Не удалось создать службу (exit code {exitCode})");
@@ -127,11 +129,32 @@ namespace BibClient
             // sc start не возвращает ошибку если служба уже запущена — exit code 1056
             int exitCode = RunSc($"start {ServiceName}");
             if (exitCode == 0)
+            {
                 Logger.Info("✅ Служба BibClientWatchdog запущена");
+            }
             else if (exitCode == 1056)
+            {
                 Logger.Info("ℹ️ Служба BibClientWatchdog уже запущена");
+            }
+            else if (exitCode == 1053)
+            {
+                // Служба не ответила — скорее всего зарегистрирована с неправильным binPath.
+                // Переустанавливаем с правильными кавычками вокруг пути.
+                Logger.Warn("⚠️ Ошибка 1053 — переустанавливаем службу с корректным binPath...");
+                RunSc($"stop {ServiceName}");
+                RunSc($"delete {ServiceName}");
+                System.Threading.Thread.Sleep(1000);
+                InstallService();
+                int retryCode = RunSc($"start {ServiceName}");
+                if (retryCode == 0)
+                    Logger.Info("✅ Служба запущена после переустановки");
+                else
+                    Logger.Error($"❌ Не удалось запустить службу после переустановки (exit={retryCode})");
+            }
             else
+            {
                 Logger.Warn($"⚠️ sc start вернул код {exitCode}");
+            }
         }
 
         // Возвращает exit code sc.exe

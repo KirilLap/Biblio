@@ -333,12 +333,8 @@ namespace BibClient
                         SettingsManager.Current.PreventClose = value.ToLower() == "true";
                         SettingsManager.Save();
                         Logger.Info($"🔒 PreventClose = {SettingsManager.Current.PreventClose}");
-                                                // Перезапускаем Guardian если настройка изменилась
                         if (SettingsManager.Current.PreventClose)
-                            Watchdog.StartGuardian(true);
-                        else
-                            Watchdog.StopGuardian();
-                        
+                            ServiceManager.EnsureServiceRunning();
                         SettingsChanged?.Invoke();
                         break;
 
