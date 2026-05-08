@@ -45,8 +45,7 @@ namespace BibClient
                 {
                     string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                     string guardianSourcePath = Path.Combine(baseDir, "BibClientGuardian.exe");
-                    
-                    // Проверяем существует ли файл Guardian
+
                     if (!File.Exists(guardianSourcePath))
                     {
                         Logger.Warn($"⚠️ BibClientGuardian.exe не найден в папке: {guardianSourcePath}");
@@ -54,11 +53,42 @@ namespace BibClient
                         return;
                     }
 
+                    // Снимаем блокировку SmartScreen/Zone.Identifier со всех exe в папке.
+                    // Файлы, скопированные с другой машины или скачанные, помечаются меткой MOTW
+                    // (Mark of the Web, ADS :Zone.Identifier=3). SmartScreen блокирует их запуск.
+                    // Удаление этого ADS = то же что "Разблокировать" в свойствах файла или Unblock-File.
+                    UnblockDirectory(baseDir);
+
                     Logger.Info($"✅ BibClientGuardian.exe найден: {guardianSourcePath}");
                 }
                 catch (Exception ex)
                 {
                     Logger.Error($"❌ Ошибка проверки Guardian: {ex.Message}");
+                }
+            }
+
+            void UnblockDirectory(string dir)
+            {
+                try
+                {
+                    int unblocked = 0;
+                    foreach (var file in Directory.GetFiles(dir, "*.exe"))
+                    {
+                        try
+                        {
+                            // Удаляем ADS Zone.Identifier — стандартный путь "file.exe:Zone.Identifier"
+                            // работает через Win32 API удаления альтернативных потоков данных NTFS
+                            File.Delete(file + ":Zone.Identifier");
+                            unblocked++;
+                        }
+                        catch { /* ADS не существует или нет прав — игнорируем */ }
+                    }
+                    if (unblocked > 0)
+                        Logger.Info($"🔓 Снята блокировка SmartScreen с {unblocked} файлов");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"⚠️ Ошибка снятия блокировки: {ex.Message}");
                 }
             }
 
