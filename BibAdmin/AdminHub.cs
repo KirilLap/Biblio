@@ -31,6 +31,9 @@ namespace BibAdmin
         // ✅ ДЛЯ ЗАЩИТЫ ОТ ДУБЛЕЙ УВЕДОМЛЕНИЙ
         private static readonly ConcurrentDictionary<string, DateTime> _lastOfflineAlert = new();
 
+        // MACs для которых конфликт уже показан в этой сессии (не показывать повторно)
+        private static readonly HashSet<string> _shownConflicts = new();
+
         // Лог удалённых ПК
         private static readonly string _deletedPcsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "deleted_pcs.json");
         public static List<DeletedPcRecord> DeletedPcs { get; } = new();
@@ -51,6 +54,34 @@ namespace BibAdmin
         {
             try { File.WriteAllText(_deletedPcsPath, JsonSerializer.Serialize(DeletedPcs, new JsonSerializerOptions { WriteIndented = true })); }
             catch { }
+        }
+
+        public static void ClearConflict(string mac) => _shownConflicts.Remove(mac);
+
+        public static void UpdateClientIdentityStatic(string registeredPcName, int newPcNumberValue, string newCustomName)
+        {
+            if (!KnownClients.TryGetValue(registeredPcName, out var client)) return;
+
+            client.PcNumberValue = newPcNumberValue;
+            client.CustomName = newCustomName;
+
+            var newPcNumber = string.IsNullOrEmpty(newCustomName)
+                ? $"ПК {newPcNumberValue}"
+                : $"{newCustomName} {newPcNumberValue}";
+
+            if (registeredPcName != newPcNumber)
+            {
+                KnownClients.TryRemove(registeredPcName, out _);
+                KnownClients[newPcNumber] = client;
+                if (_pendingCommands.TryRemove(registeredPcName, out var cmds))
+                    _pendingCommands[newPcNumber] = cmds;
+            }
+
+            SaveRegistry();
+            SavePending();
+            ClientUpdated?.Invoke(client);
+            ClientsChanged?.Invoke();
+            Logger.Info($"✅ Идентификатор ПК обновлён: '{registeredPcName}' → '{newPcNumber}'");
         }
 
         public static bool DeleteClientStatic(string pcNumber)
@@ -392,8 +423,9 @@ namespace BibAdmin
                 string requestedName = string.IsNullOrEmpty(info.CustomName)
                     ? $"ПК {info.PcNumberValue}"
                     : $"{info.CustomName} {info.PcNumberValue}";
-                if (requestedName != existingByMac.PcNumber)
+                if (requestedName != existingByMac.PcNumber && !_shownConflicts.Contains(macAddress))
                 {
+                    _shownConflicts.Add(macAddress);
                     Logger.Warn($"⚠️ Конфликт имён: MAC {macAddress} был '{existingByMac.PcNumber}', подключается как '{requestedName}'");
                     ClientNameConflict?.Invoke(existingByMac.PcNumber, requestedName, macAddress, info.PcNumberValue, info.CustomName);
                 }
