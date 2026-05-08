@@ -7,6 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
+    
+    <!-- Скрываем приложение из панели задач и делаем без окна -->
+    <ApplicationVisible>false</ApplicationVisible>
+    
+    <!-- Подключаем манифест для прав (asInvoker - наследует от родителя) -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 

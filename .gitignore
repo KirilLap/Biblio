@@ -1,19 +1,17 @@
 ```
 # Build artifacts
-bin/
-obj/
+*.obj
 *.exe
 *.dll
 *.pdb
 *.userprefs
+*.cache
+*.log
 
 # Dependencies
 packages/
-node_modules/
-vendor/
-
-# Logs
-*.log
+bin/
+obj/
 
 # Environment
 .env

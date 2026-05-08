@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Xml;
 
 namespace BibClient
 {
@@ -16,45 +17,36 @@ namespace BibClient
         // Мьютекс для предотвращения множественного запуска основного приложения
         private const string APP_MUTEX_NAME = "Global\\BibClient_SingleInstance";
         
+        // Имя задачи в Планировщике заданий
+        private const string TASK_NAME = "BibClient_AutoStart";
+        
         private static Mutex? _appMutex;
 
-        // Прописываем автозапуск в реестр с полным путем
+        // Прописываем автозапуск через Планировщик заданий (для прав администратора)
         public static void RegisterAutostart()
         {
             try
             {
-                // Получаем полный путь к исполняемому файлу
                 string exePath = GetExePath();
 
-                // Проверяем что файл существует
                 if (!File.Exists(exePath))
                 {
                     Logger.Error($"❌ Файл не найден для автозапуска: {exePath}");
                     return;
                 }
 
-                using var key = Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
-
-                if (key == null)
+                // Сначала пробуем через Планировщик заданий (предпочтительный способ)
+                if (CreateScheduledTask(exePath))
                 {
-                    Logger.Error("❌ Не удалось открыть ключ реестра для автозапуска");
-                    return;
-                }
-
-                // Регистрируем с полным путем в кавычках (для путей с пробелами)
-                string registryValue = $"\"{exePath}\"";
-                key.SetValue("BibClient", registryValue, RegistryValueKind.String);
-                
-                // Проверяем что значение записалось
-                var savedValue = key.GetValue("BibClient");
-                if (savedValue != null && savedValue.ToString() == registryValue)
-                {
-                    Logger.Info($"✅ Автозапуск зарегистрирован: {exePath}");
+                    Logger.Info($"✅ Автозапуск зарегистрирован через Планировщик заданий: {exePath}");
+                    // Удаляем старую запись из реестра если она есть
+                    UnregisterRegistryAutostart();
                 }
                 else
                 {
-                    Logger.Warn($"⚠️ Автозапуск записан, но значение отличается: {savedValue}");
+                    // Фоллбэк: реестр (если нет прав на планировщик)
+                    Logger.Warn("⚠️ Не удалось создать задачу в Планировщике, используем реестр...");
+                    RegisterRegistryAutostart(exePath);
                 }
             }
             catch (Exception ex)
@@ -64,8 +56,111 @@ namespace BibClient
             }
         }
 
-        // Убираем автозапуск из реестра
-        public static void UnregisterAutostart()
+        // Создание задачи в Планировщике заданий через schtasks.exe
+        private static bool CreateScheduledTask(string exePath)
+        {
+            try
+            {
+                // Удаляем старую задачу если существует
+                RunSchTasks($"/delete /tn \"{TASK_NAME}\" /f", true);
+
+                // Создаём новую задачу с правами администратора
+                // /ru SYSTEM - запуск от имени системы (максимальные права, без UAC)
+                // /rl HIGHEST - максимальный уровень прав
+                // /tr - путь к задаче
+                // /tr "\"{exePath}\"" - кавычки обязательны для путей с пробелами
+                string taskCommand = $"/create /tn \"{TASK_NAME}\" /tr \"\\\"{exePath}\\\"\" /ru SYSTEM /rl HIGHEST /sc onlogon /delay 00:05 /f";
+                
+                var result = RunSchTasks(taskCommand, false);
+                
+                if (result)
+                {
+                    Logger.Info($"✅ Задача '{TASK_NAME}' создана в Планировщике заданий");
+                    return true;
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"❌ Ошибка создания задачи в Планировщике: {ex.Message}");
+                return false;
+            }
+        }
+
+        // Выполнение команды schtasks.exe
+        private static bool RunSchTasks(string arguments, bool ignoreErrors)
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "schtasks.exe",
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+
+                using var process = Process.Start(startInfo);
+                if (process == null) return false;
+
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                
+                process.WaitForExit(10000);
+
+                if (process.ExitCode == 0)
+                {
+                    Logger.Info($"📋 schtasks: {output}");
+                    return true;
+                }
+                else
+                {
+                    Logger.Warn($"⚠️ schtasks exit code: {process.ExitCode}, error: {error}");
+                    return ignoreErrors ? true : false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"❌ Ошибка выполнения schtasks: {ex.Message}");
+                return ignoreErrors;
+            }
+        }
+
+        // Регистрация в реестре (фоллбэк)
+        private static void RegisterRegistryAutostart(string exePath)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
+
+                if (key == null)
+                {
+                    Logger.Error("❌ Не удалось открыть ключ реестра для автозапуска");
+                    return;
+                }
+
+                string registryValue = $"\"{exePath}\"";
+                key.SetValue("BibClient", registryValue, RegistryValueKind.String);
+                
+                var savedValue = key.GetValue("BibClient");
+                if (savedValue != null && savedValue.ToString() == registryValue)
+                {
+                    Logger.Info($"✅ Автозапуск зарегистрирован в реестре: {exePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"❌ Ошибка регистрации в реестре: {ex.Message}");
+            }
+        }
+
+        // Удаление из реестра
+        private static void UnregisterRegistryAutostart()
         {
             try
             {
@@ -74,6 +169,25 @@ namespace BibClient
                 key?.DeleteValue("BibClient", false);
             }
             catch { }
+        }
+
+        // Убираем автозапуск (и из планировщика, и из реестра)
+        public static void UnregisterAutostart()
+        {
+            try
+            {
+                // Удаляем задачу из Планировщика
+                RunSchTasks($"/delete /tn \"{TASK_NAME}\" /f", true);
+                Logger.Info("🗑️ Задача удалена из Планировщика заданий");
+                
+                // Удаляем из реестра
+                UnregisterRegistryAutostart();
+                Logger.Info("🗑️ Запись удалена из реестра");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"❌ Ошибка удаления автозапуска: {ex.Message}");
+            }
         }
         
         // Получаем полный путь к exe файлу приложения
