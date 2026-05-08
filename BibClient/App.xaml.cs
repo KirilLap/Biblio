@@ -122,6 +122,9 @@ namespace BibClient
                 Logger.Info("📁 Настройки найдены, загрузка");
                 SettingsManager.Load();
 
+                // Применяем политики ограничений из настроек (пишем в реестр HKCU напрямую)
+                RegistryPolicyEngine.ApplyAll();
+
                 // Регистрируем автозапуск если включено (по умолчанию true)
                 // Делаем это в первую очередь, чтобы при следующем старте из автозапуска всё работало
                 if (SettingsManager.Current.AutoStartWithUser)

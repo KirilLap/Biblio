@@ -295,24 +295,28 @@ namespace BibClient
                     case "TASKMGR_DISABLE":
                         SettingsManager.Current.TaskMgrDisabled = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetTaskMgrBlock(SettingsManager.Current.TaskMgrDisabled);
                         SettingsChanged?.Invoke();
                         break;
 
                     case "BLOCK_REGEDIT":
                         SettingsManager.Current.BlockRegedit = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetRegeditBlock(SettingsManager.Current.BlockRegedit);
                         SettingsChanged?.Invoke();
                         break;
 
                     case "BLOCK_CMD":
                         SettingsManager.Current.BlockCmd = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetCmdBlock(SettingsManager.Current.BlockCmd);
                         SettingsChanged?.Invoke();
                         break;
 
                     case "BLOCK_POWERSHELL":
                         SettingsManager.Current.BlockPowerShell = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetPowerShellBlock(SettingsManager.Current.BlockPowerShell);
                         SettingsChanged?.Invoke();
                         break;
 
