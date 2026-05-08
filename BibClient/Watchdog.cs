@@ -342,10 +342,12 @@ namespace BibClient
             var startInfo = new ProcessStartInfo
             {
                 FileName = guardianExePath,
-                UseShellExecute = true,
+                // UseShellExecute = false: запуск через CreateProcess, а не ShellExecute.
+                // ShellExecute проверяет Zone.Identifier и показывает диалог "Неизвестный издатель"
+                // при каждом запуске если файл был скачан из интернета. CreateProcess этого не делает.
+                UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = baseDir,
-                WindowStyle = ProcessWindowStyle.Hidden
             };
             
             try

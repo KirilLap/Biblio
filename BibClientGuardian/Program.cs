@@ -136,12 +136,13 @@ namespace BibClientGuardian
                             var startInfo = new ProcessStartInfo
                             {
                                 FileName = ClientExePath,
-                                UseShellExecute = true,
+                                // UseShellExecute = false: запуск через CreateProcess.
+                                // Это обходит проверку Zone.Identifier (диалог "Неизвестный издатель").
+                                // Guardian уже запущен с правами администратора (унаследованы от BibClient),
+                                // поэтому BibClient также стартует с правами администратора — без UAC.
+                                UseShellExecute = false,
                                 WorkingDirectory = Path.GetDirectoryName(ClientExePath) ?? "",
                                 CreateNoWindow = false,
-                                // Verb = "runas" убран: Guardian наследует права от BibClient.
-                                // Если BibClient запущен как администратор, Guardian тоже.
-                                // Явный runas вызывает диалог UAC, который никто не подтверждает.
                             };
 
                             if (!File.Exists(ClientExePath))
