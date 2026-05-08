@@ -67,6 +67,7 @@ namespace BibClient
             {
                 Logger.Info("⚙️ Настроек нет, запускаем окно настройки...");
                 var setup = new SetupWindow();
+                setup.Loaded += (_, _) => { setup.Activate(); setup.Focus(); };
 
                 // Показываем модально (главное окно не откроется, пока не завершим настройку)
                 if (setup.ShowDialog() == true && setup.Result != null)

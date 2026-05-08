@@ -6,6 +6,7 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
+        Topmost="True"
         Background="#1E1E2E">
 
     <Grid Margin="20">
