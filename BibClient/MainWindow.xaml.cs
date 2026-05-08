@@ -20,6 +20,7 @@ namespace BibClient
     public partial class MainWindow : Window
     {
         private DispatcherTimer _clockTimer = new();
+        private DispatcherTimer _guardianHeartbeat = new();
         private KeyboardHook? _lockHook;
         private KeyboardHook? _alwaysHook;
         private NetworkManager? _networkManager;
@@ -63,6 +64,8 @@ namespace BibClient
             {
                 Watchdog.RegisterAutostart();
             }
+
+            StartGuardianHeartbeat();
 
             // Подписки на удалённые команды
             PolicyEngine.RemoteUnlockRequested += () => Dispatcher.Invoke(Unlock);
@@ -333,6 +336,25 @@ namespace BibClient
             _clockTimer.Tick += (s, e) => UpdateClock();
             _clockTimer.Start();
             UpdateClock();
+        }
+
+        private void StartGuardianHeartbeat()
+        {
+            _guardianHeartbeat.Stop();
+            _guardianHeartbeat.Interval = TimeSpan.FromSeconds(15);
+            _guardianHeartbeat.Tick += (s, e) =>
+            {
+                if (!_settings.PreventClose) return;
+                var guardians = System.Diagnostics.Process.GetProcessesByName("BibClientGuardian");
+                bool alive = guardians.Length > 0;
+                foreach (var p in guardians) p.Dispose();
+                if (!alive)
+                {
+                    Logger.Warn("⚠️ Guardian не найден — перезапуск");
+                    Watchdog.StartGuardian(true);
+                }
+            };
+            _guardianHeartbeat.Start();
         }
 
         private void UpdateClock()
@@ -675,6 +697,7 @@ namespace BibClient
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
 #if DEBUG
+            _guardianHeartbeat.Stop();
             _lockHook?.Dispose();
             _alwaysHook?.Dispose();
             _trayIcon?.Dispose();
@@ -693,10 +716,13 @@ namespace BibClient
             {
                 // Легальное закрытие (администратор разблокировал или PreventClose выключен)
                 Logger.Info("✅ Разрешено легальное закрытие приложения");
-                
+
+                // Останавливаем heartbeat чтобы не перезапустил Guardian после StopGuardian
+                _guardianHeartbeat.Stop();
+
                 // Сигнализируем Guardian что закрытие легальное
                 Watchdog.SignalLegalClose();
-                
+
                 // Останавливаем guardian процесс
                 Watchdog.StopGuardian();
                 
