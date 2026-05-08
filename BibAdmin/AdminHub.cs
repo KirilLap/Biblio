@@ -25,9 +25,59 @@ namespace BibAdmin
         private const int OfflineMismatchThreshold = 60;
         public static event Action<string, double>? ClientTimeDrift;
         private const double ClockDriftThreshold = 30.0;
+        // registeredAs, requestedAs, mac, requestedPcNumberValue, requestedCustomName
+        public static event Action<string, string, string, int, string>? ClientNameConflict;
 
         // ✅ ДЛЯ ЗАЩИТЫ ОТ ДУБЛЕЙ УВЕДОМЛЕНИЙ
         private static readonly ConcurrentDictionary<string, DateTime> _lastOfflineAlert = new();
+
+        // Лог удалённых ПК
+        private static readonly string _deletedPcsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "deleted_pcs.json");
+        public static List<DeletedPcRecord> DeletedPcs { get; } = new();
+
+        public static void LoadDeletedPcs()
+        {
+            if (!File.Exists(_deletedPcsPath)) return;
+            try
+            {
+                var json = File.ReadAllText(_deletedPcsPath);
+                var list = JsonSerializer.Deserialize<List<DeletedPcRecord>>(json);
+                if (list != null) { DeletedPcs.Clear(); DeletedPcs.AddRange(list); }
+            }
+            catch (Exception ex) { Logger.Error($"Ошибка загрузки deleted_pcs.json: {ex.Message}"); }
+        }
+
+        private static void SaveDeletedPcs()
+        {
+            try { File.WriteAllText(_deletedPcsPath, JsonSerializer.Serialize(DeletedPcs, new JsonSerializerOptions { WriteIndented = true })); }
+            catch { }
+        }
+
+        public static bool DeleteClientStatic(string pcNumber)
+        {
+            if (!KnownClients.TryGetValue(pcNumber, out var client)) return false;
+            if (client.IsOnline) return false;
+            if (client.IsSession) return false;
+
+            DeletedPcs.Add(new DeletedPcRecord
+            {
+                PcNumber = pcNumber,
+                MacAddress = client.MacAddress,
+                Ip = client.Ip,
+                DeletedAt = DateTime.Now
+            });
+            SaveDeletedPcs();
+
+            KnownClients.TryRemove(pcNumber, out _);
+            _pendingCommands.TryRemove(pcNumber, out _);
+            SaveRegistry();
+            SavePending();
+            SaveActiveSessions();
+
+            ClientsChanged?.Invoke();
+            Logger.Info($"ПК удалён из реестра: {pcNumber}");
+            return true;
+        }
 
         public static void LoadRegistry()
         {
@@ -337,6 +387,16 @@ namespace BibAdmin
                 // Клиент уже известен - сохраняем его настройки имени
                 finalPcNumberValue = existingByMac.PcNumberValue;
                 finalCustomName = existingByMac.CustomName;
+
+                // Если клиент подключился под другим именем — уведомляем администратора
+                string requestedName = string.IsNullOrEmpty(info.CustomName)
+                    ? $"ПК {info.PcNumberValue}"
+                    : $"{info.CustomName} {info.PcNumberValue}";
+                if (requestedName != existingByMac.PcNumber)
+                {
+                    Logger.Warn($"⚠️ Конфликт имён: MAC {macAddress} был '{existingByMac.PcNumber}', подключается как '{requestedName}'");
+                    ClientNameConflict?.Invoke(existingByMac.PcNumber, requestedName, macAddress, info.PcNumberValue, info.CustomName);
+                }
             }
             
             string finalName = string.IsNullOrEmpty(finalCustomName) ? $"ПК {finalPcNumberValue}" : $"{finalCustomName} {finalPcNumberValue}";
@@ -1138,6 +1198,14 @@ namespace BibAdmin
             try { File.WriteAllText(_registryPath, JsonSerializer.Serialize(KnownClients.Values, new JsonSerializerOptions { WriteIndented = true })); }
             catch { }
         }
+    }
+
+    public class DeletedPcRecord
+    {
+        public string PcNumber { get; set; } = "";
+        public string MacAddress { get; set; } = "";
+        public string Ip { get; set; } = "";
+        public DateTime DeletedAt { get; set; }
     }
 
     public class SystemInfoDto

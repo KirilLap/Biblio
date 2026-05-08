@@ -46,9 +46,10 @@ namespace BibAdmin
 
             // ❌ УБРАНА загрузка истории здесь - она загружается только из MainWindow
             // LoadHistory() больше не вызывается в конструкторе!
-            
+
             UpdateStats();
             RenderSessions(Sessions);
+            RenderDeletedPcs();
         }
         
         // Метод для обновления UI после загрузки истории
@@ -56,6 +57,70 @@ namespace BibAdmin
         {
             UpdateStats();
             RenderSessions(Sessions);
+            RenderDeletedPcs();
+        }
+
+        private void RenderDeletedPcs()
+        {
+            DeletedPcsList.Children.Clear();
+            var list = AdminHub.DeletedPcs;
+            if (list.Count == 0) return;
+
+            // Заголовок секции
+            DeletedPcsList.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(248, 240, 240)),
+                Padding = new Thickness(16, 10, 16, 10),
+                Margin = new Thickness(0, 16, 0, 0),
+                Child = new TextBlock
+                {
+                    Text = $"История удалённых ПК ({list.Count})",
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(180, 60, 60))
+                }
+            });
+
+            bool alternate = false;
+            foreach (var d in list.OrderByDescending(x => x.DeletedAt))
+            {
+                var row = new Border
+                {
+                    Background = alternate
+                        ? new SolidColorBrush(Color.FromRgb(255, 250, 250))
+                        : Brushes.White,
+                    Padding = new Thickness(16, 9, 16, 9)
+                };
+                alternate = !alternate;
+
+                var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+
+                void AddCell(int col, string text, Color color, bool bold = false)
+                {
+                    var tb = new TextBlock
+                    {
+                        Text = text,
+                        FontSize = 13,
+                        FontWeight = bold ? FontWeights.Medium : FontWeights.Normal,
+                        Foreground = new SolidColorBrush(color),
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    Grid.SetColumn(tb, col);
+                    grid.Children.Add(tb);
+                }
+
+                AddCell(0, d.PcNumber, Color.FromRgb(30, 30, 46), bold: true);
+                AddCell(1, d.MacAddress, Color.FromRgb(120, 120, 120));
+                AddCell(2, d.Ip, Color.FromRgb(120, 120, 120));
+                AddCell(3, d.DeletedAt.ToString("dd.MM.yyyy HH:mm"), Color.FromRgb(180, 60, 60));
+
+                row.Child = grid;
+                DeletedPcsList.Children.Add(row);
+            }
         }
         
         // Загрузка истории из JSON-файла

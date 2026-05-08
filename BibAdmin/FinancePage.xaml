@@ -219,10 +219,13 @@
                     </Grid>
                 </Border>
 
-                <!-- Список сессий -->
+                <!-- Список сессий + история удалений -->
                 <ScrollViewer Grid.Row="1"
                               VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="SessionsList"/>
+                    <StackPanel>
+                        <StackPanel x:Name="SessionsList"/>
+                        <StackPanel x:Name="DeletedPcsList"/>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Border>

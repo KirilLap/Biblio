@@ -37,6 +37,7 @@ namespace BibAdmin
             AdminHub.ClientOfflineWithSession += OnClientOfflineWithSession;
             AdminHub.ClientTimeMismatch += OnClientTimeMismatch;
             AdminHub.ClientTimeDrift += OnClientTimeDrift;
+            AdminHub.ClientNameConflict += OnClientNameConflict;
             Unloaded += OnUnloaded;
 
             // Загружаем сохранённый режим сортировки
@@ -59,7 +60,47 @@ namespace BibAdmin
             AdminHub.ClientOfflineWithSession -= OnClientOfflineWithSession;
             AdminHub.ClientTimeMismatch -= OnClientTimeMismatch;
             AdminHub.ClientTimeDrift -= OnClientTimeDrift;
+            AdminHub.ClientNameConflict -= OnClientNameConflict;
             _timer.Stop();
+        }
+
+        private void OnClientNameConflict(string registeredName, string requestedName, string mac, int requestedPcNumberValue, string requestedCustomName)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var result = MessageBox.Show(
+                    $"ПК с MAC {mac} ранее был зарегистрирован как '{registeredName}'.\n" +
+                    $"Сейчас подключился как '{requestedName}'.\n\n" +
+                    $"Обновить имя на '{requestedName}'?",
+                    "Конфликт имён ПК",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                    _ = _hub?.InvokeAsync("SetClientCustomNameByValue", requestedPcNumberValue, requestedCustomName);
+            });
+        }
+
+        private void DeletePc(ClientState pc)
+        {
+            var result = MessageBox.Show(
+                $"Удалить '{pc.PcNumber}' из списка?\n\nФинансовая история сохранится.",
+                "Удаление ПК",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes) return;
+
+            if (!AdminHub.DeleteClientStatic(pc.PcNumber))
+                MessageBox.Show("Не удалось удалить ПК. Возможно, он онлайн или имеет активную сессию.",
+                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else if (_selected?.PcNumber == pc.PcNumber)
+            {
+                _selected = null;
+                TxtHint.Visibility = Visibility.Visible;
+                PanelInfo.Visibility = Visibility.Collapsed;
+                PanelButtons.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void LoadSortMode()
@@ -702,6 +743,12 @@ namespace BibAdmin
             menu.Items.Add(MakeItem("⟳", "Переподключить клиент", () => ReconnectPc(pc)));
             menu.Items.Add(MakeItem("↺", "Перезагрузить ПК",      () => RestartPc(pc)));
             menu.Items.Add(MakeItem("⏻", "Выключить ПК",           () => ShutdownPc(pc), isDanger: true));
+
+            if (!pc.IsOnline && !pc.IsSession)
+            {
+                menu.Items.Add(MakeSep());
+                menu.Items.Add(MakeItem("✕", "Удалить ПК из списка", () => DeletePc(pc), isDanger: true));
+            }
 
             return menu;
         }
