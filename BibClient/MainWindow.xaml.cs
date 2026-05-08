@@ -20,7 +20,6 @@ namespace BibClient
     public partial class MainWindow : Window
     {
         private DispatcherTimer _clockTimer = new();
-        private DispatcherTimer _guardianHeartbeat = new();
         private KeyboardHook? _lockHook;
         private KeyboardHook? _alwaysHook;
         private NetworkManager? _networkManager;
@@ -58,14 +57,12 @@ namespace BibClient
             ApplySettings();
             StartClock();
             StartNetwork();
-            
+
             // Регистрируем автозапуск если включено (по умолчанию true)
             if (_settings.AutoStartWithUser)
             {
                 Watchdog.RegisterAutostart();
             }
-
-            StartGuardianHeartbeat();
 
             // Подписки на удалённые команды
             PolicyEngine.RemoteUnlockRequested += () => Dispatcher.Invoke(Unlock);
@@ -338,25 +335,6 @@ namespace BibClient
             UpdateClock();
         }
 
-        private void StartGuardianHeartbeat()
-        {
-            _guardianHeartbeat.Stop();
-            _guardianHeartbeat.Interval = TimeSpan.FromSeconds(15);
-            _guardianHeartbeat.Tick += (s, e) =>
-            {
-                if (!_settings.PreventClose) return;
-                var guardians = System.Diagnostics.Process.GetProcessesByName("BibClientGuardian");
-                bool alive = guardians.Length > 0;
-                foreach (var p in guardians) p.Dispose();
-                if (!alive)
-                {
-                    Logger.Warn("⚠️ Guardian не найден — перезапуск");
-                    Watchdog.StartGuardian(true);
-                }
-            };
-            _guardianHeartbeat.Start();
-        }
-
         private void UpdateClock()
         {
             TxtTime.Text = DateTime.Now.ToString("HH:mm:ss");
@@ -562,16 +540,10 @@ namespace BibClient
             this.Show();
 
             _ = _networkManager?.SendStatusAsync("Свободный");
-            
-            // При разблокировке администратором - позволяем закрыть приложение
-            // (Window_Closing проверит флаг _isUnlocked и разрешит закрытие)
-            Logger.Info("🔓 Администратор разблокировал ПК - закрытие разрешено");
-            
-            // Сигнализируем Guardian что закрытие легальное
-            Watchdog.SignalLegalClose();
-            
-            // Останавливаем guardian процесс
-            Watchdog.StopGuardian();
+
+            // Сигнализируем службе что закрытие будет легальным — не перезапускать 30 мин
+            Logger.Info("🔓 Администратор разблокировал ПК — сигнал легального закрытия");
+            ServiceManager.SignalLegalClose();
         }
 
         private Border CreateUnlockedPanel()
@@ -697,7 +669,6 @@ namespace BibClient
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
 #if DEBUG
-            _guardianHeartbeat.Stop();
             _lockHook?.Dispose();
             _alwaysHook?.Dispose();
             _trayIcon?.Dispose();
@@ -706,10 +677,9 @@ namespace BibClient
 #else
             // Защита от закрытия: если включена настройка PreventClose, отменяем закрытие
             // Исключение: администратор разблокировал ПК паролем (_isUnlocked = true)
-            if (_settings.PreventClose && !_isUnlocked) 
+            if (_settings.PreventClose && !_isUnlocked)
             {
                 Logger.Info("🚫 Закрытие окна заблокировано настройкой PreventClose");
-                
                 e.Cancel = true;
             }
             else
@@ -717,22 +687,13 @@ namespace BibClient
                 // Легальное закрытие (администратор разблокировал или PreventClose выключен)
                 Logger.Info("✅ Разрешено легальное закрытие приложения");
 
-                // Останавливаем heartbeat чтобы не перезапустил Guardian после StopGuardian
-                _guardianHeartbeat.Stop();
-
-                // Сигнализируем Guardian что закрытие легальное
-                Watchdog.SignalLegalClose();
-
-                // Останавливаем guardian процесс
-                Watchdog.StopGuardian();
-                
                 // Освобождаем мьютекс одиночного экземпляра
                 Watchdog.ReleaseSingleInstance();
-                
+
                 // Отменяем автозапуск если нужно
                 if (!_settings.AutoStartWithUser)
                     Watchdog.UnregisterAutostart();
-                
+
                 e.Cancel = false;
             }
 #endif

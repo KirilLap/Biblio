@@ -10,12 +10,17 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
-  <!-- Post-build event: копируем BibClientGuardian.exe в папку вывода BibClient после сборки -->
-  <Target Name="CopyGuardianAfterBuild" AfterTargets="Build">
-    <Copy SourceFiles="$(ProjectDir)..\BibClientGuardian\bin\$(Configuration)\net10.0-windows\BibClientGuardian.exe" 
-          DestinationFolder="$(OutDir)" 
-          SkipUnchangedFiles="true" />
-    <Message Text="✅ BibClientGuardian.exe скопирован в $(OutDir)" Importance="high" />
+  <!-- Post-build: копируем BibClientGuardian.exe и BibClientService.exe в папку вывода -->
+  <Target Name="CopyDependenciesAfterBuild" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)..\BibClientGuardian\bin\$(Configuration)\net10.0-windows\BibClientGuardian.exe"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+    <Copy SourceFiles="$(ProjectDir)..\BibClientService\bin\$(Configuration)\net10.0-windows\win-x64\BibClientService.exe"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+    <Message Text="✅ BibClientGuardian.exe и BibClientService.exe скопированы в $(OutDir)" Importance="high" />
   </Target>
 
   <ItemGroup>

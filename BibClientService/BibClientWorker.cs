@@ -1,0 +1,214 @@
+using System.Diagnostics;
+
+namespace BibClientService
+{
+    public sealed class BibClientWorker : BackgroundService
+    {
+        private readonly ILogger<BibClientWorker> _logger;
+
+        // Путь к BibClient.exe — в той же папке, что и сервис
+        private static readonly string ClientExePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "BibClient.exe"
+        );
+
+        // Флаг легального закрытия — создаётся BibClient при корректном завершении (unlock admin)
+        // Сервис при обнаружении флага не перезапускает BibClient 30 минут
+        private static readonly string LegalCloseFlagPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "BibClientLegalClose.flag"
+        );
+
+        // Минимальный интервал между перезапусками (защита от бесконечного цикла при краше при старте)
+        private static readonly TimeSpan RestartCooldown = TimeSpan.FromSeconds(5);
+
+        // Время ожидания после легального закрытия администратором
+        private static readonly TimeSpan LegalCloseDelay = TimeSpan.FromMinutes(30);
+
+        public BibClientWorker(ILogger<BibClientWorker> logger)
+        {
+            _logger = logger;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("BibClientService запущен. Слежу за: {Path}", ClientExePath);
+
+            DateTime lastRestartTime = DateTime.MinValue;
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(3000, stoppingToken);
+
+                    if (!File.Exists(ClientExePath))
+                    {
+                        _logger.LogWarning("BibClient.exe не найден по пути: {Path}", ClientExePath);
+                        continue;
+                    }
+
+                    bool isRunning = IsBibClientRunning();
+
+                    if (!isRunning)
+                    {
+                        // Проверяем флаг легального закрытия (администратор закрыл через пароль)
+                        if (File.Exists(LegalCloseFlagPath))
+                        {
+                            _logger.LogInformation("Флаг легального закрытия обнаружен — ожидание {Minutes} минут", LegalCloseDelay.TotalMinutes);
+                            File.Delete(LegalCloseFlagPath);
+                            await Task.Delay(LegalCloseDelay, stoppingToken);
+                            continue;
+                        }
+
+                        // Соблюдаем cooldown чтобы не циклиться если BibClient падает при старте
+                        var sinceLastRestart = DateTime.UtcNow - lastRestartTime;
+                        if (sinceLastRestart < RestartCooldown)
+                        {
+                            await Task.Delay(RestartCooldown - sinceLastRestart, stoppingToken);
+                        }
+
+                        _logger.LogWarning("BibClient не запущен — перезапуск...");
+                        lastRestartTime = DateTime.UtcNow;
+                        StartBibClient();
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Нормальная остановка службы
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Ошибка в цикле мониторинга");
+                }
+            }
+
+            _logger.LogInformation("BibClientService остановлен");
+        }
+
+        private bool IsBibClientRunning()
+        {
+            try
+            {
+                var processes = Process.GetProcessesByName("BibClient");
+                foreach (var p in processes)
+                {
+                    try
+                    {
+                        // Сервис работает как SYSTEM — имеет доступ к MainModule всех процессов
+                        var path = p.MainModule?.FileName;
+                        if (!string.IsNullOrEmpty(path) &&
+                            path.Equals(ClientExePath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+                    catch { }
+                    finally { p.Dispose(); }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Ошибка поиска процесса BibClient: {Message}", ex.Message);
+            }
+
+            return false;
+        }
+
+        private void StartBibClient()
+        {
+            try
+            {
+                // Сервис работает как SYSTEM в Session 0.
+                // Чтобы показать UI пользователю нужен CreateProcessAsUser с токеном активного сеанса.
+                var sessionId = GetActiveUserSessionId();
+                if (sessionId < 0)
+                {
+                    _logger.LogWarning("Активный пользовательский сеанс не найден — BibClient будет запущен при входе пользователя");
+                    return;
+                }
+
+                bool launched = LaunchProcessInSession(ClientExePath, sessionId);
+                if (launched)
+                    _logger.LogInformation("BibClient успешно запущен в сеансе {SessionId}", sessionId);
+                else
+                    _logger.LogError("Не удалось запустить BibClient в сеансе {SessionId}", sessionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка запуска BibClient");
+            }
+        }
+
+        // Получаем ID активного интерактивного сеанса пользователя
+        private static int GetActiveUserSessionId()
+        {
+            try
+            {
+                // WTSGetActiveConsoleSessionId возвращает ID сеанса на физической консоли
+                uint sessionId = NativeMethods.WTSGetActiveConsoleSessionId();
+                return sessionId == 0xFFFFFFFF ? -1 : (int)sessionId;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        // Запускаем процесс в пользовательском сеансе из контекста SYSTEM
+        private static bool LaunchProcessInSession(string exePath, int sessionId)
+        {
+            IntPtr userToken = IntPtr.Zero;
+            IntPtr duplicatedToken = IntPtr.Zero;
+
+            try
+            {
+                // Получаем токен пользователя из сеанса
+                if (!NativeMethods.WTSQueryUserToken((uint)sessionId, out userToken))
+                    return false;
+
+                // Дублируем токен для CreateProcessAsUser
+                var sa = new NativeMethods.SECURITY_ATTRIBUTES();
+                sa.nLength = System.Runtime.InteropServices.Marshal.SizeOf(sa);
+                if (!NativeMethods.DuplicateTokenEx(userToken, NativeMethods.TOKEN_ALL_ACCESS, ref sa,
+                    NativeMethods.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
+                    NativeMethods.TOKEN_TYPE.TokenPrimary, out duplicatedToken))
+                    return false;
+
+                var si = new NativeMethods.STARTUPINFO();
+                si.cb = System.Runtime.InteropServices.Marshal.SizeOf(si);
+                si.lpDesktop = "winsta0\\default"; // Интерактивный рабочий стол
+
+                var workDir = Path.GetDirectoryName(exePath) ?? "";
+
+                bool result = NativeMethods.CreateProcessAsUser(
+                    duplicatedToken,
+                    exePath,
+                    null,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    false,
+                    NativeMethods.CREATE_UNICODE_ENVIRONMENT,
+                    IntPtr.Zero,
+                    workDir,
+                    ref si,
+                    out var pi
+                );
+
+                if (result)
+                {
+                    NativeMethods.CloseHandle(pi.hProcess);
+                    NativeMethods.CloseHandle(pi.hThread);
+                }
+
+                return result;
+            }
+            finally
+            {
+                if (userToken != IntPtr.Zero) NativeMethods.CloseHandle(userToken);
+                if (duplicatedToken != IntPtr.Zero) NativeMethods.CloseHandle(duplicatedToken);
+            }
+        }
+    }
+}

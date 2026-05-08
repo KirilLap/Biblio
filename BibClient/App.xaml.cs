@@ -10,21 +10,7 @@ namespace BibClient
         {
             base.OnStartup(e);
 
-            // 🔹 КРИТИЧЕСКИ ВАЖНО: Сначала проверяем и копируем Guardian.exe если нужно
-            // Это делается ДО всех остальных проверок чтобы Guardian всегда был актуален
-            EnsureGuardianInstalled();
-
-            // Проверка на запуск в режиме Guardian
-            if (e.Args.Length > 0 && e.Args[0] == "--guardian")
-            {
-                Logger.Info("🛡️ Запуск в режиме Guardian (устаревший режим - теперь используется отдельный exe)");
-                // В новой версии Guardian работает как отдельный exe файл
-                // Этот код оставлен для обратной совместимости
-                Shutdown();
-                return;
-            }
-
-            // Проверяем что это единственный экземпляр основного приложения (не guardian)
+            // Проверяем что это единственный экземпляр основного приложения
             if (!Watchdog.EnsureSingleInstance())
             {
                 Logger.Warn("⚠️ Приложение уже запущено, завершаем дубликат");
@@ -38,34 +24,10 @@ namespace BibClient
                 Watchdog.ReleaseSingleInstance();
             };
 
-            // 🔹 Метод проверки и копирования BibClientGuardian.exe
-            void EnsureGuardianInstalled()
-            {
-                try
-                {
-                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                    string guardianSourcePath = Path.Combine(baseDir, "BibClientGuardian.exe");
-
-                    if (!File.Exists(guardianSourcePath))
-                    {
-                        Logger.Warn($"⚠️ BibClientGuardian.exe не найден в папке: {guardianSourcePath}");
-                        Logger.Warn("⚠️ Функция защиты от закрытия будет недоступна!");
-                        return;
-                    }
-
-                    // Снимаем блокировку SmartScreen/Zone.Identifier со всех exe в папке.
-                    // Файлы, скопированные с другой машины или скачанные, помечаются меткой MOTW
-                    // (Mark of the Web, ADS :Zone.Identifier=3). SmartScreen блокирует их запуск.
-                    // Удаление этого ADS = то же что "Разблокировать" в свойствах файла или Unblock-File.
-                    UnblockDirectory(baseDir);
-
-                    Logger.Info($"✅ BibClientGuardian.exe найден: {guardianSourcePath}");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"❌ Ошибка проверки Guardian: {ex.Message}");
-                }
-            }
+            // Снимаем блокировку SmartScreen/Zone.Identifier со всех exe в папке.
+            // Файлы, скопированные с другой машины или скачанные, помечаются меткой MOTW
+            // (Mark of the Web, ADS :Zone.Identifier=3). SmartScreen блокирует их запуск.
+            UnblockDirectory(AppDomain.CurrentDomain.BaseDirectory);
 
             void UnblockDirectory(string dir)
             {
@@ -74,14 +36,8 @@ namespace BibClient
                     int unblocked = 0;
                     foreach (var file in Directory.GetFiles(dir, "*.exe"))
                     {
-                        try
-                        {
-                            // Удаляем ADS Zone.Identifier — стандартный путь "file.exe:Zone.Identifier"
-                            // работает через Win32 API удаления альтернативных потоков данных NTFS
-                            File.Delete(file + ":Zone.Identifier");
-                            unblocked++;
-                        }
-                        catch { /* ADS не существует или нет прав — игнорируем */ }
+                        try { File.Delete(file + ":Zone.Identifier"); unblocked++; }
+                        catch { }
                     }
                     if (unblocked > 0)
                         Logger.Info($"🔓 Снята блокировка SmartScreen с {unblocked} файлов");
@@ -169,20 +125,19 @@ namespace BibClient
                     Logger.Info("ℹ️ Автозапуск отключен, запись удалена из реестра");
                 }
                 
+                // Убеждаемся что служба защиты BibClientWatchdog установлена и запущена
+                if (SettingsManager.Current.PreventClose)
+                {
+                    ServiceManager.EnsureServiceRunning();
+                }
+
                 var mainWindow = new MainWindow();
                 MainWindow = mainWindow;
-                
+
                 // Показываем окно
                 mainWindow.Show();
                 mainWindow.Activate();
-                
-                // Запускаем Guardian ПОСЛЕ создания главного окна
-                // Это критично для восстановления после закрытия через диспетчер задач
-                if (SettingsManager.Current.PreventClose)
-                {
-                    Watchdog.StartGuardian(true);
-                }
-                
+
                 // Вызываем блокировку через Dispatcher с повторной попыткой если _isReady ещё false
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(
                     new Action(() => 
