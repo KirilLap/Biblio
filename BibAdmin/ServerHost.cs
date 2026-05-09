@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.Http;
 
 namespace BibAdmin
 {
@@ -68,9 +69,11 @@ namespace BibAdmin
             // Сразу пишем «живой» пульс (сбрасываем GracefulShutdownUtc)
             WriteHeartbeat(_startedAt, _startedAt);
 
-            // Путь к папке с загруженными файлами
+            // Пути к папкам
             var filesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+            var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
             Directory.CreateDirectory(filesPath);
+            Directory.CreateDirectory(wwwrootPath);
 
             _host = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(webBuilder =>
@@ -81,9 +84,6 @@ namespace BibAdmin
                         services.AddSignalR(options =>
                         {
                             options.MaximumReceiveMessageSize = 100 * 1024 * 1024;
-                            // Детектируем разрыв за ~25 сек: keepalive 10с → timeout 25с
-                            // 7/15 вызывали ложные разрывы на игровых ПК под нагрузкой;
-                            // 15/30 — слишком долго; 10/25 — баланс надёжности и скорости
                             options.KeepAliveInterval = TimeSpan.FromSeconds(10);
                             options.ClientTimeoutInterval = TimeSpan.FromSeconds(25);
                         });
@@ -94,28 +94,61 @@ namespace BibAdmin
                                 builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
                             });
                         });
+                        services.AddSingleton<OperatorBroadcaster>();
                     });
                     webBuilder.Configure(app =>
                     {
                         app.UseCors("AllowAll");
                         app.UseRouting();
 
-                        // ✅ Раздаём папку Files как статические файлы по пути /files
+                        // Статические файлы веб-оператора
+                        app.UseStaticFiles(new StaticFileOptions
+                        {
+                            FileProvider = new PhysicalFileProvider(wwwrootPath),
+                            RequestPath = ""
+                        });
+
+                        // Статические файлы (фоны)
                         app.UseStaticFiles(new StaticFileOptions
                         {
                             FileProvider = new PhysicalFileProvider(filesPath),
                             RequestPath = "/files"
                         });
 
+                        // REST API для авторизации операторов
+                        app.Use(async (ctx, next) =>
+                        {
+                            if (ctx.Request.Method == "POST" && ctx.Request.Path == "/api/op/login")
+                            {
+                                await OperatorApi.HandleLogin(ctx);
+                                return;
+                            }
+                            if (ctx.Request.Method == "POST" && ctx.Request.Path == "/api/op/logout")
+                            {
+                                await OperatorApi.HandleLogout(ctx);
+                                return;
+                            }
+                            if (ctx.Request.Method == "GET" && ctx.Request.Path == "/api/op/me")
+                            {
+                                await OperatorApi.HandleMe(ctx);
+                                return;
+                            }
+                            await next();
+                        });
+
                         app.UseEndpoints(endpoints =>
                         {
                             endpoints.MapHub<AdminHub>("/hub");
+                            endpoints.MapHub<OperatorHub>("/webhub");
                         });
                     });
                 })
                 .Build();
 
             await _host.StartAsync();
+
+            // Инициализируем broadcaster — он подписывается на события AdminHub
+            _host.Services.GetRequiredService<OperatorBroadcaster>();
 
             // Пульс сервера каждые 30 секунд — защита от аварийного завершения
             _ = Task.Run(async () =>

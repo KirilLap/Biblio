@@ -1,0 +1,118 @@
+<Page x:Class="BibAdmin.OperatorsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="#F5F5F5">
+
+    <Grid Margin="32,28,32,28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Операторы" FontSize="22" FontWeight="Bold" Foreground="#1E1E2E"/>
+            <TextBlock Text="Управление учётными записями операторов веб-интерфейса"
+                       FontSize="12" Foreground="#888" Margin="0,4,0,0"/>
+            <TextBlock x:Name="TxtWebUrl" FontSize="12" Foreground="#4A90D9"
+                       Margin="0,4,0,0" Cursor="Arrow"/>
+        </StackPanel>
+
+        <!-- Форма добавления -->
+        <Border Grid.Row="1" Background="White" CornerRadius="10"
+                BorderBrush="#E0E0E0" BorderThickness="1" Padding="20,16" Margin="0,0,0,16">
+            <StackPanel>
+                <TextBlock Text="Новый оператор" FontWeight="SemiBold" FontSize="13"
+                           Foreground="#333" Margin="0,0,0,12"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="Отображаемое имя" FontSize="11" Foreground="#666" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtNewDisplayName" Height="34" Padding="10,0"
+                                 BorderBrush="#CCC" BorderThickness="1"
+                                 VerticalContentAlignment="Center" FontSize="13"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                        <TextBlock Text="Логин" FontSize="11" Foreground="#666" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtNewLogin" Height="34" Padding="10,0"
+                                 BorderBrush="#CCC" BorderThickness="1"
+                                 VerticalContentAlignment="Center" FontSize="13"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Margin="0,0,10,0">
+                        <TextBlock Text="Пароль" FontSize="11" Foreground="#666" Margin="0,0,0,4"/>
+                        <PasswordBox x:Name="TxtNewPassword" Height="34" Padding="10,0"
+                                     BorderBrush="#CCC" BorderThickness="1"
+                                     VerticalContentAlignment="Center" FontSize="13"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
+                        <Button Content="Добавить" Height="34" Padding="16,0"
+                                Background="#1D9E75" Foreground="White"
+                                BorderThickness="0" FontSize="13" Cursor="Hand"
+                                Click="AddOperator_Click">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                                        CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="bd" Property="Background" Value="#17876A"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <TextBlock x:Name="TxtSaved" Text="" Foreground="#1D9E75"
+                           FontSize="12" Margin="0,8,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Список операторов -->
+        <Border Grid.Row="2" Background="White" CornerRadius="10"
+                BorderBrush="#E0E0E0" BorderThickness="1">
+            <DockPanel>
+                <!-- Заголовок таблицы -->
+                <Grid DockPanel.Dock="Top" Margin="20,14,20,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="90"/>
+                        <ColumnDefinition Width="80"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Имя / Логин" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="1" Text="Пароль" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="2" Text="Статус" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="3" Text="Активен" FontSize="11" Foreground="#999" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Column="4" Text="" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                </Grid>
+                <Border DockPanel.Dock="Top" Height="1" Background="#F0F0F0" Margin="20,10,20,0"/>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="OperatorsPanel" Margin="0,4,0,8"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+    </Grid>
+</Page>

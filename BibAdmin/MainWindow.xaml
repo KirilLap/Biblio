@@ -125,6 +125,10 @@
                             Content="⚙  Настройки"
                             Style="{StaticResource NavBtn}"
                             Click="BtnSettings_Click"/>
+                    <Button x:Name="BtnOperators"
+                            Content="👥  Операторы"
+                            Style="{StaticResource NavBtn}"
+                            Click="BtnOperators_Click"/>
 
                     <!-- Разделитель -->
                     <Border Height="1" Background="#2E2E4E" Margin="4,12"/>

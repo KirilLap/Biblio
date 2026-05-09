@@ -147,6 +147,12 @@ namespace BibAdmin
             MainFrame.Navigate(new SettingsPage());
         }
 
+        private void BtnOperators_Click(object sender, RoutedEventArgs e)
+        {
+            SetActive(BtnOperators);
+            MainFrame.Navigate(new OperatorsPage());
+        }
+
         private void BtnNewService_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ServiceOrderDialog();
@@ -159,6 +165,7 @@ namespace BibAdmin
             BtnComputers.Tag = null;
             BtnFinance.Tag = null;
             BtnSettings.Tag = null;
+            BtnOperators.Tag = null;
             btn.Tag = "active";
         }
 

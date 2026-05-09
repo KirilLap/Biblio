@@ -21,6 +21,9 @@ namespace BibAdmin
         public static event Action<ClientState>? ClientUpdated;
         public static event Action? ClientsChanged;
         public static event Action<ClientState>? ClientOfflineWithSession;
+
+        // Вызов событий из внешних классов (OperatorHub и т.п.)
+        public static void RaiseClientUpdated(ClientState cs) => ClientUpdated?.Invoke(cs);
         public static event Action<string, int, int>? ClientTimeMismatch;
         private const int OfflineMismatchThreshold = 60;
         public static event Action<string, double>? ClientTimeDrift;

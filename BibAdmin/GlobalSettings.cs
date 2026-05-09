@@ -151,6 +151,11 @@ namespace BibAdmin
 
             return cmds;
         }
+
+        // =====================
+        // Операторы
+        // =====================
+        public List<OperatorAccount> Operators { get; set; } = new();
     }
 
     // Модель услуги
@@ -160,6 +165,16 @@ namespace BibAdmin
         public string Name { get; set; } = "";
         public string Unit { get; set; } = "лист";
         public int Price { get; set; } = 0;
+        public bool IsActive { get; set; } = true;
+    }
+
+    // Модель оператора
+    public class OperatorAccount
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Login { get; set; } = "";
+        public string PasswordHash { get; set; } = "";
+        public string DisplayName { get; set; } = "";
         public bool IsActive { get; set; } = true;
     }
 
