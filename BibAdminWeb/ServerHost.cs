@@ -1,0 +1,155 @@
+using System;
+using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+
+namespace BibAdminWeb
+{
+    public class ServerHost
+    {
+        private IHost? _host;
+        private DateTime _startedAt;
+
+        private static readonly string HeartbeatPath =
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "server_heartbeat.json");
+
+        private static void WriteHeartbeat(DateTime startedAt, DateTime lastAlive, DateTime? gracefulShutdown = null)
+        {
+            try
+            {
+                var data = new { StartedAtUtc = startedAt.ToString("o"), LastAliveUtc = lastAlive.ToString("o"), GracefulShutdownUtc = gracefulShutdown?.ToString("o") };
+                File.WriteAllText(HeartbeatPath, JsonSerializer.Serialize(data));
+            }
+            catch { }
+        }
+
+        public async Task StartAsync(int port = 8080)
+        {
+            _startedAt = DateTime.UtcNow;
+            WriteHeartbeat(_startedAt, _startedAt);
+
+            var filesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+            var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+            Directory.CreateDirectory(filesPath);
+            Directory.CreateDirectory(wwwrootPath);
+
+            _host = Host.CreateDefaultBuilder()
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseUrls($"http://*:{port}");
+                    webBuilder.ConfigureServices(services =>
+                    {
+                        services.AddSignalR(options =>
+                        {
+                            options.MaximumReceiveMessageSize = 100 * 1024 * 1024;
+                            options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+                            options.ClientTimeoutInterval = TimeSpan.FromSeconds(25);
+                        });
+                        services.AddCors(options =>
+                            options.AddPolicy("AllowAll", b => b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+                        services.AddSingleton<OperatorBroadcaster>();
+                        services.AddSingleton<AdminBroadcaster>();
+                    });
+                    webBuilder.Configure(app =>
+                    {
+                        app.UseCors("AllowAll");
+                        app.UseRouting();
+
+                        // wwwroot static files
+                        app.UseStaticFiles(new StaticFileOptions
+                        {
+                            FileProvider = new PhysicalFileProvider(wwwrootPath),
+                            RequestPath = ""
+                        });
+
+                        // Files (backgrounds)
+                        app.UseStaticFiles(new StaticFileOptions
+                        {
+                            FileProvider = new PhysicalFileProvider(filesPath),
+                            RequestPath = "/files"
+                        });
+
+                        // Auth endpoints
+                        app.Use(async (ctx, next) =>
+                        {
+                            var path = ctx.Request.Path.Value ?? "";
+                            var method = ctx.Request.Method;
+
+                            if (method == "POST" && path == "/api/admin/login")
+                            { await AdminAuth.HandleLogin(ctx); return; }
+                            if (method == "POST" && path == "/api/admin/logout")
+                            { await AdminAuth.HandleLogout(ctx); return; }
+                            if (method == "GET" && path == "/api/admin/check")
+                            { await AdminAuth.HandleCheck(ctx); return; }
+
+                            if (method == "POST" && path == "/api/op/login")
+                            { await OperatorApi.HandleLogin(ctx); return; }
+                            if (method == "POST" && path == "/api/op/logout")
+                            { await OperatorApi.HandleLogout(ctx); return; }
+                            if (method == "GET" && path == "/api/op/me")
+                            { await OperatorApi.HandleMe(ctx); return; }
+
+                            await next(ctx);
+                        });
+
+                        // Admin REST API
+                        app.Use(AdminApi.Handle);
+
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapHub<AdminHub>("/hub");
+                            endpoints.MapHub<AdminWebHub>("/adminhub");
+                            endpoints.MapHub<OperatorHub>("/webhub");
+                        });
+                    });
+                })
+                .Build();
+
+            await _host.StartAsync();
+
+            // Force init singletons so they subscribe to events immediately
+            _host.Services.GetRequiredService<OperatorBroadcaster>();
+            _host.Services.GetRequiredService<AdminBroadcaster>();
+
+            // Heartbeat
+            _ = Task.Run(async () =>
+            {
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+                while (await timer.WaitForNextTickAsync())
+                    WriteHeartbeat(_startedAt, DateTime.UtcNow);
+            });
+
+            // Auto-save sessions
+            _ = Task.Run(async () =>
+            {
+                using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+                while (await timer.WaitForNextTickAsync())
+                {
+                    try { AdminHub.SaveActiveSessions(); }
+                    catch (Exception ex) { Logger.Error($"Ошибка автосохранения: {ex.Message}"); }
+                }
+            });
+
+            Logger.Info($"🚀 BibAdmin Web запущен на порту {port}");
+        }
+
+        public async Task StopAsync()
+        {
+            WriteHeartbeat(_startedAt, DateTime.UtcNow, DateTime.UtcNow);
+            try { AdminHub.SaveActiveSessions(); } catch { }
+            if (_host != null)
+            {
+                await _host.StopAsync();
+                _host.Dispose();
+                Logger.Info("Сервер остановлен");
+            }
+        }
+    }
+}

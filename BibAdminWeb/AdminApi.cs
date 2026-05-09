@@ -1,0 +1,208 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+
+namespace BibAdminWeb
+{
+    // REST API handlers for the admin web panel.
+    public static class AdminApi
+    {
+        private static readonly JsonSerializerOptions _json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+        public static async Task Handle(HttpContext ctx, RequestDelegate next)
+        {
+            var path = ctx.Request.Path.Value ?? "";
+            var method = ctx.Request.Method;
+
+            if (!path.StartsWith("/api/admin/")) { await next(ctx); return; }
+
+            if (!AdminAuth.IsAuthorized(ctx))
+            {
+                ctx.Response.StatusCode = 401;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync("{\"error\":\"Unauthorized\"}");
+                return;
+            }
+
+            ctx.Response.ContentType = "application/json";
+
+            // ─── Settings ─────────────────────────────────────────────────────
+            if (path == "/api/admin/settings" && method == "GET")
+            {
+                var s = GlobalSettings.Load();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(s, _json));
+                return;
+            }
+            if (path == "/api/admin/settings" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var s = JsonSerializer.Deserialize<GlobalSettings>(body, _json) ?? new GlobalSettings();
+                s.Save();
+                // Push new settings to all online PCs
+                AdminBroadcaster.Instance?.PushSettings(s);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
+            // ─── Finance: sessions ────────────────────────────────────────────
+            if (path == "/api/admin/finance/sessions" && method == "GET")
+            {
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(FinanceStore.Sessions, _json));
+                return;
+            }
+            if (path == "/api/admin/finance/sessions" && method == "DELETE")
+            {
+                FinanceStore.Sessions.Clear();
+                FinanceStore.SaveHistory();
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
+            // ─── Finance: services ────────────────────────────────────────────
+            if (path == "/api/admin/finance/services" && method == "GET")
+            {
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ServiceTransaction.All, _json));
+                return;
+            }
+            if (path == "/api/admin/finance/services" && method == "DELETE")
+            {
+                ServiceTransaction.All.Clear();
+                ServiceTransaction.SaveHistory();
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+            if (path.StartsWith("/api/admin/finance/services/") && path.EndsWith("/pay") && method == "POST")
+            {
+                var id = path.Replace("/api/admin/finance/services/", "").Replace("/pay", "");
+                ServiceTransaction.MarkAsPaid(id);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
+            // ─── Finance: export CSV ─────────────────────────────────────────
+            if (path == "/api/admin/finance/export" && method == "GET")
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("=== СЕССИИ ===");
+                sb.AppendLine("ПК;Тип;ID читателя;Пользователь;Длительность;Сумма;Оплачено;Возврат;Оператор;Начало;Конец");
+                foreach (var s in FinanceStore.Sessions)
+                {
+                    int h = s.DurationSeconds / 3600, m = (s.DurationSeconds % 3600) / 60, sec = s.DurationSeconds % 60;
+                    sb.AppendLine($"{s.PcNumber};{s.SessionType};{s.ReaderId};{s.UserName};{h:D2}:{m:D2}:{sec:D2};{s.EarnedAmount};{s.PaidAmount};{s.RefundAmount};{s.OperatorName};{s.StartTime:dd.MM.yyyy HH:mm};{s.EndTime:dd.MM.yyyy HH:mm}");
+                }
+                sb.AppendLine();
+                sb.AppendLine("=== УСЛУГИ ===");
+                sb.AppendLine("Услуга;Единица;Кол-во;Цена/ед;Итого;Оплачено;Читатель;Дата");
+                foreach (var t in ServiceTransaction.All)
+                    sb.AppendLine($"{t.ServiceName};{t.Unit};{t.Quantity};{t.PricePerUnit};{t.TotalAmount};{t.PaidAmount};{t.ReaderName};{t.CreatedAt:dd.MM.yyyy HH:mm}");
+
+                var csv = sb.ToString();
+                ctx.Response.ContentType = "text/csv; charset=utf-8";
+                ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                await ctx.Response.WriteAsync(csv, Encoding.UTF8);
+                return;
+            }
+
+            // ─── Operators ────────────────────────────────────────────────────
+            if (path == "/api/admin/operators" && method == "GET")
+            {
+                var s = GlobalSettings.Load();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(s.Operators, _json));
+                return;
+            }
+            if (path == "/api/admin/operators" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var data = JsonSerializer.Deserialize<JsonElement>(body);
+                var login = data.GetProperty("login").GetString() ?? "";
+                var displayName = data.GetProperty("displayName").GetString() ?? "";
+                var password = data.GetProperty("password").GetString() ?? "";
+                var s = GlobalSettings.Load();
+                if (s.Operators.Any(o => o.Login == login))
+                {
+                    ctx.Response.StatusCode = 409;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = $"Логин '{login}' уже занят" }));
+                    return;
+                }
+                s.Operators.Add(new OperatorAccount
+                {
+                    Login = login, DisplayName = displayName,
+                    PasswordHash = HashPassword(password), IsActive = true
+                });
+                s.Save();
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+            if (path.StartsWith("/api/admin/operators/"))
+            {
+                var id = path.Replace("/api/admin/operators/", "");
+                if (id.EndsWith("/active") && method == "PATCH")
+                {
+                    id = id.Replace("/active", "");
+                    var body = await ReadBody(ctx);
+                    var data = JsonSerializer.Deserialize<JsonElement>(body);
+                    var isActive = data.GetProperty("isActive").GetBoolean();
+                    var s = GlobalSettings.Load();
+                    var op = s.Operators.Find(o => o.Id == id);
+                    if (op != null) { op.IsActive = isActive; s.Save(); }
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                    return;
+                }
+                if (id.EndsWith("/password") && method == "PATCH")
+                {
+                    id = id.Replace("/password", "");
+                    var body = await ReadBody(ctx);
+                    var data = JsonSerializer.Deserialize<JsonElement>(body);
+                    var password = data.GetProperty("password").GetString() ?? "";
+                    var s = GlobalSettings.Load();
+                    var op = s.Operators.Find(o => o.Id == id);
+                    if (op != null) { op.PasswordHash = HashPassword(password); s.Save(); }
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                    return;
+                }
+                if (method == "DELETE")
+                {
+                    var s = GlobalSettings.Load();
+                    s.Operators.RemoveAll(o => o.Id == id);
+                    s.Save();
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                    return;
+                }
+            }
+
+            // ─── Computers ────────────────────────────────────────────────────
+            if (path == "/api/admin/computers" && method == "GET")
+            {
+                var all = AdminHub.KnownClients.Values.Select(AdminWebHub.ClientDto).ToList();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(all, _json));
+                return;
+            }
+            if (path.StartsWith("/api/admin/computers/") && method == "DELETE")
+            {
+                var pcNumber = Uri.UnescapeDataString(path.Replace("/api/admin/computers/", ""));
+                var ok = AdminHub.DeleteClientStatic(pcNumber);
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok }));
+                return;
+            }
+
+            await next(ctx);
+        }
+
+        private static async Task<string> ReadBody(HttpContext ctx)
+        {
+            using var reader = new StreamReader(ctx.Request.Body);
+            return await reader.ReadToEndAsync();
+        }
+
+        private static string HashPassword(string password)
+        {
+            var bytes = Encoding.UTF8.GetBytes(password);
+            return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        }
+    }
+}

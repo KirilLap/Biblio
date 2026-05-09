@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BibAdmin</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">📚</span>
+    <span class="logo-text">BibAdmin</span>
+  </div>
+  <div class="nav-items">
+    <button class="nav-btn active" data-page="computers" onclick="showPage('computers')">
+      <span>🖥️</span><span>Компьютеры</span>
+    </button>
+    <button class="nav-btn" data-page="finance" onclick="showPage('finance')">
+      <span>💰</span><span>Финансы</span>
+    </button>
+    <button class="nav-btn" data-page="settings" onclick="showPage('settings')">
+      <span>⚙️</span><span>Настройки</span>
+    </button>
+    <button class="nav-btn" data-page="operators" onclick="showPage('operators')">
+      <span>👥</span><span>Операторы</span>
+    </button>
+  </div>
+  <div class="sidebar-footer">
+    <div class="conn-status" id="connStatus">⚫ Подключение...</div>
+    <button class="logout-btn" onclick="logout()">Выйти</button>
+  </div>
+</nav>
+
+<!-- Main content -->
+<main class="main">
+
+  <!-- ══════════════════════ COMPUTERS PAGE ══════════════════════ -->
+  <div id="page-computers" class="page active">
+    <div class="page-header">
+      <div>
+        <h1>Компьютеры</h1>
+        <p id="pcStats" class="page-sub">Загрузка...</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" onclick="lockAll()">🔒 Заблокировать всех</button>
+        <button class="btn btn-outline" onclick="unlockAll()">🔓 Разблокировать всех</button>
+      </div>
+    </div>
+    <div id="pcGrid" class="pc-grid"></div>
+  </div>
+
+  <!-- ══════════════════════ FINANCE PAGE ══════════════════════ -->
+  <div id="page-finance" class="page">
+    <div class="page-header">
+      <div>
+        <h1>Финансы</h1>
+        <p id="finDate" class="page-sub"></p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="exportCsv()">📊 Экспорт CSV</button>
+        <button class="btn btn-outline" onclick="clearFinance()">🗑 Очистить</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row" id="finStats">
+      <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-val green" id="statToday">0 сум</div></div>
+      <div class="stat-card"><div class="stat-label">За неделю</div><div class="stat-val blue" id="statWeek">0 сум</div></div>
+      <div class="stat-card"><div class="stat-label">За месяц</div><div class="stat-val orange" id="statMonth">0 сум</div></div>
+      <div class="stat-card"><div class="stat-label">Записей</div><div class="stat-val" id="statCount">0</div></div>
+    </div>
+
+    <!-- Tab + filter -->
+    <div class="fin-toolbar">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabSessions" onclick="setFinTab('sessions')">📋 Сессии</button>
+        <button class="tab-btn" id="tabServices" onclick="setFinTab('services')">🛎 Услуги</button>
+        <button class="tab-btn" id="tabAll" onclick="setFinTab('all')">📊 Всё</button>
+      </div>
+      <div class="filter-row">
+        <label><input type="radio" name="finPeriod" value="all" checked onchange="renderFinance()"> Все</label>
+        <label><input type="radio" name="finPeriod" value="today" onchange="renderFinance()"> Сегодня</label>
+        <label><input type="radio" name="finPeriod" value="week" onchange="renderFinance()"> Неделя</label>
+        <label><input type="radio" name="finPeriod" value="month" onchange="renderFinance()"> Месяц</label>
+        <select id="finTypeFilter" onchange="renderFinance()" style="display:none">
+          <option value="">Все типы</option>
+          <option value="VIP">VIP</option>
+          <option value="Лимит">Лимит</option>
+        </select>
+        <select id="finStatusFilter" onchange="renderFinance()" style="display:none">
+          <option value="">Все статусы</option>
+          <option value="paid">Оплачено</option>
+          <option value="unpaid">Не оплачено</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="fin-table-wrap">
+      <div id="finTable"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ SETTINGS PAGE ══════════════════════ -->
+  <div id="page-settings" class="page">
+    <div class="page-header">
+      <div><h1>Настройки</h1></div>
+      <div class="header-actions">
+        <span id="settingsSaved" class="saved-badge" style="display:none">✓ Сохранено</span>
+        <button class="btn btn-primary" onclick="saveSettings()">Сохранить и применить</button>
+      </div>
+    </div>
+
+    <div class="settings-grid">
+      <div class="settings-card">
+        <h3>Тарификация</h3>
+        <div class="form-row">
+          <label>Тариф (сум/час)</label>
+          <input type="number" id="sTariff" min="0">
+        </div>
+        <div class="form-row">
+          <label>Пароль администратора</label>
+          <input type="text" id="sAdminPassword">
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Ограничения</h3>
+        <div class="form-check"><label><input type="checkbox" id="sUsbBlocked"> Блокировка USB</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sTaskMgr"> Отключить диспетчер задач</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sBlockRegedit"> Блокировать реестр</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sBlockCmd"> Блокировать CMD</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sBlockPs"> Блокировать PowerShell</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sHideDrive"> Скрыть диск C:</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sBlockInstall"> Блокировать установку</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sLockOnOffline"> Блокировать при потере связи</label></div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Защита и автозапуск</h3>
+        <div class="form-check"><label><input type="checkbox" id="sPreventClose"> Защита от закрытия</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sAutoStart"> Автозапуск с Windows</label></div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Экран блокировки</h3>
+        <div class="form-check"><label><input type="checkbox" id="sShowPcName"> Показывать название ПК</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sShowPcNumber"> Показывать номер ПК</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись "Заблокировано"</label></div>
+        <div class="form-row">
+          <label>Прозрачность фона</label>
+          <input type="range" id="sBgOpacity" min="0" max="1" step="0.05">
+          <span id="sBgOpacityVal">0.30</span>
+        </div>
+      </div>
+
+      <div class="settings-card full-width">
+        <h3>Услуги <button class="btn-sm" onclick="addService()">+ Добавить</button></h3>
+        <div id="servicesList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ OPERATORS PAGE ══════════════════════ -->
+  <div id="page-operators" class="page">
+    <div class="page-header">
+      <div><h1>Операторы</h1></div>
+    </div>
+    <div class="settings-card" style="max-width:560px;margin-bottom:20px">
+      <h3>Веб-интерфейс оператора</h3>
+      <p id="opWebUrl" class="op-url"></p>
+    </div>
+    <div class="settings-card" style="max-width:560px;margin-bottom:20px">
+      <h3>Добавить оператора</h3>
+      <div class="form-row"><label>Отображаемое имя</label><input type="text" id="newOpName" placeholder="Иван Иванов"></div>
+      <div class="form-row"><label>Логин</label><input type="text" id="newOpLogin" placeholder="ivan"></div>
+      <div class="form-row"><label>Пароль</label><input type="password" id="newOpPwd" placeholder="••••••"></div>
+      <button class="btn btn-primary" onclick="addOperator()">Добавить</button>
+      <span id="opSaved" class="saved-badge" style="display:none">✓ Сохранено</span>
+    </div>
+    <div class="settings-card" style="max-width:560px">
+      <h3>Список операторов</h3>
+      <div id="operatorsList"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ══════════════════════ DIALOGS ══════════════════════ -->
+
+<!-- Start session dialog -->
+<div id="dlgStartSession" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">Начать сессию — <span id="dlgSsPc"></span></div>
+    <div class="form-row"><label>Тип сессии</label>
+      <select id="dlgSsType">
+        <option value="VIP">VIP (безлимит)</option>
+        <option value="Лимит">Лимит</option>
+      </select>
+    </div>
+    <div id="dlgSsLimitRow" class="form-row" style="display:none">
+      <label>Время (мин) или Сумма (сум)</label>
+      <select id="dlgSsLimitType"><option value="time">По времени</option><option value="money">По деньгам</option></select>
+      <input type="number" id="dlgSsLimitVal" min="1" placeholder="60">
+    </div>
+    <div id="dlgSsPaidRow" class="form-row" style="display:none">
+      <label>Внесено (сум)</label>
+      <input type="number" id="dlgSsPaid" min="0" placeholder="0">
+    </div>
+    <div class="form-row"><label>Читатель (ID)</label><input type="text" id="dlgSsReader" placeholder="Необязательно"></div>
+    <div class="form-row"><label>Имя</label><input type="text" id="dlgSsName" placeholder="Необязательно"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgStartSession')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmStartSession()">Начать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session summary dialog -->
+<div id="dlgSummary" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">Итог сессии</div>
+    <div id="dlgSummaryContent" style="margin:16px 0;line-height:1.8;color:#ccc"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-primary" onclick="closeDlg('dlgSummary')">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Offline alert dialog -->
+<div id="dlgOffline" class="dlg-overlay" style="display:none">
+  <div class="dlg dlg-warn">
+    <div class="dlg-title">⚠️ ПК отключился с активной сессией</div>
+    <div id="dlgOfflineText" style="margin:16px 0;color:#ccc"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="resolveOffline('Pause')">⏸ Поставить на паузу</button>
+      <button class="btn btn-primary" onclick="resolveOffline('Continue')">▶ Продолжить (таймер идёт)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer session dialog -->
+<div id="dlgTransfer" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">↔ Пересадка сессии — <span id="dlgTransferFrom"></span></div>
+    <div class="form-row"><label>Пересадить на</label>
+      <select id="dlgTransferTarget"><option value="">— выберите ПК —</option></select>
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgTransfer')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmTransfer()">Пересадить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Name conflict dialog -->
+<div id="dlgNameConflict" class="dlg-overlay" style="display:none">
+  <div class="dlg dlg-warn">
+    <div class="dlg-title">⚠️ Конфликт имён ПК</div>
+    <div id="dlgConflictText" style="margin:16px 0;color:#ccc;line-height:1.7"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="resolveConflict(false)">Оставить старое имя</button>
+      <button class="btn btn-primary" onclick="resolveConflict(true)">Принять новое имя</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename PC dialog -->
+<div id="dlgRename" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">Переименовать ПК</div>
+    <div class="form-row"><label>Кастомное название (пусто = «ПК»)</label><input type="text" id="dlgRenameName" placeholder="Зал, Комп..."></div>
+    <div style="color:#888;font-size:12px;margin-bottom:16px">Номер ПК (<span id="dlgRenameNum"></span>) сохраняется — меняется только название.</div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgRename')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmRename()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toastArea"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+<script src="/admin.js"></script>
+</body>
+</html>
