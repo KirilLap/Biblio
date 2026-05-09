@@ -25,7 +25,7 @@ let connection = null;
 function startSignalR() {
   connection = new signalR.HubConnectionBuilder()
     .withUrl('/webhub')
-    .withAutomaticReconnect([1000, 2000, 5000, 10000])
+    .withAutomaticReconnect([2000, 5000, 10000, 30000, 60000, 60000, 60000])
     .build();
 
   connection.on('stateSnapshot', list => {
@@ -78,9 +78,19 @@ function startSignalR() {
     toast(`Услуга "${s.serviceName}" создана. Сумма: ${fmt(s.total)} сум${s.isPaid ? '' : ' (отложено)'}`, 'good');
   });
 
-  connection.onreconnecting(() => setDot(false));
-  connection.onreconnected(() => setDot(true));
-  connection.onclose(() => setDot(false));
+  connection.onreconnecting(() => {
+    setDot(false);
+    toast('Переподключение к серверу...', '');
+  });
+  connection.onreconnected(async () => {
+    setDot(true);
+    toast('Связь восстановлена', 'good');
+    try { await connection.invoke('RequestSnapshot'); } catch (e) { console.warn('snapshot error', e); }
+  });
+  connection.onclose(() => {
+    setDot(false);
+    toast('Соединение потеряно. Ожидание сервера...', 'warn');
+  });
 
   connection.start()
     .then(() => setDot(true))
@@ -195,6 +205,7 @@ function renderActionBar() {
     const pauseLabel = pc.isPaused ? '▶ Продолжить' : '⏸ Пауза';
     const pauseCls = pc.isPaused ? 'green' : 'amber';
     btns.push(`<button class="ab-btn ${pauseCls}" onclick="doTogglePause()">${pauseLabel}</button>`);
+    btns.push(`<button class="ab-btn blue" onclick="openTransferDlg()">↔ Пересадить</button>`);
     btns.push(`<button class="ab-btn red" onclick="doEndSession()">⏹ Завершить</button>`);
   }
 
@@ -271,6 +282,48 @@ async function resolveOffline(decision) {
     await connection.invoke('ResolveOffline', offlinePcNumber, decision);
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
   offlinePcNumber = null;
+}
+
+async function openTransferDlg() {
+  if (!selectedPc) return;
+  const errEl = document.getElementById('dlgTransferError');
+  errEl.style.display = 'none';
+
+  let targets;
+  try {
+    targets = await connection.invoke('GetTransferTargets', selectedPc);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); return; }
+
+  if (!targets || targets.length === 0) {
+    toast('Нет доступных ПК для пересадки (нужен свободный онлайн-ПК)', 'warn');
+    return;
+  }
+
+  document.getElementById('dlgTransferFrom').textContent = `Сессия с: ${selectedPc}`;
+  const sel = document.getElementById('dlgTransferTarget');
+  sel.innerHTML = targets
+    .sort((a, b) => a.pcNumberValue - b.pcNumberValue)
+    .map(t => `<option value="${esc(t.pcNumber)}">${esc(t.pcNumber)}</option>`)
+    .join('');
+  openDlg('dlgTransfer');
+}
+
+async function confirmTransfer() {
+  const toPc = document.getElementById('dlgTransferTarget').value;
+  const errEl = document.getElementById('dlgTransferError');
+  errEl.style.display = 'none';
+  try {
+    const result = await connection.invoke('TransferSession', selectedPc, toPc);
+    if (result === 'OK') {
+      closeDlg('dlgTransfer');
+      toast(`Сессия перенесена на ${toPc}`, 'good');
+      selectedPc = null;
+      document.getElementById('actionBar').classList.add('hidden');
+    } else {
+      errEl.textContent = result;
+      errEl.style.display = 'block';
+    }
+  } catch (e) { errEl.textContent = String(e); errEl.style.display = 'block'; }
 }
 
 function openServiceDlg() {

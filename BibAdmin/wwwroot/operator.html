@@ -85,6 +85,23 @@
   </div>
 </div>
 
+<!-- Диалог: Пересадка -->
+<div id="dlgTransfer" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgTransfer')">
+  <div class="dlg">
+    <div class="dlg-title">↔ Пересадить сессию</div>
+    <div class="dlg-pc-name" id="dlgTransferFrom"></div>
+    <div class="field-row">
+      <label>Выберите ПК назначения</label>
+      <select id="dlgTransferTarget"></select>
+    </div>
+    <div id="dlgTransferError" style="color:#E24B4A;font-size:12px;margin-top:8px;display:none"></div>
+    <div class="dlg-actions">
+      <button class="btn-cancel" onclick="closeDlg('dlgTransfer')">Отмена</button>
+      <button class="btn-primary" onclick="confirmTransfer()">Пересадить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Диалог: Услуга -->
 <div id="dlgService" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgService')">
   <div class="dlg">

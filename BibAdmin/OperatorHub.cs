@@ -40,6 +40,21 @@ namespace BibAdmin
             await base.OnConnectedAsync();
         }
 
+        // ── Переподключение: клиент запрашивает актуальный снапшот ────────────
+        public async Task RequestSnapshot()
+        {
+            if (!IsAuthorized()) return;
+            var all = AdminHub.KnownClients.Values.Select(OperatorBroadcaster.ClientDto).ToList();
+            await Clients.Caller.SendAsync("stateSnapshot", all);
+            var settings = GlobalSettings.Load();
+            var services = settings.Services.Where(s => s.IsActive).Select(s => new
+            {
+                id = s.Id, name = s.Name, unit = s.Unit, price = s.Price
+            }).ToList();
+            await Clients.Caller.SendAsync("serviceTypes", services);
+            await Clients.Caller.SendAsync("tariff", settings.Tariff);
+        }
+
         // ── Запуск сессии ──────────────────────────────────────────────────────
         public async Task StartSession(string pcNumber, string sessionType,
             int limitSeconds, int paidAmount, string userName, string readerId)
@@ -231,6 +246,90 @@ namespace BibAdmin
             if (payNow) ServiceTransaction.MarkAsPaid(tx.Id);
 
             await Clients.Caller.SendAsync("serviceCreated", new { total, isPaid = payNow, serviceName = svc.Name });
+        }
+
+        // ── Пересадка сессии ───────────────────────────────────────────────────
+        public async Task<string> TransferSession(string fromPcNumber, string toPcNumber)
+        {
+            if (!IsAuthorized()) return "Нет авторизации";
+            if (!AdminHub.KnownClients.TryGetValue(fromPcNumber, out var source))
+                return $"ПК {fromPcNumber} не найден";
+            if (!AdminHub.KnownClients.TryGetValue(toPcNumber, out var target))
+                return $"ПК {toPcNumber} не найден";
+            if (!source.IsSession) return "На исходном ПК нет активной сессии";
+            if (!target.IsOnline) return "ПК назначения не в сети";
+            if (target.IsSession) return "На ПК назначения уже есть сессия";
+
+            string sessionType = source.SessionType;
+            int limitSeconds = source.LimitSeconds;
+            int paidAmount = source.PaidAmount;
+            int elapsed = source.IsPaused
+                ? source.AccumulatedSeconds
+                : source.AccumulatedSeconds + (int)(DateTime.UtcNow - (source.SessionStart ?? DateTime.UtcNow)).TotalSeconds;
+            elapsed = Math.Max(0, elapsed);
+
+            // Блокируем источник
+            if (source.IsOnline)
+                await _adminCtx.Clients.Client(source.ConnectionId)
+                    .SendAsync("ReceiveCommand", JsonSerializer.Serialize(new { Type = "REMOTE_LOCK", Value = "true" }));
+            else
+                AdminHub.AddPendingCommand(fromPcNumber, "REMOTE_LOCK", "true");
+
+            source.Status = "Заблокирован";
+            source.SessionType = "";
+            source.ElapsedSeconds = 0;
+            source.LimitSeconds = 0;
+            source.PaidAmount = 0;
+            source.SessionStart = null;
+            source.IsPaused = false;
+            source.AccumulatedSeconds = 0;
+            source.SessionId = "";
+            source.DisconnectedAt = null;
+            source.OfflineDecision = OfflineDecision.None;
+
+            // Запускаем на цели
+            var newStart = DateTime.UtcNow.AddSeconds(-elapsed);
+            var startCmd = new
+            {
+                Type = "START_SESSION",
+                SessionType = sessionType,
+                LimitSeconds = limitSeconds,
+                PaidAmount = paidAmount,
+                ElapsedSeconds = elapsed,
+                ServerStartTime = newStart.ToString("o")
+            };
+            await _adminCtx.Clients.Client(target.ConnectionId)
+                .SendAsync("ReceiveCommand", JsonSerializer.Serialize(startCmd));
+
+            target.SessionType = sessionType;
+            target.Status = sessionType;
+            target.LimitSeconds = limitSeconds;
+            target.PaidAmount = paidAmount;
+            target.ElapsedSeconds = elapsed;
+            target.AccumulatedSeconds = elapsed;
+            target.SessionStart = newStart;
+            target.IsPaused = false;
+            target.SessionId = "";
+
+            AdminHub.KnownClients[fromPcNumber] = source;
+            AdminHub.KnownClients[toPcNumber] = target;
+            AdminHub.SaveActiveSessions();
+            AdminHub.RaiseClientUpdated(source);
+            AdminHub.RaiseClientUpdated(target);
+
+            Logger.Info($"[Operator] Сессия перенесена: {fromPcNumber} → {toPcNumber}");
+            return "OK";
+        }
+
+        // ── Список ПК доступных для пересадки ─────────────────────────────────
+        public Task<object[]> GetTransferTargets(string fromPcNumber)
+        {
+            if (!IsAuthorized()) return Task.FromResult(Array.Empty<object>());
+            var targets = AdminHub.KnownClients.Values
+                .Where(c => c.PcNumber != fromPcNumber && c.IsOnline && !c.IsSession)
+                .Select(c => (object)new { pcNumber = c.PcNumber, pcNumberValue = c.PcNumberValue })
+                .ToArray();
+            return Task.FromResult(targets);
         }
 
         // ── Утилиты ────────────────────────────────────────────────────────────

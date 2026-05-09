@@ -46,6 +46,16 @@ namespace BibAdmin
             _ = _ctx.Clients.All.SendAsync("offlineResolved", new { pcNumber, decision });
         }
 
+        public void PushServiceTypes()
+        {
+            var settings = GlobalSettings.Load();
+            var services = settings.Services.Where(s => s.IsActive).Select(s => new
+            {
+                id = s.Id, name = s.Name, unit = s.Unit, price = s.Price
+            }).ToList();
+            _ = _ctx.Clients.All.SendAsync("serviceTypes", services);
+        }
+
         public static object ClientDto(ClientState cs) => new
         {
             pcNumber = cs.PcNumber,

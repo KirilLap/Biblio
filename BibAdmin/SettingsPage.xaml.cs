@@ -220,6 +220,7 @@ namespace BibAdmin
         private void SaveServices()
         {
             _global.Save();
+            OperatorBroadcaster.Instance?.PushServiceTypes();
             ShowSaved(TxtServicesSaved);
         }
 
