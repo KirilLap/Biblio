@@ -9,21 +9,71 @@ namespace BibAdmin
     public partial class MainWindow : Window
     {
         private ServerHost? _server;
+        private TrayIconHelper _tray = null!;
+        private bool _realExit = false;
+
         public static MainWindow? Instance { get; private set; }
 
         public MainWindow()
         {
             InitializeComponent();
             Instance = this;
-            
-            // Устанавливаем размер окна в процентах от размера экрана (80% ширины, 75% высоты)
+
             var screenWidth = SystemParameters.PrimaryScreenWidth;
             var screenHeight = SystemParameters.PrimaryScreenHeight;
             Width = screenWidth * 0.80;
             Height = screenHeight * 0.75;
-            
+
+            InitTrayIcon();
             StartServer();
         }
+
+        // =====================
+        // Трей
+        // =====================
+
+        private void InitTrayIcon()
+        {
+            _tray = new TrayIconHelper();
+            _tray.ShowRequested += ShowMainWindow;
+            _tray.ExitRequested += DoExit;
+        }
+
+        private void ShowMainWindow()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                Show();
+                WindowState = WindowState.Normal;
+                Activate();
+            });
+        }
+
+        private void DoExit()
+        {
+            _realExit = true;
+            Dispatcher.Invoke(Close);
+        }
+
+        // =====================
+        // Кнопки меню
+        // =====================
+
+        private void BtnExit_Click(object sender, RoutedEventArgs e)
+        {
+            var r = MessageBox.Show(
+                "Завершить работу BibAdmin?\n\nСервер будет остановлен, клиентские ПК потеряют связь.",
+                "Выход из программы",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (r == MessageBoxResult.Yes)
+                DoExit();
+        }
+
+        // =====================
+        // Сервер
+        // =====================
 
         private async void StartServer()
         {
@@ -32,39 +82,28 @@ namespace BibAdmin
             {
                 await _server.StartAsync(8080);
 
-                // 1. Загружаем реестр клиентов (сбрасываем статусы в Оффлайн)
                 AdminHub.LoadRegistry();
                 Logger.Info("✅ Реестр клиентов загружен");
 
-                // ✅ 2. ВОССТАНАВЛИВАЕМ АКТИВНЫЕ СЕССИИ
-                // Это критически важно: если сервер перезапустился, 
-                // мы читаем active_sessions.json и возвращаем таймеры на место.
                 AdminHub.LoadActiveSessions();
                 Logger.Info("✅ Активные сессии восстановлены");
 
                 AdminHub.LoadDeletedPcs();
                 Logger.Info("✅ Лог удалённых ПК загружен");
 
-                // ✅ 3. ЗАГРУЖАЕМ ИСТОРИЮ ФИНАНСОВ ПРИ ЗАПУСКЕ
                 FinancePage.LoadHistory();
                 Logger.Info("✅ История финансов загружена");
 
-                // ✅ 4. ЗАГРУЖАЕМ ИСТОРИЮ УСЛУГ
                 ServiceTransaction.LoadHistory();
                 Logger.Info("✅ История услуг загружена");
 
-                // 🔄 Обновляем UI если вкладка Финансы уже активна
                 if (MainFrame.Content is FinancePage financePage)
-                {
                     financePage.RefreshUI();
-                    Logger.Info("🔄 UI финансов обновлён");
-                }
 
                 Dispatcher.Invoke(() =>
                 {
                     TxtServerStatus.Text = "Сервер запущен :8080";
-                    DotServer.Fill = new SolidColorBrush(
-                        Color.FromRgb(29, 158, 117)); // Зеленый цвет
+                    DotServer.Fill = new SolidColorBrush(Color.FromRgb(29, 158, 117));
                 });
 
                 Logger.Info("Сервер запущен успешно");
@@ -74,17 +113,18 @@ namespace BibAdmin
                 Dispatcher.Invoke(() =>
                 {
                     TxtServerStatus.Text = "Ошибка сервера";
-                    DotServer.Fill = new SolidColorBrush(
-                        Color.FromRgb(226, 75, 74)); // Красный цвет
+                    DotServer.Fill = new SolidColorBrush(Color.FromRgb(226, 75, 74));
                 });
                 Logger.Error($"Ошибка запуска сервера: {ex.Message}");
             }
 
-            // Открываем страницу компьютеров по умолчанию
             MainFrame.Navigate(new ComputersPage());
         }
 
-        // Навигация: Компьютеры
+        // =====================
+        // Навигация
+        // =====================
+
         private void BtnComputers_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnComputers);
@@ -92,42 +132,28 @@ namespace BibAdmin
                 MainFrame.Navigate(new ComputersPage());
         }
 
-        // Навигация: Финансы
         private void BtnFinance_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnFinance);
-            // Проверяем, не открыта ли уже страница финансов
             if (MainFrame.Content is not FinancePage)
-            {
                 MainFrame.Navigate(new FinancePage());
-            }
             else
-            {
-                // Если страница уже открыта, просто обновляем UI
                 ((FinancePage)MainFrame.Content).RefreshUI();
-            }
         }
 
-        // Навигация: Настройки
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
             SetActive(BtnSettings);
             MainFrame.Navigate(new SettingsPage());
         }
 
-        // Быстрый заказ услуги
         private void BtnNewService_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ServiceOrderDialog();
-            if (dialog.ShowDialog() == true)
-            {
-                // Если открыта страница финансов — обновляем UI
-                if (MainFrame.Content is FinancePage fp)
-                    fp.RefreshUI();
-            }
+            if (dialog.ShowDialog() == true && MainFrame.Content is FinancePage fp)
+                fp.RefreshUI();
         }
 
-        // Подсветка активной кнопки меню
         private void SetActive(Button btn)
         {
             BtnComputers.Tag = null;
@@ -136,9 +162,30 @@ namespace BibAdmin
             btn.Tag = "active";
         }
 
-        // Корректное завершение работы
-        protected override async void OnClosing(
-            System.ComponentModel.CancelEventArgs e)
+        // =====================
+        // Закрытие окна
+        // =====================
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (!_realExit)
+            {
+                // Крестик → скрыть в трей
+                e.Cancel = true;
+                Hide();
+                _tray.ShowBalloon("BibAdmin",
+                    "Приложение продолжает работать в фоне. Дважды кликните по иконке в трее для открытия.");
+                return;
+            }
+
+            // Реальный выход — убираем иконку из трея и останавливаем сервер
+            _tray.Dispose();
+
+            _ = StopServerAsync();
+            base.OnClosing(e);
+        }
+
+        private async Task StopServerAsync()
         {
             try
             {
@@ -146,7 +193,6 @@ namespace BibAdmin
                 Logger.Info("Сервер остановлен");
             }
             catch { }
-            base.OnClosing(e);
         }
     }
 }

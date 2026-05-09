@@ -65,6 +65,36 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Кнопка выхода -->
+                <Border DockPanel.Dock="Bottom" Padding="12,10"
+                        BorderBrush="#2E2E4E" BorderThickness="0,1,0,0">
+                    <Button Content="✕  Выход"
+                            Padding="14,9" FontSize="13" Cursor="Hand"
+                            HorizontalContentAlignment="Left"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            Foreground="#664455"
+                            Click="BtnExit_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="bd"
+                                        Background="{TemplateBinding Background}"
+                                        CornerRadius="8"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Left"
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="bd" Property="Background" Value="#3A1520"/>
+                                        <Setter Property="Foreground" Value="#E24B4A"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Border>
+
                 <!-- Статус сервера -->
                 <Border DockPanel.Dock="Bottom" Padding="20,14"
                         BorderBrush="#2E2E4E" BorderThickness="0,1,0,0">
