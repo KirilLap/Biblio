@@ -102,10 +102,17 @@ namespace BibAdmin
                         app.UseRouting();
 
                         // Статические файлы веб-оператора
+                        var contentTypeProvider = new FileExtensionContentTypeProvider();
+                        // Явно задаём charset=utf-8 для JS и CSS — иначе браузер может не распознать кириллицу
+                        contentTypeProvider.Mappings[".js"]  = "application/javascript; charset=utf-8";
+                        contentTypeProvider.Mappings[".css"] = "text/css; charset=utf-8";
+                        contentTypeProvider.Mappings[".html"] = "text/html; charset=utf-8";
+
                         app.UseStaticFiles(new StaticFileOptions
                         {
                             FileProvider = new PhysicalFileProvider(wwwrootPath),
-                            RequestPath = ""
+                            RequestPath = "",
+                            ContentTypeProvider = contentTypeProvider
                         });
 
                         // Статические файлы (фоны)

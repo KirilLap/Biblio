@@ -202,6 +202,8 @@ namespace BibAdminWeb
             if (target.IsSession) return "На ПК назначения уже есть сессия";
 
             string sessionType = source.SessionType;
+            int limitSeconds = source.LimitSeconds;
+            int paidAmount = source.PaidAmount;
             int elapsed = source.IsPaused
                 ? source.AccumulatedSeconds
                 : source.AccumulatedSeconds + (int)(DateTime.UtcNow - (source.SessionStart ?? DateTime.UtcNow)).TotalSeconds;
@@ -216,12 +218,14 @@ namespace BibAdminWeb
             source.Status = "Заблокирован"; source.SessionType = ""; source.ElapsedSeconds = 0;
             source.LimitSeconds = 0; source.PaidAmount = 0; source.SessionStart = null;
             source.IsPaused = false; source.AccumulatedSeconds = 0; source.SessionId = "";
+            source.DisconnectedAt = null; source.OfflineDecision = OfflineDecision.None;
 
             var newStart = DateTime.UtcNow.AddSeconds(-elapsed);
-            var startCmd = new { Type = "START_SESSION", SessionType = sessionType, LimitSeconds = source.LimitSeconds, PaidAmount = source.PaidAmount, ElapsedSeconds = elapsed, ServerStartTime = newStart.ToString("o") };
+            var startCmd = new { Type = "START_SESSION", SessionType = sessionType, LimitSeconds = limitSeconds, PaidAmount = paidAmount, ElapsedSeconds = elapsed, ServerStartTime = newStart.ToString("o") };
             await _adminCtx.Clients.Client(target.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(startCmd));
 
             target.SessionType = sessionType; target.Status = sessionType;
+            target.LimitSeconds = limitSeconds; target.PaidAmount = paidAmount;
             target.ElapsedSeconds = elapsed; target.AccumulatedSeconds = elapsed;
             target.SessionStart = newStart; target.IsPaused = false; target.SessionId = "";
 

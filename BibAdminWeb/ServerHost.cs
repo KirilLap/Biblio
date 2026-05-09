@@ -74,10 +74,17 @@ namespace BibAdminWeb
                         });
 
                         // wwwroot static files
+                        // Явно указываем charset=utf-8 для JS/CSS/HTML — иначе браузер может искажать кириллицу
+                        var contentTypeProvider = new FileExtensionContentTypeProvider();
+                        contentTypeProvider.Mappings[".js"]   = "application/javascript; charset=utf-8";
+                        contentTypeProvider.Mappings[".css"]  = "text/css; charset=utf-8";
+                        contentTypeProvider.Mappings[".html"] = "text/html; charset=utf-8";
+
                         app.UseStaticFiles(new StaticFileOptions
                         {
                             FileProvider = new PhysicalFileProvider(wwwrootPath),
-                            RequestPath = ""
+                            RequestPath = "",
+                            ContentTypeProvider = contentTypeProvider
                         });
 
                         // Files (backgrounds)

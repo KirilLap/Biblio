@@ -148,12 +148,90 @@
         <h3>Экран блокировки</h3>
         <div class="form-check"><label><input type="checkbox" id="sShowPcName"> Показывать название ПК</label></div>
         <div class="form-check"><label><input type="checkbox" id="sShowPcNumber"> Показывать номер ПК</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись "Заблокировано"</label></div>
-        <div class="form-row">
-          <label>Прозрачность фона</label>
-          <input type="range" id="sBgOpacity" min="0" max="1" step="0.05">
-          <span id="sBgOpacityVal">0.30</span>
+        <div class="form-check"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись «Заблокировано»</label></div>
+
+        <div class="form-row" style="margin-top:10px">
+          <label>Прозрачность фона (<span id="sBgOpacityVal">30</span>%)</label>
+          <input type="range" id="sBgOpacity" min="0" max="100" step="5">
         </div>
+
+        <div class="lock-section-sep"></div>
+        <div class="lock-section-title">Номер ПК</div>
+        <div class="form-row">
+          <label>Позиция</label>
+          <select id="sPcNumberPosition">
+            <option value="TopLeft">Сверху слева</option>
+            <option value="TopCenter">Сверху по центру</option>
+            <option value="TopRight">Сверху справа</option>
+            <option value="MiddleLeft">По центру слева</option>
+            <option value="MiddleCenter" selected>По центру</option>
+            <option value="MiddleRight">По центру справа</option>
+            <option value="BottomLeft">Снизу слева</option>
+            <option value="BottomCenter">Снизу по центру</option>
+            <option value="BottomRight">Снизу справа</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Размер шрифта (<span id="sPcFontSizeVal">52</span>)</label>
+          <input type="range" id="sPcNumberFontSize" min="16" max="120" step="4">
+        </div>
+
+        <div class="lock-section-sep"></div>
+        <div class="lock-section-title">Надпись «Компьютер заблокирован»</div>
+        <div class="form-row">
+          <label>Позиция</label>
+          <select id="sLockedTextPosition">
+            <option value="TopLeft">Сверху слева</option>
+            <option value="TopCenter">Сверху по центру</option>
+            <option value="TopRight">Сверху справа</option>
+            <option value="MiddleLeft">По центру слева</option>
+            <option value="MiddleCenter" selected>По центру</option>
+            <option value="MiddleRight">По центру справа</option>
+            <option value="BottomLeft">Снизу слева</option>
+            <option value="BottomCenter">Снизу по центру</option>
+            <option value="BottomRight">Снизу справа</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Размер шрифта (<span id="sLockedFontSizeVal">16</span>)</label>
+          <input type="range" id="sLockedTextFontSize" min="10" max="40" step="1">
+        </div>
+
+        <div class="lock-section-sep"></div>
+        <div class="lock-section-title">Время и дата</div>
+        <div class="form-row">
+          <label>Позиция</label>
+          <select id="sTimePosition">
+            <option value="TopLeft">Сверху слева</option>
+            <option value="TopCenter">Сверху по центру</option>
+            <option value="TopRight">Сверху справа</option>
+            <option value="MiddleLeft">По центру слева</option>
+            <option value="MiddleCenter">По центру</option>
+            <option value="MiddleRight">По центру справа</option>
+            <option value="BottomLeft">Снизу слева</option>
+            <option value="BottomCenter" selected>Снизу по центру</option>
+            <option value="BottomRight">Снизу справа</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Размер шрифта (<span id="sTimeFontSizeVal">36</span>)</label>
+          <input type="range" id="sTimeFontSize" min="12" max="80" step="2">
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Фоновое изображение</h3>
+        <p style="color:#666;font-size:12px;margin-bottom:12px">Загрузите изображение для экрана блокировки</p>
+        <div class="form-row">
+          <label>Текущий файл</label>
+          <input type="text" id="sBgFileName" readonly placeholder="(не задан)">
+        </div>
+        <div class="form-row">
+          <label>Загрузить новый файл</label>
+          <input type="file" id="sBgFileInput" accept="image/*" style="color:#ccc;font-size:13px">
+        </div>
+        <button class="btn btn-outline" style="margin-top:4px" onclick="uploadBgFile()">📤 Загрузить и отправить всем</button>
+        <span id="bgUploadStatus" style="display:none;color:#1d9e75;font-size:12px;margin-left:10px">✓ Отправлено</span>
       </div>
 
       <div class="settings-card full-width">
@@ -192,25 +270,49 @@
 
 <!-- Start session dialog -->
 <div id="dlgStartSession" class="dlg-overlay" style="display:none">
-  <div class="dlg">
-    <div class="dlg-title">Начать сессию — <span id="dlgSsPc"></span></div>
-    <div class="form-row"><label>Тип сессии</label>
-      <select id="dlgSsType">
-        <option value="VIP">VIP (безлимит)</option>
-        <option value="Лимит">Лимит</option>
-      </select>
+  <div class="dlg dlg-session">
+    <div class="dlg-title">Запуск платной сессии — <span id="dlgSsPc"></span></div>
+
+    <!-- Тип сессии — карточки как в WPF -->
+    <div class="ss-type-row">
+      <div class="ss-type-btn active" id="ssBtnLimited" onclick="ssSelectType('Лимит')">
+        <div class="ss-type-icon">⏱</div>
+        <div class="ss-type-label" id="ssBtnLimitedLbl">Лимитированная</div>
+      </div>
+      <div class="ss-type-btn" id="ssBtnVip" onclick="ssSelectType('VIP')">
+        <div class="ss-type-icon">⭐</div>
+        <div class="ss-type-label" id="ssBtnVipLbl">VIP</div>
+      </div>
     </div>
-    <div id="dlgSsLimitRow" class="form-row" style="display:none">
-      <label>Время (мин) или Сумма (сум)</label>
-      <select id="dlgSsLimitType"><option value="time">По времени</option><option value="money">По деньгам</option></select>
-      <input type="number" id="dlgSsLimitVal" min="1" placeholder="60">
+
+    <!-- Поля для Лимит -->
+    <div id="dlgSsLimitFields">
+      <div class="form-row">
+        <label>Время (минуты)</label>
+        <input type="number" id="dlgSsMinutes" min="1" placeholder="60" oninput="ssSyncMinutes()">
+      </div>
+      <div class="form-row">
+        <label>Сумма (сум)</label>
+        <input type="number" id="dlgSsMoney" min="0" placeholder="3000" oninput="ssSyncMoney()">
+      </div>
+      <div id="dlgSsHint" style="font-size:12px;color:#1d9e75;text-align:right;margin-bottom:12px"></div>
     </div>
-    <div id="dlgSsPaidRow" class="form-row" style="display:none">
-      <label>Внесено (сум)</label>
-      <input type="number" id="dlgSsPaid" min="0" placeholder="0">
+
+    <!-- Сообщение для VIP -->
+    <div id="dlgSsVipInfo" style="display:none;color:#666688;font-size:13px;text-align:center;margin-bottom:16px">
+      Безлимитный доступ без ограничений по времени
     </div>
-    <div class="form-row"><label>Читатель (ID)</label><input type="text" id="dlgSsReader" placeholder="Необязательно"></div>
-    <div class="form-row"><label>Имя</label><input type="text" id="dlgSsName" placeholder="Необязательно"></div>
+
+    <!-- ID читателя (обязательно) -->
+    <div class="form-row">
+      <label>ID читателя *</label>
+      <input type="text" id="dlgSsReader" placeholder="Обязательно">
+    </div>
+    <div class="form-row">
+      <label>Имя</label>
+      <input type="text" id="dlgSsName" placeholder="Необязательно">
+    </div>
+
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgStartSession')">Отмена</button>
       <button class="btn btn-primary" onclick="confirmStartSession()">Начать</button>

@@ -110,24 +110,44 @@ function buildPcCard(c) {
   div.className = 'pc-card';
   div.id = 'pc-' + c.pcNumber.replace(/\s/g, '_');
 
+  // Оффлайн + сессия: карточка с тёплым красным акцентом
+  if (!c.isOnline && c.isSession) {
+    div.style.borderColor = '#c86464';
+    div.style.background  = '#1f1010';
+  }
+
   const dotClass = !c.isOnline ? '' : c.isSession && c.isPaused ? 'paused' : c.isSession ? 'session' : c.isFree ? 'free' : 'online';
   const badge = statusBadge(c);
 
+  // Индивидуальные настройки — ★ справа от имени
+  const indBadge = c.hasIndividualSettings
+    ? `<span class="pc-ind-badge" title="Есть индивидуальные настройки">★</span>`
+    : '';
+
   let timer = '';
   if (c.isSession) {
-    timer = `<div class="pc-timer ${c.sessionType === 'VIP' ? 'vip-timer' : ''} ${c.isPaused ? 'paused-timer' : ''}" id="timer-${esc(c.pcNumber)}">
-      ${fmtTime(c.elapsedSeconds)}
-    </div>`;
+    const timerCls = `pc-timer ${c.sessionType === 'VIP' ? 'vip-timer' : ''} ${c.isPaused ? 'paused-timer' : ''} ${!c.isOnline ? 'offline-timer' : ''}`;
+    timer = `<div class="${timerCls}" id="timer-${esc(c.pcNumber)}">${fmtTime(c.elapsedSeconds)}</div>`;
     if (c.limitSeconds > 0) {
       const rem = Math.max(0, c.limitSeconds - c.elapsedSeconds);
-      timer += `<div class="pc-meta"><span>Осталось: ${fmtTime(rem)}</span></div>`;
+      const remCls = rem <= 300 ? 'style="color:#f87171"' : '';
+      timer += `<div class="pc-meta"><span ${remCls}>Осталось: ${fmtTime(rem)}</span></div>`;
+    }
+    // VIP — показываем стоимость
+    if (c.sessionType === 'VIP') {
+      const cost = Math.floor(c.elapsedSeconds * (settings.tariff || 3000) / 3600);
+      timer += `<div class="pc-meta"><span style="color:#f59e0b">К оплате: ${cost.toLocaleString()} сум</span></div>`;
+    }
+    // Оффлайн + сессия — предупреждение
+    if (!c.isOnline) {
+      timer += `<div class="pc-meta"><span style="color:#f87171">📵 нет связи</span></div>`;
     }
   }
 
   const meta = `<div class="pc-meta">
     ${c.ip ? `<span>${c.ip}</span>` : ''}
-    ${c.isSession && c.userName ? `<span>👤 ${c.userName}</span>` : ''}
-    ${c.isSession && c.readerId ? `<span>🪪 ${c.readerId}</span>` : ''}
+    ${c.isSession && c.userName ? `<span>👤 ${esc(c.userName)}</span>` : ''}
+    ${c.isSession && c.readerId ? `<span>🪪 ${esc(c.readerId)}</span>` : ''}
     ${c.isSession && c.paidAmount ? `<span>💵 ${c.paidAmount.toLocaleString()} сум</span>` : ''}
   </div>`;
 
@@ -135,7 +155,7 @@ function buildPcCard(c) {
 
   div.innerHTML = `
     <div class="pc-card-header">
-      <span class="pc-name" onclick="openRename(${c.pcNumberValue}, '${esc(c.customName)}')">${esc(c.pcNumber)}</span>
+      <span class="pc-name" onclick="openRename(${c.pcNumberValue}, '${esc(c.customName)}')">${esc(c.pcNumber)}${indBadge}</span>
       <div class="pc-offline-dot ${dotClass} online"></div>
     </div>
     ${badge}
@@ -182,6 +202,7 @@ function buildActions(c) {
 // ─── Timers ──────────────────────────────────────────────────────────────────
 function tickTimers() {
   Object.values(pcs).forEach(c => {
+    // Тикаем таймер если сессия активна (включая оффлайн-ПК с сессией — таймер идёт)
     if (!c.isSession || c.isPaused) return;
     c.elapsedSeconds++;
     const el = document.getElementById('timer-' + c.pcNumber.replace(/\s/g, '_'));
@@ -190,38 +211,93 @@ function tickTimers() {
 }
 
 // ─── Session actions ─────────────────────────────────────────────────────────
+let _ssType = 'Лимит'; // текущий тип в диалоге
+let _ssSyncing = false; // защита от рекурсии при синхронизации полей
+
 function openStartSession(pcNumber) {
   activePc = pcNumber;
   document.getElementById('dlgSsPc').textContent = pcNumber;
-  document.getElementById('dlgSsType').value = 'VIP';
-  document.getElementById('dlgSsLimitRow').style.display = 'none';
-  document.getElementById('dlgSsPaidRow').style.display = 'none';
   document.getElementById('dlgSsReader').value = '';
   document.getElementById('dlgSsName').value = '';
-  document.getElementById('dlgSsType').onchange = function() {
-    const isLimit = this.value === 'Лимит';
-    document.getElementById('dlgSsLimitRow').style.display = isLimit ? '' : 'none';
-    document.getElementById('dlgSsPaidRow').style.display = isLimit ? '' : 'none';
-  };
+  document.getElementById('dlgSsMinutes').value = '';
+  document.getElementById('dlgSsMoney').value = '';
+  document.getElementById('dlgSsHint').textContent = '';
+  ssSelectType('Лимит');
   document.getElementById('dlgStartSession').style.display = 'flex';
 }
 
+function ssSelectType(type) {
+  _ssType = type;
+  const isLimit = type === 'Лимит';
+  document.getElementById('dlgSsLimitFields').style.display = isLimit ? '' : 'none';
+  document.getElementById('dlgSsVipInfo').style.display     = isLimit ? 'none' : '';
+  // Стили кнопок
+  document.getElementById('ssBtnLimited').classList.toggle('active', isLimit);
+  document.getElementById('ssBtnVip').classList.toggle('active', !isLimit);
+  if (!isLimit) {
+    document.getElementById('dlgSsMinutes').value = '';
+    document.getElementById('dlgSsMoney').value = '';
+    document.getElementById('dlgSsHint').textContent = '';
+  }
+}
+
+// Синхронизация минуты → деньги (как в WPF TxtMinutes_TextChanged)
+function ssSyncMinutes() {
+  if (_ssSyncing) return;
+  _ssSyncing = true;
+  try {
+    const mins = parseFloat(document.getElementById('dlgSsMinutes').value);
+    const t = GlobalSettings_Tariff();
+    if (mins > 0) {
+      const cost = Math.round((mins / 60) * t);
+      document.getElementById('dlgSsMoney').value = cost;
+      document.getElementById('dlgSsHint').textContent = `${mins} мин = ${cost.toLocaleString()} сум`;
+    } else {
+      document.getElementById('dlgSsMoney').value = '';
+      document.getElementById('dlgSsHint').textContent = '';
+    }
+  } finally { _ssSyncing = false; }
+}
+
+// Синхронизация деньги → минуты (как в WPF TxtMoney_TextChanged)
+function ssSyncMoney() {
+  if (_ssSyncing) return;
+  _ssSyncing = true;
+  try {
+    const money = parseFloat(document.getElementById('dlgSsMoney').value);
+    const t = GlobalSettings_Tariff();
+    if (money > 0) {
+      const mins = Math.round((money / t) * 60);
+      document.getElementById('dlgSsMinutes').value = mins;
+      document.getElementById('dlgSsHint').textContent = `${money.toLocaleString()} сум = ${mins} мин`;
+    } else {
+      document.getElementById('dlgSsMinutes').value = '';
+      document.getElementById('dlgSsHint').textContent = '';
+    }
+  } finally { _ssSyncing = false; }
+}
+
 async function confirmStartSession() {
-  const type = document.getElementById('dlgSsType').value;
-  const limitType = document.getElementById('dlgSsLimitType').value;
-  const limitVal = parseInt(document.getElementById('dlgSsLimitVal').value) || 0;
-  const paid = parseInt(document.getElementById('dlgSsPaid').value) || 0;
   const reader = document.getElementById('dlgSsReader').value.trim();
+  if (!reader) { toast('Введите ID читателя', 'warn'); return; }
   const name = document.getElementById('dlgSsName').value.trim();
 
   let limitSeconds = 0, paidAmount = 0;
-  if (type === 'Лимит') {
-    if (limitType === 'time') limitSeconds = limitVal * 60;
-    else { paidAmount = limitVal; const t = GlobalSettings_Tariff(); limitSeconds = Math.floor(limitVal / t * 3600); }
-    paidAmount = paid || paidAmount;
+  if (_ssType === 'Лимит') {
+    const mins  = parseFloat(document.getElementById('dlgSsMinutes').value) || 0;
+    const money = parseFloat(document.getElementById('dlgSsMoney').value)   || 0;
+    if (!mins && !money) { toast('Введите время или сумму', 'warn'); return; }
+    const t = GlobalSettings_Tariff();
+    if (mins > 0) {
+      limitSeconds = Math.round(mins * 60);
+      paidAmount   = money || Math.round((mins / 60) * t);
+    } else {
+      paidAmount   = money;
+      limitSeconds = Math.round((money / t) * 3600);
+    }
   }
   closeDlg('dlgStartSession');
-  await conn.invoke('StartSession', activePc, type, limitSeconds, paidAmount, name, reader);
+  await conn.invoke('StartSession', activePc, _ssType, limitSeconds, paidAmount, name, reader);
 }
 
 function GlobalSettings_Tariff() { return settings.tariff || 3000; }
@@ -502,19 +578,54 @@ function fillSettingsForm() {
   document.getElementById('sLockOnOffline').checked = !!settings.lockOnOffline;
   document.getElementById('sPreventClose').checked = !!settings.preventClose;
   document.getElementById('sAutoStart').checked = !!settings.autoStartWithUser;
-  document.getElementById('sShowPcName').checked = !!settings.showPcName;
-  document.getElementById('sShowPcNumber').checked = !!settings.showPcNumber;
-  document.getElementById('sShowLockedText').checked = !!settings.showLockedText;
-  const opacity = settings.backgroundOpacity ?? 0.3;
-  document.getElementById('sBgOpacity').value = opacity;
-  document.getElementById('sBgOpacityVal').textContent = opacity.toFixed(2);
-  document.getElementById('sBgOpacity').oninput = function() {
-    document.getElementById('sBgOpacityVal').textContent = parseFloat(this.value).toFixed(2);
-  };
+  document.getElementById('sShowPcName').checked   = settings.showPcName  !== false;
+  document.getElementById('sShowPcNumber').checked = settings.showPcNumber !== false;
+  document.getElementById('sShowLockedText').checked = settings.showLockedText !== false;
+
+  // Прозрачность фона (сервер хранит 0..1, слайдер 0..100)
+  const opacityRaw = settings.backgroundOpacity ?? 0.3;
+  const opacityPct = Math.round(opacityRaw * 100);
+  document.getElementById('sBgOpacity').value = opacityPct;
+  document.getElementById('sBgOpacityVal').textContent = opacityPct;
+
+  // Позиции и размеры шрифтов экрана блокировки
+  document.getElementById('sPcNumberPosition').value  = settings.pcNumberPosition   ?? 'MiddleCenter';
+  document.getElementById('sLockedTextPosition').value = settings.lockedTextPosition ?? 'MiddleCenter';
+  document.getElementById('sTimePosition').value       = settings.timePosition       ?? 'BottomCenter';
+
+  const pcFont     = settings.pcNumberFontSize   ?? 52;
+  const lockedFont = settings.lockedTextFontSize ?? 16;
+  const timeFont   = settings.timeFontSize       ?? 36;
+  document.getElementById('sPcNumberFontSize').value  = pcFont;
+  document.getElementById('sLockedTextFontSize').value = lockedFont;
+  document.getElementById('sTimeFontSize').value       = timeFont;
+  document.getElementById('sPcFontSizeVal').textContent    = pcFont;
+  document.getElementById('sLockedFontSizeVal').textContent = lockedFont;
+  document.getElementById('sTimeFontSizeVal').textContent   = timeFont;
+
+  // Имя файла фона
+  document.getElementById('sBgFileName').value = settings.backgroundFileName ?? '';
+
+  // Привязываем live-обновление подписей слайдеров (один раз)
+  bindSliderLabel('sBgOpacity',        'sBgOpacityVal',       v => Math.round(v));
+  bindSliderLabel('sPcNumberFontSize', 'sPcFontSizeVal',      v => Math.round(v));
+  bindSliderLabel('sLockedTextFontSize','sLockedFontSizeVal', v => Math.round(v));
+  bindSliderLabel('sTimeFontSize',     'sTimeFontSizeVal',    v => Math.round(v));
+
   renderServicesList();
 }
 
+function bindSliderLabel(sliderId, labelId, fmt) {
+  const slider = document.getElementById(sliderId);
+  const label  = document.getElementById(labelId);
+  if (!slider || !label) return;
+  // Удалить старый обработчик чтобы не дублировать
+  slider.oninput = () => { label.textContent = fmt(parseFloat(slider.value)); };
+}
+
 function readSettingsForm() {
+  // Прозрачность: слайдер 0..100 → сервер хранит 0..1
+  const opacityPct = parseFloat(document.getElementById('sBgOpacity').value) || 30;
   return {
     tariff: parseInt(document.getElementById('sTariff').value) || 3000,
     adminPassword: document.getElementById('sAdminPassword').value,
@@ -531,16 +642,18 @@ function readSettingsForm() {
     showPcName: document.getElementById('sShowPcName').checked,
     showPcNumber: document.getElementById('sShowPcNumber').checked,
     showLockedText: document.getElementById('sShowLockedText').checked,
-    backgroundOpacity: parseFloat(document.getElementById('sBgOpacity').value),
+    backgroundOpacity: opacityPct / 100,
+    // Экран блокировки — позиции и размеры шрифтов
+    pcNumberPosition:   document.getElementById('sPcNumberPosition').value,
+    pcNumberFontSize:   parseInt(document.getElementById('sPcNumberFontSize').value) || 52,
+    lockedTextPosition: document.getElementById('sLockedTextPosition').value,
+    lockedTextFontSize: parseInt(document.getElementById('sLockedTextFontSize').value) || 16,
+    timePosition:       document.getElementById('sTimePosition').value,
+    timeFontSize:       parseInt(document.getElementById('sTimeFontSize').value) || 36,
+    // Фон — имя файла берём из поля (uploadBgFile() обновляет его отдельно)
+    backgroundFileName: document.getElementById('sBgFileName').value,
     services: readServicesForm(),
-    // keep untouched fields from original
-    pcNumberPosition: settings.pcNumberPosition,
-    pcNumberFontSize: settings.pcNumberFontSize,
-    lockedTextPosition: settings.lockedTextPosition,
-    lockedTextFontSize: settings.lockedTextFontSize,
-    timePosition: settings.timePosition,
-    timeFontSize: settings.timeFontSize,
-    backgroundFileName: settings.backgroundFileName,
+    // Сохраняем поля которые не редактируются на этой странице
     clientSortMode: settings.clientSortMode,
     operators: settings.operators,
   };
@@ -557,6 +670,30 @@ async function saveSettings() {
   const badge = document.getElementById('settingsSaved');
   badge.style.display = 'inline';
   setTimeout(() => badge.style.display = 'none', 2000);
+}
+
+// Загрузка файла фона через SignalR (аналог SendBgAll_Click в WPF)
+async function uploadBgFile() {
+  const input = document.getElementById('sBgFileInput');
+  if (!input.files || !input.files.length) {
+    toast('Выберите файл изображения', 'warn');
+    return;
+  }
+  const file = input.files[0];
+  const fileName = file.name;
+  const buf = await file.arrayBuffer();
+  const bytes = Array.from(new Uint8Array(buf));
+  try {
+    await conn.invoke('UploadFile', fileName, bytes, '*', true);
+    document.getElementById('sBgFileName').value = fileName;
+    settings.backgroundFileName = fileName;
+    const status = document.getElementById('bgUploadStatus');
+    status.style.display = 'inline';
+    setTimeout(() => status.style.display = 'none', 3000);
+    toast('Фон отправлен всем ПК', 'success');
+  } catch (e) {
+    toast('Ошибка загрузки фона: ' + e.message, 'warn');
+  }
 }
 
 // ─── Services (in settings) ───────────────────────────────────────────────────

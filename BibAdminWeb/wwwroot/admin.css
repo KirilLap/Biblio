@@ -406,6 +406,61 @@ body {
 .dlg .form-row input:focus, .dlg .form-row select:focus { border-color: #1d9e75; }
 .dlg-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 
+/* ── Session type card buttons (like WPF SessionDialog) ─ */
+.ss-type-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.ss-type-btn {
+  background: #1e1e38;
+  border: 2px solid #333355;
+  border-radius: 8px;
+  padding: 12px 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s, background .15s;
+}
+.ss-type-btn:hover { border-color: #555577; }
+#ssBtnLimited.active {
+  background: rgba(29,158,117,.12);
+  border-color: #1d9e75;
+}
+#ssBtnLimited.active .ss-type-label { color: #1d9e75; }
+#ssBtnVip.active {
+  background: rgba(245,158,11,.10);
+  border-color: #f59e0b;
+}
+#ssBtnVip.active .ss-type-label { color: #f59e0b; }
+.ss-type-icon { font-size: 20px; margin-bottom: 4px; }
+.ss-type-label { font-size: 12px; font-weight: 600; color: #666; }
+
+/* ── Lock screen section dividers in settings ──────────── */
+.lock-section-sep {
+  height: 1px;
+  background: #222240;
+  margin: 16px 0;
+}
+.lock-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+/* ── PC card individual settings badge ─────────────────── */
+.pc-ind-badge {
+  color: #f59e0b;
+  font-size: 10px;
+  margin-left: 4px;
+  vertical-align: super;
+  cursor: default;
+}
+
+/* ── Offline timer on PC card ───────────────────────────── */
+.pc-timer.offline-timer { color: #f87171; }
+
 /* ── Toasts ──────────────────────────────────────────── */
 #toastArea {
   position: fixed;

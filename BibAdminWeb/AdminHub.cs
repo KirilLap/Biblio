@@ -1104,44 +1104,6 @@ namespace BibAdminWeb
             }
         }
 
-        private static void CleanupUnusedBackgroundFiles()
-        {
-            try
-            {
-                var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
-                if (!Directory.Exists(filesDir)) return;
-
-                // РЎРѕР±РёСЂР°РµРј РІСЃРµ С„Р°Р№Р»С‹, РЅР° РєРѕС‚РѕСЂС‹Рµ РєС‚Рѕ-С‚Рѕ СЃСЃС‹Р»Р°РµС‚СЃСЏ
-                var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                var global = GlobalSettings.Load();
-                if (!string.IsNullOrEmpty(global.BackgroundFileName))
-                    referenced.Add(global.BackgroundFileName);
-
-                foreach (var client in KnownClients.Values)
-                {
-                    if (client.IsIndividual("SET_BACKGROUND") && !string.IsNullOrEmpty(client.BackgroundFileName))
-                        referenced.Add(client.BackgroundFileName);
-                }
-
-                // РЈРґР°Р»СЏРµРј РІСЃРµ С„Р°Р№Р»С‹, РєРѕС‚РѕСЂС‹Рµ Р±РѕР»СЊС€Рµ РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ
-                foreach (var file in Directory.GetFiles(filesDir))
-                {
-                    var name = Path.GetFileName(file);
-                    if (!referenced.Contains(name))
-                    {
-                        try
-                        {
-                            File.Delete(file);
-                            Logger.Info($"РЈРґР°Р»С‘РЅ РЅРµРёСЃРїРѕР»СЊР·СѓРµРјС‹Р№ С„РѕРЅ: {name}");
-                        }
-                        catch (Exception ex) { Logger.Warn($"РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ {name}: {ex.Message}"); }
-                    }
-                }
-            }
-            catch (Exception ex) { Logger.Error($"РћС€РёР±РєР° РѕС‡РёСЃС‚РєРё Files: {ex.Message}"); }
-        }
-
         public async Task<string> TransferSession(string fromPcNumber, string toPcNumber)
         {
             if (!KnownClients.TryGetValue(fromPcNumber, out var source))
@@ -1240,10 +1202,38 @@ namespace BibAdminWeb
             }
         }
 
-        private static void SaveRegistryStatic()
+        public static void SaveRegistryStatic()
         {
             try { File.WriteAllText(_registryPath, JsonSerializer.Serialize(KnownClients.Values, new JsonSerializerOptions { WriteIndented = true })); }
             catch { }
+        }
+
+        public static void CleanupUnusedBackgroundFiles()
+        {
+            try
+            {
+                var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+                if (!Directory.Exists(filesDir)) return;
+                var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var global = GlobalSettings.Load();
+                if (!string.IsNullOrEmpty(global.BackgroundFileName))
+                    referenced.Add(global.BackgroundFileName);
+                foreach (var client in KnownClients.Values)
+                {
+                    if (client.IsIndividual("SET_BACKGROUND") && !string.IsNullOrEmpty(client.BackgroundFileName))
+                        referenced.Add(client.BackgroundFileName);
+                }
+                foreach (var file in Directory.GetFiles(filesDir))
+                {
+                    var name = Path.GetFileName(file);
+                    if (!referenced.Contains(name))
+                    {
+                        try { File.Delete(file); Logger.Info($"Удалён неиспользуемый фон: {name}"); }
+                        catch (Exception ex) { Logger.Warn($"Не удалось удалить {name}: {ex.Message}"); }
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Error($"Ошибка очистки Files: {ex.Message}"); }
         }
     }
 

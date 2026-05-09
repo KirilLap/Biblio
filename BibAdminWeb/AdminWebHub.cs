@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -261,6 +262,76 @@ namespace BibAdminWeb
         {
             if (!IsAuthorized()) return Task.FromResult(false);
             return Task.FromResult(AdminHub.DeleteClientStatic(pcNumber));
+        }
+
+        /// <summary>
+        /// Загружает фоновое изображение и рассылает его клиентам.
+        /// targetPc == "*" — глобальный фон для всех ПК, иначе — индивидуальный.
+        /// replaceIndividual — заменять ли индивидуальные фоны при глобальной загрузке.
+        /// </summary>
+        public async Task UploadFile(string fileName, byte[] fileData, string targetPc, bool replaceIndividual = true)
+        {
+            if (!IsAuthorized()) return;
+            try
+            {
+                var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+                Directory.CreateDirectory(filesDir);
+                var filePath = Path.Combine(filesDir, fileName);
+                await File.WriteAllBytesAsync(filePath, fileData);
+                Logger.Info($"Фон сохранён: {fileName}");
+
+                var command = new { Type = "SET_BACKGROUND", Value = fileName };
+                var json = JsonSerializer.Serialize(command);
+
+                if (targetPc == "*")
+                {
+                    // Глобальный фон — обновляем GlobalSettings
+                    var global = GlobalSettings.Load();
+                    global.BackgroundFileName = fileName;
+                    global.Save();
+
+                    foreach (var client in AdminHub.KnownClients.Values)
+                    {
+                        bool isIndividual = client.IsIndividual("SET_BACKGROUND");
+                        if (isIndividual && !replaceIndividual) continue;
+                        if (isIndividual && replaceIndividual)
+                        {
+                            client.IndividualSettingKeys.Remove("SET_BACKGROUND");
+                            if (client.IndividualSettingKeys.Count == 0)
+                                client.HasIndividualSettings = false;
+                            client.BackgroundFileName = "";
+                        }
+                        if (client.IsOnline)
+                            await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                        else
+                            AdminHub.AddPendingCommand(client.PcNumber, "SET_BACKGROUND", fileName);
+                    }
+                    AdminHub.SaveRegistryStatic();
+                }
+                else
+                {
+                    // Индивидуальный фон
+                    if (AdminHub.KnownClients.TryGetValue(targetPc, out var client))
+                    {
+                        client.BackgroundFileName = fileName;
+                        client.MarkIndividual("SET_BACKGROUND");
+                        AdminHub.KnownClients[targetPc] = client;
+                        AdminHub.SaveRegistryStatic();
+                        if (client.IsOnline)
+                            await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                        else
+                            AdminHub.AddPendingCommand(targetPc, "SET_BACKGROUND", fileName);
+                    }
+                }
+
+                AdminHub.CleanupUnusedBackgroundFiles();
+                Logger.Info($"Фон применён: {fileName} → {targetPc}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка UploadFile: {ex.Message}");
+                throw;
+            }
         }
 
         public async Task CreateService(string serviceTypeId, int quantity, string readerId, string readerName, bool payNow)
