@@ -8,10 +8,12 @@ namespace BibAdminWeb
     {
         public static AdminBroadcaster? Instance { get; private set; }
         private readonly IHubContext<AdminWebHub> _ctx;
+        private readonly IHubContext<AdminHub> _adminCtx;
 
-        public AdminBroadcaster(IHubContext<AdminWebHub> ctx)
+        public AdminBroadcaster(IHubContext<AdminWebHub> ctx, IHubContext<AdminHub> adminCtx)
         {
             _ctx = ctx;
+            _adminCtx = adminCtx;
             Instance = this;
             AdminHub.ClientUpdated += cs => _ = _ctx.Clients.All.SendAsync("pcUpdated", AdminWebHub.ClientDto(cs));
             AdminHub.ClientsChanged += () =>
@@ -36,11 +38,22 @@ namespace BibAdminWeb
 
         public void PushSettings(GlobalSettings settings)
         {
+            // Уведомить браузер-клиентов (admin UI)
             _ = _ctx.Clients.All.SendAsync("settingsUpdated", settings);
-            var services = settings.Services
-                .Where(s => s.IsActive)
-                .Select(s => new { id = s.Id, name = s.Name, unit = s.Unit, price = s.Price })
-                .ToList();
+
+            // Отправить новые настройки всем подключённым ПК-клиентам
+            var commands = settings.ToCommands();
+            foreach (var client in AdminHub.KnownClients.Values.Where(c => c.IsOnline))
+            {
+                foreach (var cmd in commands)
+                {
+                    if (client.IsIndividual(cmd.Type)) continue;
+                    var json = JsonSerializer.Serialize(new { cmd.Type, cmd.Value });
+                    _ = _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                }
+            }
+
+            // Обновить список услуг у операторов
             OperatorBroadcaster.Instance?.PushServiceTypes();
         }
     }

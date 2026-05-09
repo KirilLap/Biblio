@@ -30,7 +30,7 @@ namespace BibAdminWeb
             Debug.WriteLine(entry);
             lock (_lock)
             {
-                try { File.AppendAllText(_logFile, entry + Environment.NewLine); }
+                try { File.AppendAllText(_logFile, entry + Environment.NewLine, System.Text.Encoding.UTF8); }
                 catch { }
             }
         }

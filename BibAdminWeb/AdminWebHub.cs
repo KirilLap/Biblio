@@ -269,11 +269,15 @@ namespace BibAdminWeb
         /// targetPc == "*" — глобальный фон для всех ПК, иначе — индивидуальный.
         /// replaceIndividual — заменять ли индивидуальные фоны при глобальной загрузке.
         /// </summary>
-        public async Task UploadFile(string fileName, byte[] fileData, string targetPc, bool replaceIndividual = true)
+        /// <summary>
+        /// fileDataBase64 — base64-кодированное содержимое файла (браузер передаёт через btoa).
+        /// </summary>
+        public async Task UploadFile(string fileName, string fileDataBase64, string targetPc, bool replaceIndividual = true)
         {
             if (!IsAuthorized()) return;
             try
             {
+                var fileData = Convert.FromBase64String(fileDataBase64);
                 var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
                 Directory.CreateDirectory(filesDir);
                 var filePath = Path.Combine(filesDir, fileName);

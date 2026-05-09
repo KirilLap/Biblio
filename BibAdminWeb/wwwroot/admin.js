@@ -682,9 +682,10 @@ async function uploadBgFile() {
   const file = input.files[0];
   const fileName = file.name;
   const buf = await file.arrayBuffer();
-  const bytes = Array.from(new Uint8Array(buf));
+  // SignalR/System.Text.Json deserialization requires byte[] as base64 string
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
   try {
-    await conn.invoke('UploadFile', fileName, bytes, '*', true);
+    await conn.invoke('UploadFile', fileName, b64, '*', true);
     document.getElementById('sBgFileName').value = fileName;
     settings.backgroundFileName = fileName;
     const status = document.getElementById('bgUploadStatus');

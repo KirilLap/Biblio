@@ -22,7 +22,7 @@ namespace BibAdminWeb
         public static event Action? ClientsChanged;
         public static event Action<ClientState>? ClientOfflineWithSession;
 
-        // Р’С‹Р·РѕРІ СЃРѕР±С‹С‚РёР№ РёР· РІРЅРµС€РЅРёС… РєР»Р°СЃСЃРѕРІ (OperatorHub Рё С‚.Рї.)
+        // Вызов событий из внешних классов (OperatorHub и т.п.)
         public static void RaiseClientUpdated(ClientState cs) => ClientUpdated?.Invoke(cs);
         public static event Action<string, int, int>? ClientTimeMismatch;
         private const int OfflineMismatchThreshold = 60;
@@ -31,16 +31,16 @@ namespace BibAdminWeb
         // registeredAs, requestedAs, mac, requestedPcNumberValue, requestedCustomName
         public static event Action<string, string, string, int, string>? ClientNameConflict;
 
-        // вњ… Р”Р›РЇ Р—РђР©РРўР« РћРў Р”РЈР‘Р›Р•Р™ РЈР’Р•Р”РћРњР›Р•РќРР™
+        // ✅ ДЛЯ ЗАЩИТЫ ОТ ДУБЛЕЙ УВЕДОМЛЕНИЙ
         private static readonly ConcurrentDictionary<string, DateTime> _lastOfflineAlert = new();
 
-        // MACs РґР»СЏ РєРѕС‚РѕСЂС‹С… РєРѕРЅС„Р»РёРєС‚ СѓР¶Рµ РїРѕРєР°Р·Р°РЅ РІ СЌС‚РѕР№ СЃРµСЃСЃРёРё (РЅРµ РїРѕРєР°Р·С‹РІР°С‚СЊ РїРѕРІС‚РѕСЂРЅРѕ)
+        // MACs для которых конфликт уже показан в этой сессии (не показывать повторно)
         private static readonly HashSet<string> _shownConflicts = new();
 
-        // РћР¶РёРґР°РЅРёРµ СЂРµС€РµРЅРёСЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР° РїРѕ РєРѕРЅС„Р»РёРєС‚Сѓ РёРјС‘РЅ
+        // Ожидание решения администратора по конфликту имён
         private static readonly ConcurrentDictionary<string, TaskCompletionSource<(int PcNumberValue, string CustomName)?>> _conflictDecisions = new();
 
-        // Р›РѕРі СѓРґР°Р»С‘РЅРЅС‹С… РџРљ
+        // Лог удалённых ПК
         private static readonly string _deletedPcsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "deleted_pcs.json");
         public static List<DeletedPcRecord> DeletedPcs { get; } = new();
 
@@ -53,7 +53,7 @@ namespace BibAdminWeb
                 var list = JsonSerializer.Deserialize<List<DeletedPcRecord>>(json);
                 if (list != null) { DeletedPcs.Clear(); DeletedPcs.AddRange(list); }
             }
-            catch (Exception ex) { Logger.Error($"РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё deleted_pcs.json: {ex.Message}"); }
+            catch (Exception ex) { Logger.Error($"Ошибка загрузки deleted_pcs.json: {ex.Message}"); }
         }
 
         private static void SaveDeletedPcs()
@@ -62,7 +62,7 @@ namespace BibAdminWeb
             catch { }
         }
 
-        // Р’С‹Р·С‹РІР°РµС‚СЃСЏ РёР· UI: "Р”Р°" в†’ РїРµСЂРµРґР°С‘Рј РЅРѕРІС‹Рµ РґР°РЅРЅС‹Рµ, "РќРµС‚" в†’ null
+        // Вызывается из UI: "Да" → передаём новые данные, "Нет" → null
         public static void ResolveConflict(string mac, int? newPcNumberValue, string? newCustomName)
         {
             if (_conflictDecisions.TryRemove(mac, out var tcs))
@@ -96,7 +96,7 @@ namespace BibAdminWeb
             SaveActiveSessions();
 
             ClientsChanged?.Invoke();
-            Logger.Info($"РџРљ СѓРґР°Р»С‘РЅ РёР· СЂРµРµСЃС‚СЂР°: {pcNumber}");
+            Logger.Info($"ПК удалён из реестра: {pcNumber}");
             return true;
         }
 
@@ -113,14 +113,14 @@ namespace BibAdminWeb
                         foreach (var c in list)
                         {
                             c.IsOnline = false;
-                            c.Status = c.IsPaused ? "РџР°СѓР·Р°" : "РћС„С„Р»Р°Р№РЅ";
+                            c.Status = c.IsPaused ? "Пауза" : "Оффлайн";
                             c.LastSeen = DateTime.MinValue;
                             KnownClients[c.PcNumber] = c;
                         }
-                        Logger.Info($"вњ… Р—Р°РіСЂСѓР¶РµРЅРѕ {list.Count} РєР»РёРµРЅС‚РѕРІ");
+                        Logger.Info($"✅ Загружено {list.Count} клиентов");
                     }
                 }
-                catch (Exception ex) { Logger.Error($"РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё clients.json: {ex.Message}"); }
+                catch (Exception ex) { Logger.Error($"Ошибка загрузки clients.json: {ex.Message}"); }
             }
 
             if (File.Exists(_pendingPath))
@@ -132,7 +132,7 @@ namespace BibAdminWeb
                     if (dict != null)
                         foreach (var kv in dict)
                             _pendingCommands[kv.Key] = kv.Value;
-                    Logger.Info($"Р—Р°РіСЂСѓР¶РµРЅРѕ pending РєРѕРјР°РЅРґ: {_pendingCommands.Sum(x => x.Value.Count)}");
+                    Logger.Info($"Загружено pending команд: {_pendingCommands.Sum(x => x.Value.Count)}");
                 }
                 catch { }
             }
@@ -190,15 +190,15 @@ namespace BibAdminWeb
                 else
                     File.Move(tempPath, SessionsFilePath);
             }
-            catch (Exception ex) { Logger.Error($"вќЊ SaveActiveSessions: {ex.Message}"); }
+            catch (Exception ex) { Logger.Error($"❌ SaveActiveSessions: {ex.Message}"); }
         }
 
         /// <summary>
-        /// РќРѕСЂРјР°Р»РёР·СѓРµС‚ С‚РёРї СЃРµСЃСЃРёРё: "РџРѕ РІСЂРµРјРµРЅРё" Рё "РџРѕ РґРµРЅСЊРіР°Рј" в†’ "Р›РёРјРёС‚".
-        /// РћР±РµСЃРїРµС‡РёРІР°РµС‚ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚СЊ СЃРѕ СЃС‚Р°СЂС‹РјРё СЃРѕС…СЂР°РЅС‘РЅРЅС‹РјРё РґР°РЅРЅС‹РјРё.
+        /// Нормализует тип сессии: "По времени" и "По деньгам" → "Лимит".
+        /// Обеспечивает совместимость со старыми сохранёнными данными.
         /// </summary>
         private static string NormalizeSessionType(string sessionType) =>
-            sessionType is "РџРѕ РІСЂРµРјРµРЅРё" or "РџРѕ РґРµРЅСЊРіР°Рј" ? "Р›РёРјРёС‚" : sessionType;
+            sessionType is "По времени" or "По деньгам" ? "Лимит" : sessionType;
 
         public static void LoadActiveSessions()
         {
@@ -218,13 +218,13 @@ namespace BibAdminWeb
 
                     if (!KnownClients.TryGetValue(pcNumber, out var client))
                     {
-                        Logger.Warn($"вљ пёЏ РљР»РёРµРЅС‚ {pcNumber} РёР· active_sessions РЅРµ РЅР°Р№РґРµРЅ");
+                        Logger.Warn($"⚠️ Клиент {pcNumber} из active_sessions не найден");
                         continue;
                     }
 
-                    // РќРѕСЂРјР°Р»РёР·СѓРµРј: СЃС‚Р°СЂС‹Рµ "РџРѕ РІСЂРµРјРµРЅРё"/"РџРѕ РґРµРЅСЊРіР°Рј" в†’ "Р›РёРјРёС‚"
+                    // Нормализуем: старые "По времени"/"По деньгам" → "Лимит"
                     var sessionType = NormalizeSessionType(s.GetProperty("SessionType").GetString() ?? "");
-                    if (string.IsNullOrEmpty(sessionType) || sessionType == "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ" || sessionType == "РЎРІРѕР±РѕРґРЅС‹Р№")
+                    if (string.IsNullOrEmpty(sessionType) || sessionType == "Заблокирован" || sessionType == "Свободный")
                         continue;
 
                     DateTime? sessionStart = null;
@@ -285,31 +285,31 @@ namespace BibAdminWeb
                     client.LimitSeconds = limitSeconds;
 
                     if (isPaused)
-                        client.Status = "РџР°СѓР·Р°";
+                        client.Status = "Пауза";
                     else
                         client.Status = sessionType;
 
                     client.SessionId = sessionIdVal;
                     client.DisconnectedAt = disconnectedAt;
-                    client.ElapsedAtDisconnect = elapsedAtDisconnect; // вњ… РЎРћРҐР РђРќРЇР•Рњ!
+                    client.ElapsedAtDisconnect = elapsedAtDisconnect; // ✅ СОХРАНЯЕМ!
                     client.OfflineDecision = offlineDecision;
 
                     KnownClients[pcNumber] = client;
                     restoredCount++;
-                    Logger.Info($"рџ”„ Р’РѕСЃСЃС‚Р°РЅРѕРІР»РµРЅР° СЃРµСЃСЃРёСЏ: {pcNumber} | {sessionType} | {elapsedSeconds}СЃ");
+                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | {elapsedSeconds}с");
                 }
-                Logger.Info($"вњ… Р—Р°РіСЂСѓР¶РµРЅРѕ {restoredCount} СЃРµСЃСЃРёР№ РёР· С„Р°Р№Р»Р°");
+                Logger.Info($"✅ Загружено {restoredCount} сессий из файла");
             }
             catch (Exception ex)
             {
-                Logger.Error($"вќЊ LoadActiveSessions: {ex.Message}");
+                Logger.Error($"❌ LoadActiveSessions: {ex.Message}");
                 Logger.Error($"Stack: {ex.StackTrace}");
             }
         }
 
         public override Task OnConnectedAsync()
         {
-            Logger.Info($"РљР»РёРµРЅС‚ РїРѕРґРєР»СЋС‡РёР»СЃСЏ: {Context.ConnectionId}");
+            Logger.Info($"Клиент подключился: {Context.ConnectionId}");
             return base.OnConnectedAsync();
         }
 
@@ -319,7 +319,7 @@ namespace BibAdminWeb
             if (client != null)
             {
                 client.IsOnline = false;
-                client.Status = "РћС„С„Р»Р°Р№РЅ";
+                client.Status = "Оффлайн";
                 client.LastSeen = DateTime.UtcNow;
 
                 if (client.IsSession)
@@ -327,7 +327,7 @@ namespace BibAdminWeb
                     int elapsedNow = client.IsPaused
                         ? client.AccumulatedSeconds
                         : Math.Max(0, client.AccumulatedSeconds + (int)(DateTime.UtcNow - client.SessionStart!.Value).TotalSeconds);
-                    client.ElapsedAtDisconnect = elapsedNow; // вњ… РЎРћРҐР РђРќРЇР•Рњ РџР•Р Р•Р” РћРўРЎРћР•Р”РРќР•РќРР•Рњ
+                    client.ElapsedAtDisconnect = elapsedNow; // ✅ СОХРАНЯЕМ ПЕРЕД ОТСОЕДИНЕНИЕМ
                     client.DisconnectedAt = DateTime.UtcNow;
                     client.OfflineDecision = OfflineDecision.None;
                 }
@@ -342,16 +342,16 @@ namespace BibAdminWeb
                 SaveActiveSessions();
                 ClientUpdated?.Invoke(client);
                 ClientsChanged?.Invoke();
-                Logger.Info($"РљР»РёРµРЅС‚ РѕС‚РєР»СЋС‡РёР»СЃСЏ: {client.PcNumber}{(client.DisconnectedAt.HasValue ? $" (Р°РєС‚РёРІРЅР°СЏ СЃРµСЃСЃРёСЏ, elapsed={client.ElapsedAtDisconnect}СЃ)" : "")}");
+                Logger.Info($"Клиент отключился: {client.PcNumber}{(client.DisconnectedAt.HasValue ? $" (активная сессия, elapsed={client.ElapsedAtDisconnect}с)" : "")}");
 
-                // вњ… Р—РђР©РРўРђ РћРў Р”РЈР‘Р›Р•Р™: РЅРµ С‡Р°С‰Рµ 1 СЂР°Р·Р° РІ 5 РјРёРЅСѓС‚
+                // ✅ ЗАЩИТА ОТ ДУБЛЕЙ: не чаще 1 раза в 5 минут
                 if (client.DisconnectedAt.HasValue)
                 {
-                    // Р”РµРґСѓРї 60 СЃРµРє вЂ” Р·Р°С‰РёС‚Р° РѕС‚ rapid-disconnect, СЃР±СЂР°СЃС‹РІР°РµС‚СЃСЏ РїСЂРё СЂРµРєРѕРЅРЅРµРєС‚Рµ
+                    // Дедуп 60 сек — защита от rapid-disconnect, сбрасывается при реконнекте
                     if (_lastOfflineAlert.TryGetValue(client.PcNumber, out var lastAlert) &&
                         DateTime.UtcNow - lastAlert < TimeSpan.FromSeconds(60))
                     {
-                        Logger.Info($"вЏ­пёЏ РџСЂРѕРїСѓСЃРє РґСѓР±Р»СЏ СѓРІРµРґРѕРјР»РµРЅРёСЏ РґР»СЏ {client.PcNumber} (< 60СЃ)");
+                        Logger.Info($"⏭️ Пропуск дубля уведомления для {client.PcNumber} (< 60с)");
                     }
                     else
                     {
@@ -374,49 +374,49 @@ namespace BibAdminWeb
                 client.IsPaused = true;
                 client.AccumulatedSeconds = client.ElapsedAtDisconnect;
                 client.ElapsedSeconds = client.ElapsedAtDisconnect;
-                client.Status = "РџР°СѓР·Р°";
+                client.Status = "Пауза";
             }
             else if (decision == OfflineDecision.Continue)
             {
-                // РЇРІРЅС‹Р№ Continue вЂ” СЃР±СЂР°СЃС‹РІР°РµРј РїР°СѓР·Сѓ, РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃС‚Р°С‚СѓСЃ РёР· С‚РёРїР° СЃРµСЃСЃРёРё
+                // Явный Continue — сбрасываем паузу, восстанавливаем статус из типа сессии
                 client.IsPaused = false;
                 if (!string.IsNullOrEmpty(client.SessionType) &&
-                    client.SessionType != "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ" &&
-                    client.SessionType != "РЎРІРѕР±РѕРґРЅС‹Р№")
+                    client.SessionType != "Заблокирован" &&
+                    client.SessionType != "Свободный")
                     client.Status = client.SessionType;
             }
 
             KnownClients[pcNumber] = client;
             SaveActiveSessions();
             ClientUpdated?.Invoke(client);
-            Logger.Info($"Р РµС€РµРЅРёРµ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР° РґР»СЏ {pcNumber}: {decision}, elapsed={client.ElapsedAtDisconnect}СЃ");
+            Logger.Info($"Решение администратора для {pcNumber}: {decision}, elapsed={client.ElapsedAtDisconnect}с");
             return client;
         }
 
         public async Task<string> RegisterClient(SystemInfoDto info, string macAddress, bool isRestoring = false, string sessionId = "", int offlineSeconds = 0)
         {
-            Logger.Info($"Р РµРіРёСЃС‚СЂР°С†РёСЏ: РџРљ {info.PcNumberValue}, MAC: {macAddress}");
+            Logger.Info($"Регистрация: ПК {info.PcNumberValue}, MAC: {macAddress}");
 
             var existingByMac = KnownClients.Values.FirstOrDefault(c => c.MacAddress == macAddress);
             
-            // РћРїСЂРµРґРµР»СЏРµРј С„РёРЅР°Р»СЊРЅРѕРµ РёРјСЏ: РµСЃР»Рё РєР»РёРµРЅС‚ СѓР¶Рµ РёР·РІРµСЃС‚РµРЅ РїРѕ MAC - Р±РµСЂРµРј РµРіРѕ PcNumberValue Рё CustomName
+            // Определяем финальное имя: если клиент уже известен по MAC - берем его PcNumberValue и CustomName
             int finalPcNumberValue = info.PcNumberValue;
             string finalCustomName = info.CustomName;
             
             if (existingByMac != null)
             {
-                // РљР»РёРµРЅС‚ СѓР¶Рµ РёР·РІРµСЃС‚РµРЅ - СЃРѕС…СЂР°РЅСЏРµРј РµРіРѕ РЅР°СЃС‚СЂРѕР№РєРё РёРјРµРЅРё
+                // Клиент уже известен - сохраняем его настройки имени
                 finalPcNumberValue = existingByMac.PcNumberValue;
                 finalCustomName = existingByMac.CustomName;
 
-                // Р•СЃР»Рё РєР»РёРµРЅС‚ РїРѕРґРєР»СЋС‡РёР»СЃСЏ РїРѕРґ РґСЂСѓРіРёРј РёРјРµРЅРµРј вЂ” Р¶РґС‘Рј СЂРµС€РµРЅРёСЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
+                // Если клиент подключился под другим именем — ждём решения администратора
                 string requestedName = string.IsNullOrEmpty(info.CustomName)
-                    ? $"РџРљ {info.PcNumberValue}"
+                    ? $"ПК {info.PcNumberValue}"
                     : $"{info.CustomName} {info.PcNumberValue}";
                 if (requestedName != existingByMac.PcNumber && !_shownConflicts.Contains(macAddress))
                 {
                     _shownConflicts.Add(macAddress);
-                    Logger.Warn($"вљ пёЏ РљРѕРЅС„Р»РёРєС‚ РёРјС‘РЅ: MAC {macAddress} Р±С‹Р» '{existingByMac.PcNumber}', РїРѕРґРєР»СЋС‡Р°РµС‚СЃСЏ РєР°Рє '{requestedName}'");
+                    Logger.Warn($"⚠️ Конфликт имён: MAC {macAddress} был '{existingByMac.PcNumber}', подключается как '{requestedName}'");
 
                     var tcs = new TaskCompletionSource<(int PcNumberValue, string CustomName)?>();
                     _conflictDecisions[macAddress] = tcs;
@@ -424,58 +424,58 @@ namespace BibAdminWeb
 
                     try
                     {
-                        // Р–РґС‘Рј РїРѕРєР° Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ РЅР°Р¶РјС‘С‚ Р”Р°/РќРµС‚ (РјР°РєСЃ 60 СЃРµРє)
+                        // Ждём пока администратор нажмёт Да/Нет (макс 60 сек)
                         var decision = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(60));
                         if (decision.HasValue)
                         {
                             finalPcNumberValue = decision.Value.PcNumberValue;
                             finalCustomName = decision.Value.CustomName;
-                            _shownConflicts.Remove(macAddress); // СЃРЅСЏР»Рё РєРѕРЅС„Р»РёРєС‚ вЂ” СЃР±СЂРѕСЃ, РёРјСЏ Р±СѓРґРµС‚ РїСЂР°РІРёР»СЊРЅС‹Рј
-                            Logger.Info($"вњ… РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ РїСЂРёРЅСЏР»: MAC {macAddress} в†’ РџРљ {finalPcNumberValue}");
+                            _shownConflicts.Remove(macAddress); // сняли конфликт — сброс, имя будет правильным
+                            Logger.Info($"✅ Администратор принял: MAC {macAddress} → ПК {finalPcNumberValue}");
                         }
                         else
                         {
-                            Logger.Info($"рџљ« РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ РѕС‚РєР»РѕРЅРёР» РїРµСЂРµРёРјРµРЅРѕРІР°РЅРёРµ MAC {macAddress}");
+                            Logger.Info($"🚫 Администратор отклонил переименование MAC {macAddress}");
                         }
                     }
                     catch (TimeoutException)
                     {
-                        Logger.Warn($"вЏ° РўР°Р№Рј-Р°СѓС‚ РѕР¶РёРґР°РЅРёСЏ СЂРµС€РµРЅРёСЏ РїРѕ РєРѕРЅС„Р»РёРєС‚Сѓ {macAddress}, РёСЃРїРѕР»СЊР·СѓРµРј СЃС‚Р°СЂРѕРµ РёРјСЏ");
+                        Logger.Warn($"⏰ Тайм-аут ожидания решения по конфликту {macAddress}, используем старое имя");
                         _conflictDecisions.TryRemove(macAddress, out _);
                     }
                 }
             }
             
-            string finalName = string.IsNullOrEmpty(finalCustomName) ? $"РџРљ {finalPcNumberValue}" : $"{finalCustomName} {finalPcNumberValue}";
+            string finalName = string.IsNullOrEmpty(finalCustomName) ? $"ПК {finalPcNumberValue}" : $"{finalCustomName} {finalPcNumberValue}";
 
             if (existingByMac == null)
             {
-                // РќРѕРІС‹Р№ РєР»РёРµРЅС‚ - РїСЂРѕРІРµСЂСЏРµРј РЅРµС‚ Р»Рё РєРѕРЅС„Р»РёРєС‚Р° РїРѕ РёРјРµРЅРё
+                // Новый клиент - проверяем нет ли конфликта по имени
                 while (KnownClients.ContainsKey(finalName))
                 {
                     finalPcNumberValue++;
-                    finalName = $"РџРљ {finalPcNumberValue}";
+                    finalName = $"ПК {finalPcNumberValue}";
                 }
             }
 
             if (existingByMac != null && existingByMac.PcNumber != finalName)
             {
                 KnownClients.TryRemove(existingByMac.PcNumber, out _);
-                Logger.Info($"РЈРґР°Р»РµРЅР° СЃС‚Р°СЂР°СЏ Р·Р°РїРёСЃСЊ: {existingByMac.PcNumber}");
+                Logger.Info($"Удалена старая запись: {existingByMac.PcNumber}");
             }
 
             bool isNewClient = existingByMac == null;
 
             bool hadActiveSession = existingByMac != null &&
                 !string.IsNullOrEmpty(existingByMac.SessionType) &&
-                existingByMac.SessionType != "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ" &&
-                existingByMac.SessionType != "РЎРІРѕР±РѕРґРЅС‹Р№" &&
+                existingByMac.SessionType != "Заблокирован" &&
+                existingByMac.SessionType != "Свободный" &&
                 existingByMac.SessionStart.HasValue;
 
-            // РќРѕСЂРјР°Р»РёР·СѓРµРј С‚РёРї СЃРµСЃСЃРёРё РёР· СЃРѕС…СЂР°РЅС‘РЅРЅС‹С… РґР°РЅРЅС‹С… (СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚СЊ СЃРѕ СЃС‚Р°СЂС‹РјРё Р·Р°РїРёСЃСЏРјРё)
+            // Нормализуем тип сессии из сохранённых данных (совместимость со старыми записями)
             var restoredSessionType = NormalizeSessionType(existingByMac?.SessionType ?? "");
-            var restoredStatus = (existingByMac?.IsPaused == true) ? "РџР°СѓР·Р°"
-                : (hadActiveSession ? restoredSessionType : "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ");
+            var restoredStatus = (existingByMac?.IsPaused == true) ? "Пауза"
+                : (hadActiveSession ? restoredSessionType : "Заблокирован");
 
             var state = new ClientState
             {
@@ -502,32 +502,32 @@ namespace BibAdminWeb
                 SessionId = !string.IsNullOrEmpty(sessionId) ? sessionId : existingByMac?.SessionId ?? "",
                 DisconnectedAt = null,
                 OfflineDecision = existingByMac?.OfflineDecision ?? OfflineDecision.None,
-                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // вњ… РљРћРџРР РЈР•Рњ!
+                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // ✅ КОПИРУЕМ!
             };
 
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);
             SaveRegistry();
 
-            // РќР• СЃР±СЂР°СЃС‹РІР°РµРј _lastOfflineAlert РїСЂРё СЂРµРєРѕРЅРЅРµРєС‚Рµ: РµСЃР»Рё СЃРµС‚СЊ РЅРµСЃС‚Р°Р±РёР»СЊРЅР°,
-            // РєР»РёРµРЅС‚ РјРѕР¶РµС‚ СѓСЃРїРµС‚СЊ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ Рё С‚СѓС‚ Р¶Рµ СѓРїР°СЃС‚СЊ СЃРЅРѕРІР° вЂ” С‡С‚Рѕ РґР°С‘С‚
-            // РґСѓР±Р»РёСЂСѓСЋС‰РµРµ СѓРІРµРґРѕРјР»РµРЅРёРµ. 60-СЃРµРєСѓРЅРґРЅРѕРµ РѕРєРЅРѕ РґРµРґСѓРїР° РёСЃС‚РµС‡С‘С‚ СЃР°РјРѕ.
-            // РЈРІРµРґРѕРјР»РµРЅРёРµ РїСЂРё СЃР»РµРґСѓСЋС‰РµРј СЃС‚Р°Р±РёР»СЊРЅРѕРј РѕР±СЂС‹РІРµ Р±СѓРґРµС‚ СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ РєРѕСЂСЂРµРєС‚РЅРѕ.
+            // НЕ сбрасываем _lastOfflineAlert при реконнекте: если сеть нестабильна,
+            // клиент может успеть зарегистрироваться и тут же упасть снова — что даёт
+            // дублирующее уведомление. 60-секундное окно дедупа истечёт само.
+            // Уведомление при следующем стабильном обрыве будет сгенерировано корректно.
 
             ClientUpdated?.Invoke(state);
             ClientsChanged?.Invoke();
 
             if (!string.IsNullOrEmpty(sessionId) && !string.IsNullOrEmpty(existingByMac?.SessionId)
                 && existingByMac.SessionId != sessionId && hadActiveSession)
-                Logger.Warn($"вљ пёЏ SessionId Рјismatch: {finalName} РїСЂРёСЃР»Р°Р» {sessionId[..8]}вЂ¦, СЃРµСЂРІРµСЂ РїРѕРјРЅРёС‚ {existingByMac.SessionId[..8]}вЂ¦");
+                Logger.Warn($"⚠️ SessionId мismatch: {finalName} прислал {sessionId[..8]}…, сервер помнит {existingByMac.SessionId[..8]}…");
 
-            Logger.Info($"РљР»РёРµРЅС‚ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ: {finalName}{(hadActiveSession ? $" (РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅР° СЃРµСЃСЃРёСЏ: {state.SessionType})" : "")}");
+            Logger.Info($"Клиент зарегистрирован: {finalName}{(hadActiveSession ? $" (восстановлена сессия: {state.SessionType})" : "")}");
             if (offlineSeconds > 0)
-                Logger.Info($"рџ•ђ РљР»РёРµРЅС‚ {finalName} СЃРѕРѕР±С‰Р°РµС‚ Рѕ {offlineSeconds}СЃ РѕС„С„Р»Р°Р№РЅР°");
+                Logger.Info($"🕐 Клиент {finalName} сообщает о {offlineSeconds}с оффлайна");
 
-            // Р’СЃРµРіРґР° РѕС‚РїСЂР°РІР»СЏРµРј РіР»РѕР±Р°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё вЂ” Рё РЅРѕРІС‹Рј, Рё РїРµСЂРµРїРѕРґРєР»СЋС‡РёРІС€РёРјСЃСЏ РєР»РёРµРЅС‚Р°Рј.
-            // РњРµС‚РѕРґ РІРЅСѓС‚СЂРё РїСЂРѕРІРµСЂСЏРµС‚ РёРЅРґРёРІРёРґСѓР°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё Рё РїСЂРѕРїСѓСЃРєР°РµС‚ РёС….
+            // Всегда отправляем глобальные настройки — и новым, и переподключившимся клиентам.
+            // Метод внутри проверяет индивидуальные настройки и пропускает их.
             await SendGlobalSettingsToClient(finalName);
-            Logger.Info($"Р“Р»РѕР±Р°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё РѕС‚РїСЂР°РІР»РµРЅС‹ РџРљ: {finalName} (РЅРѕРІС‹Р№: {isNewClient})");
+            Logger.Info($"Глобальные настройки отправлены ПК: {finalName} (новый: {isNewClient})");
 
             await FlushPendingCommands(finalName);
 
@@ -541,8 +541,8 @@ namespace BibAdminWeb
 
                 if (Math.Abs(offsetSeconds) > ClockDriftThreshold)
                 {
-                    string direction = offsetSeconds > 0 ? "РѕС‚СЃС‚Р°С‘С‚ РѕС‚ СЃРµСЂРІРµСЂР°" : "РѕРїРµСЂРµР¶Р°РµС‚ СЃРµСЂРІРµСЂ";
-                    Logger.Warn($"вљ пёЏ CLOCK DRIFT {finalName}: РєР»РёРµРЅС‚ {direction} РЅР° {Math.Abs(offsetSeconds):F0}СЃ");
+                    string direction = offsetSeconds > 0 ? "отстаёт от сервера" : "опережает сервер";
+                    Logger.Warn($"⚠️ CLOCK DRIFT {finalName}: клиент {direction} на {Math.Abs(offsetSeconds):F0}с");
                     ClientTimeDrift?.Invoke(finalName, offsetSeconds);
 
                     var mismatchCmd = new { Type = "CLOCK_MISMATCH", Value = offsetSeconds.ToString("F2") };
@@ -550,7 +550,7 @@ namespace BibAdminWeb
                 }
                 else
                 {
-                    Logger.Info($"вњ… Р§Р°СЃС‹ {finalName}: СЂР°СЃС…РѕР¶РґРµРЅРёРµ {offsetSeconds:F1}СЃ вЂ” РІ РЅРѕСЂРјРµ");
+                    Logger.Info($"✅ Часы {finalName}: расхождение {offsetSeconds:F1}с — в норме");
                 }
             }
 
@@ -562,12 +562,12 @@ namespace BibAdminWeb
                     int mismatch = Math.Abs(offlineSeconds - serverOfflineSecs);
                     if (mismatch > OfflineMismatchThreshold)
                     {
-                        Logger.Warn($"вљ пёЏ TIME MISMATCH {finalName}: РєР»РёРµРЅС‚={offlineSeconds}СЃ, СЃРµСЂРІРµСЂ={serverOfflineSecs}СЃ, СЂР°СЃС…РѕР¶РґРµРЅРёРµ={mismatch}СЃ");
+                        Logger.Warn($"⚠️ TIME MISMATCH {finalName}: клиент={offlineSeconds}с, сервер={serverOfflineSecs}с, расхождение={mismatch}с");
                         ClientTimeMismatch?.Invoke(finalName, offlineSeconds, serverOfflineSecs);
                     }
                     else
                     {
-                        Logger.Info($"вњ… Р’РµСЂРёС„РёРєР°С†РёСЏ РѕС„С„Р»Р°Р№РЅР° {finalName}: РєР»РёРµРЅС‚={offlineSeconds}СЃ в‰€ СЃРµСЂРІРµСЂ={serverOfflineSecs}СЃ вњ“");
+                        Logger.Info($"✅ Верификация оффлайна {finalName}: клиент={offlineSeconds}с ≈ сервер={serverOfflineSecs}с ✓");
                     }
                 }
 
@@ -579,14 +579,14 @@ namespace BibAdminWeb
 
                 if (adminChosePause)
                 {
-                    elapsedToSend = client.ElapsedAtDisconnect; // вњ… РРЎРџРћР›Р¬Р—РЈР•Рњ РЎРћРҐР РђРќРЃРќРќРћР• Р—РќРђР§Р•РќРР•
+                    elapsedToSend = client.ElapsedAtDisconnect; // ✅ ИСПОЛЬЗУЕМ СОХРАНЁННОЕ ЗНАЧЕНИЕ
                     sendPause = true;
 
-                    client.Status = "РџР°СѓР·Р°";
+                    client.Status = "Пауза";
                     client.IsPaused = true;
                     KnownClients[finalName] = client;
                     ClientUpdated?.Invoke(client);
-                    Logger.Info($"вњ… {finalName}: РїСЂРёРјРµРЅСЏРµРј СЂРµС€РµРЅРёРµ РџРђРЈР—Рђ, elapsed={elapsedToSend}СЃ");
+                    Logger.Info($"✅ {finalName}: применяем решение ПАУЗА, elapsed={elapsedToSend}с");
                 }
                 else if (!isRestoring || adminChoseContinue)
                 {
@@ -594,7 +594,7 @@ namespace BibAdminWeb
                         (client.IsPaused ? 0 : (int)(DateTime.UtcNow - client.SessionStart!.Value).TotalSeconds);
                     elapsedToSend = Math.Max(0, serverElapsed);
                     sendPause = client.IsPaused;
-                    Logger.Info($"рџ”„ {finalName}: LAN/Continue, elapsed={elapsedToSend}СЃ");
+                    Logger.Info($"🔄 {finalName}: LAN/Continue, elapsed={elapsedToSend}с");
                 }
                 else
                 {
@@ -603,7 +603,7 @@ namespace BibAdminWeb
                     KnownClients[finalName] = client;
                     elapsedToSend = client.ElapsedSeconds;
                     sendPause = client.IsPaused;
-                    Logger.Info($"рџ›ЎпёЏ {finalName}: smart protection, elapsed={elapsedToSend}СЃ");
+                    Logger.Info($"🛡️ {finalName}: smart protection, elapsed={elapsedToSend}с");
                 }
 
                 var restoreCmd = new
@@ -656,7 +656,7 @@ namespace BibAdminWeb
                             if (client.IndividualSettingKeys.Count == 0)
                                 client.HasIndividualSettings = false;
                             settingsChanged = true;
-                            Logger.Info($"РђРІС‚Рѕ-РѕС‡РёСЃС‚РєР°: {pcNumber} в†’ {cmd.Type}");
+                            Logger.Info($"Авто-очистка: {pcNumber} → {cmd.Type}");
                         }
                         else { continue; }
                     }
@@ -666,7 +666,7 @@ namespace BibAdminWeb
 
                 if (settingsChanged) SaveRegistryStatic();
             }
-            catch (Exception ex) { Logger.Error($"РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё РіР»РѕР±Р°Р»СЊРЅС‹С… РЅР°СЃС‚СЂРѕРµРє: {ex.Message}"); }
+            catch (Exception ex) { Logger.Error($"Ошибка отправки глобальных настроек: {ex.Message}"); }
         }
 
         private bool IsValueMatchingClientState(ClientState client, string commandType, string globalValue)
@@ -692,7 +692,7 @@ namespace BibAdminWeb
             if (!KnownClients.TryGetValue(pcNumber, out var client) || !client.IsOnline)
                 return;
 
-            Logger.Info($"РћС‚РїСЂР°РІРєР° {commands.Count} pending РєРѕРјР°РЅРґ в†’ {pcNumber}");
+            Logger.Info($"Отправка {commands.Count} pending команд → {pcNumber}");
 
             foreach (var cmd in commands)
             {
@@ -704,19 +704,19 @@ namespace BibAdminWeb
                         !string.IsNullOrEmpty(client.SessionType) &&
                         client.SessionStart.HasValue)
                     {
-                        Logger.Info($"вЏ­пёЏ РџСЂРѕРїСѓСЃРє REMOTE_LOCK РґР»СЏ {pcNumber} вЂ” РµСЃС‚СЊ Р°РєС‚РёРІРЅР°СЏ СЃРµСЃСЃРёСЏ ({client.SessionType})");
+                        Logger.Info($"⏭️ Пропуск REMOTE_LOCK для {pcNumber} — есть активная сессия ({client.SessionType})");
                         continue;
                     }
 
                     var json = JsonSerializer.Serialize(new { cmd.Type, cmd.Value });
                     await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
                 }
-                catch (Exception ex) { Logger.Error($"РћС€РёР±РєР° pending РєРѕРјР°РЅРґС‹: {ex.Message}"); }
+                catch (Exception ex) { Logger.Error($"Ошибка pending команды: {ex.Message}"); }
             }
 
             _pendingCommands.TryRemove(pcNumber, out _);
             SavePending();
-            Logger.Info($"Pending РєРѕРјР°РЅРґС‹ РѕС‡РёС‰РµРЅС‹ РґР»СЏ {pcNumber}");
+            Logger.Info($"Pending команды очищены для {pcNumber}");
         }
 
         public static void AddPendingCommand(string pcNumber, string type, string value)
@@ -756,7 +756,7 @@ namespace BibAdminWeb
             client.IsOnline = true;
 
             if (string.IsNullOrEmpty(client.SessionType) && !client.SessionStart.HasValue &&
-                status != "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ" && status != "РЎРІРѕР±РѕРґРЅС‹Р№")
+                status != "Заблокирован" && status != "Свободный")
             {
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
@@ -765,10 +765,10 @@ namespace BibAdminWeb
 
             if (client.SessionStart.HasValue && elapsedSeconds == 0)
             {
-                // РџСЂРёРјРµРЅСЏРµРј IsPaused РєР°Рє РїСЂРёРѕСЂРёС‚РµС‚ вЂ” РєР»РёРµРЅС‚ РµС‰С‘ РЅРµ РїСЂРёСЃР»Р°Р» elapsed,
-                // РЅРѕ РїР°СѓР·Р° СѓР¶Рµ СЃС‚РѕРёС‚ РЅР° СЃРµСЂРІРµСЂРµ (РЅР°РїСЂРёРјРµСЂ, СЂРµС€РµРЅРёРµ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°).
-                if (status != "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ" && status != "РЎРІРѕР±РѕРґРЅС‹Р№")
-                    client.Status = client.IsPaused ? "РџР°СѓР·Р°" : status;
+                // Применяем IsPaused как приоритет — клиент ещё не прислал elapsed,
+                // но пауза уже стоит на сервере (например, решение администратора).
+                if (status != "Заблокирован" && status != "Свободный")
+                    client.Status = client.IsPaused ? "Пауза" : status;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
                 return;
@@ -782,61 +782,61 @@ namespace BibAdminWeb
                     client.AccumulatedSeconds = 0;
             }
 
-            // РќРѕСЂРјР°Р»РёР·СѓРµРј С‚РёРї СЃРµСЃСЃРёРё РѕС‚ РєР»РёРµРЅС‚Р°, РЅРѕ РЅРµ РїРµСЂРµР·Р°РїРёСЃС‹РІР°РµРј РїСЂРё Р±Р»РѕРєРёСЂРѕРІРєРµ вЂ”
-            // РёРЅР°С‡Рµ РєР»РёРµРЅС‚ СЃ СѓСЃС‚Р°СЂРµРІС€РёРј ActiveSessionType РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚ "РїСЂРёР·СЂР°С‡РЅСѓСЋ" СЃРµСЃСЃРёСЋ.
-            if (status != "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ" && status != "РЎРІРѕР±РѕРґРЅС‹Р№" && !string.IsNullOrEmpty(sessionType))
+            // Нормализуем тип сессии от клиента, но не перезаписываем при блокировке —
+            // иначе клиент с устаревшим ActiveSessionType восстановит "призрачную" сессию.
+            if (status != "Заблокирован" && status != "Свободный" && !string.IsNullOrEmpty(sessionType))
                 client.SessionType = NormalizeSessionType(sessionType);
 
-            if (status == "РџР°СѓР·Р°")
+            if (status == "Пауза")
             {
                 client.IsPaused = true;
                 client.AccumulatedSeconds = elapsedSeconds;
             }
 
-            // рџ”‘ рџ”Ґ Р“Р›РђР’РќРђРЇ Р—РђР©РРўРђ: Р•РЎР›Р Р•РЎРўР¬ OFFLINE_DECISION = PAUSE, РР“РќРћР РР РЈР•Рњ РЎРўРђРўРЈРЎ РћРў РљР›РР•РќРўРђ
+            // 🔑 🔥 ГЛАВНАЯ ЗАЩИТА: ЕСЛИ ЕСТЬ OFFLINE_DECISION = PAUSE, ИГНОРИРУЕМ СТАТУС ОТ КЛИЕНТА
             if (client.OfflineDecision == OfflineDecision.Pause && !client.IsPaused)
             {
                 client.IsPaused = true;
                 client.AccumulatedSeconds = client.ElapsedAtDisconnect;
-                Logger.Info($"рџ›ЎпёЏ {pcNumber}: РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅР°СЏ РїР°СѓР·Р° РїРѕ OfflineDecision");
+                Logger.Info($"🛡️ {pcNumber}: принудительная пауза по OfflineDecision");
             }
 
-            // в”Ђв”Ђ РЎС‚СЂРѕРіР°СЏ С†РµРїРѕС‡РєР° РїСЂРёРѕСЂРёС‚РµС‚РѕРІ РІРёР·СѓР°Р»СЊРЅРѕРіРѕ СЃС‚Р°С‚СѓСЃР° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-            // РЎРµСЂРІРµСЂ СЏРІР»СЏРµС‚СЃСЏ РёСЃС‚РѕС‡РЅРёРєРѕРј РёСЃС‚РёРЅС‹; РєР»РёРµРЅС‚СЃРєРёР№ СЃС‚Р°С‚СѓСЃ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ
-            // РґР»СЏ С†РёС„СЂ/Р±РёР»Р»РёРЅРіР°, РІРёР·СѓР°Р»СЊРЅС‹Р№ СЃС‚Р°С‚СѓСЃ РїРµСЂРµСЃС‡РёС‚С‹РІР°РµС‚СЃСЏ Р·РґРµСЃСЊ РЅРµР·Р°РІРёСЃРёРјРѕ.
+            // ── Строгая цепочка приоритетов визуального статуса ──────────────────────
+            // Сервер является источником истины; клиентский статус используется только
+            // для цифр/биллинга, визуальный статус пересчитывается здесь независимо.
             string visualStatus;
             string reason;
 
             if (!client.IsOnline)
             {
-                visualStatus = "РћС„С„Р»Р°Р№РЅ";
+                visualStatus = "Оффлайн";
                 reason = "IsOnline=false";
             }
             else if (client.IsPaused)
             {
-                visualStatus = "РџР°СѓР·Р°";
-                reason = "IsPaused=true (РїСЂРёРѕСЂРёС‚РµС‚ РЅР°Рґ РєР»РёРµРЅС‚СЃРєРёРј СЃС‚Р°С‚СѓСЃРѕРј)";
+                visualStatus = "Пауза";
+                reason = "IsPaused=true (приоритет над клиентским статусом)";
             }
             else if (client.SessionType == "VIP")
             {
                 visualStatus = "VIP";
                 reason = "SessionType=VIP";
             }
-            else if (client.SessionType == "Р›РёРјРёС‚")
+            else if (client.SessionType == "Лимит")
             {
-                visualStatus = "Р›РёРјРёС‚";
-                reason = "SessionType=Р›РёРјРёС‚";
+                visualStatus = "Лимит";
+                reason = "SessionType=Лимит";
             }
-            else if (status == "РЎРІРѕР±РѕРґРЅС‹Р№")
+            else if (status == "Свободный")
             {
-                visualStatus = "РЎРІРѕР±РѕРґРЅС‹Р№";
-                reason = "РєР»РёРµРЅС‚ СЃРѕРѕР±С‰РёР» РЎРІРѕР±РѕРґРЅС‹Р№";
+                visualStatus = "Свободный";
+                reason = "клиент сообщил Свободный";
             }
             else
             {
-                // РќРµС‚ Р°РєС‚РёРІРЅРѕР№ СЃРµСЃСЃРёРё, РЅРµС‚ СЏРІРЅРѕРіРѕ РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ вЂ” СЃС‡РёС‚Р°РµРј Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹Рј
-                visualStatus = "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ";
-                reason = "РЅРµС‚ Р°РєС‚РёРІРЅРѕР№ СЃРµСЃСЃРёРё (fallback)";
+                // Нет активной сессии, нет явного освобождения — считаем заблокированным
+                visualStatus = "Заблокирован";
+                reason = "нет активной сессии (fallback)";
             }
 
             client.Status = visualStatus;
@@ -844,16 +844,16 @@ namespace BibAdminWeb
             KnownClients[pcNumber] = client;
             ClientUpdated?.Invoke(client);
 
-            Logger.Info($"рџЋЁ Р’РёР·СѓР°Р» {pcNumber}: \"{client.Status}\" | РџСЂРёС‡РёРЅР°: {reason} (SessionType={client.SessionType}, elapsed={client.ElapsedSeconds}СЃ, paused={client.IsPaused})");
+            Logger.Info($"🎨 Визуал {pcNumber}: \"{client.Status}\" | Причина: {reason} (SessionType={client.SessionType}, elapsed={client.ElapsedSeconds}с, paused={client.IsPaused})");
 
-            if (client.IsSession || client.Status == "РџР°СѓР·Р°")
+            if (client.IsSession || client.Status == "Пауза")
                 SaveActiveSessions();
         }
 
         public async Task SyncSessionTime(string pcNumber, bool force = false)
         {
             if (!KnownClients.TryGetValue(pcNumber, out var client)) return;
-            if (client.IsPaused || !(client.IsSession || client.Status == "РџР°СѓР·Р°") || !client.SessionStart.HasValue) return;
+            if (client.IsPaused || !(client.IsSession || client.Status == "Пауза") || !client.SessionStart.HasValue) return;
 
             if (!force && DateTime.UtcNow - client.LastSeen < TimeSpan.FromSeconds(10)) return;
 
@@ -871,7 +871,7 @@ namespace BibAdminWeb
             var json = JsonSerializer.Serialize(cmd);
             await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
 
-            Logger.Info($"рџ”„ SyncSessionTime: {pcNumber} в†’ {serverElapsed}СЃ (СЂР°СЃС…РѕР¶РґРµРЅРёРµ {diff}СЃ)");
+            Logger.Info($"🔄 SyncSessionTime: {pcNumber} → {serverElapsed}с (расхождение {diff}с)");
         }
 
         public async Task RenameClient(string oldName, string newName)
@@ -887,13 +887,13 @@ namespace BibAdminWeb
                 SaveRegistry();
                 SavePending();
                 ClientsChanged?.Invoke();
-                Logger.Info($"РџРљ РїРµСЂРµРёРјРµРЅРѕРІР°РЅ: {oldName} в†’ {newName}");
+                Logger.Info($"ПК переименован: {oldName} → {newName}");
             }
         }
 
         /// <summary>
-        /// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ РёРЅРґРёРІРёРґСѓР°Р»СЊРЅРѕРµ РѕС‚РѕР±СЂР°Р¶Р°РµРјРѕРµ РёРјСЏ РґР»СЏ РєР»РёРµРЅС‚Р° (CustomName).
-        /// РЈРЅРёРєР°Р»СЊРЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ PcNumberValue РЅРµ РјРµРЅСЏРµС‚СЃСЏ.
+        /// Устанавливает индивидуальное отображаемое имя для клиента (CustomName).
+        /// Уникальный идентификатор PcNumberValue не меняется.
         /// </summary>
         public async Task SetClientCustomName(string pcNumber, string customName)
         {
@@ -901,39 +901,39 @@ namespace BibAdminWeb
             {
                 var oldName = pcNumber;
                 
-                // РћР±РЅРѕРІР»СЏРµРј CustomName
+                // Обновляем CustomName
                 client.CustomName = customName;
                 
-                // Р’С‹С‡РёСЃР»СЏРµРј РЅРѕРІРѕРµ РѕС‚РѕР±СЂР°Р¶Р°РµРјРѕРµ РёРјСЏ (С‚РµРїРµСЂСЊ СЌС‚Рѕ "{CustomName} {PcNumberValue}" РёР»Рё "РџРљ {PcNumberValue}")
-                var newName = string.IsNullOrEmpty(customName) ? $"РџРљ {client.PcNumberValue}" : $"{customName} {client.PcNumberValue}";
+                // Вычисляем новое отображаемое имя (теперь это "{CustomName} {PcNumberValue}" или "ПК {PcNumberValue}")
+                var newName = string.IsNullOrEmpty(customName) ? $"ПК {client.PcNumberValue}" : $"{customName} {client.PcNumberValue}";
                 
-                // Р•СЃР»Рё РёРјСЏ РёР·РјРµРЅРёР»РѕСЃСЊ - РїРµСЂРµРЅРѕСЃРёРј РІ СЃР»РѕРІР°СЂРµ
+                // Если имя изменилось - переносим в словаре
                 if (oldName != newName)
                 {
                     KnownClients.TryRemove(oldName, out _);
                     KnownClients[newName] = client;
                     
-                    // РџРµСЂРµРЅРѕСЃРёРј РѕС‚Р»РѕР¶РµРЅРЅС‹Рµ РєРѕРјР°РЅРґС‹
+                    // Переносим отложенные команды
                     if (_pendingCommands.TryRemove(oldName, out var cmds))
                         _pendingCommands[newName] = cmds;
                         
-                    Logger.Info($"вњ… РРјСЏ РџРљ РёР·РјРµРЅРµРЅРѕ: {oldName} в†’ {newName} (CustomName={customName})");
+                    Logger.Info($"✅ Имя ПК изменено: {oldName} → {newName} (CustomName={customName})");
                 }
                 else
                 {
-                    Logger.Info($"вњ… CustomName РѕР±РЅРѕРІР»С‘РЅ РґР»СЏ {pcNumber}: '{customName}'");
+                    Logger.Info($"✅ CustomName обновлён для {pcNumber}: '{customName}'");
                 }
                 
                 SaveRegistry();
                 SavePending();
-                ClientUpdated?.Invoke(client);  // вњ… Р’С‹Р·С‹РІР°РµРј ClientUpdated РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ UI
+                ClientUpdated?.Invoke(client);  // ✅ Вызываем ClientUpdated для обновления UI
                 ClientsChanged?.Invoke();
             }
         }
 
         /// <summary>
-        /// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ РёРЅРґРёРІРёРґСѓР°Р»СЊРЅРѕРµ РѕС‚РѕР±СЂР°Р¶Р°РµРјРѕРµ РёРјСЏ РґР»СЏ РєР»РёРµРЅС‚Р° РїРѕ РµРіРѕ С‡РёСЃР»РѕРІРѕРјСѓ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂСѓ.
-        /// Р­С‚Рѕ Р±РѕР»РµРµ РЅР°РґС‘Р¶РЅС‹Р№ СЃРїРѕСЃРѕР±, С‚Р°Рє РєР°Рє PcNumberValue РЅРµ РјРµРЅСЏРµС‚СЃСЏ РїСЂРё РїРµСЂРµРёРјРµРЅРѕРІР°РЅРёРё.
+        /// Устанавливает индивидуальное отображаемое имя для клиента по его числовому идентификатору.
+        /// Это более надёжный способ, так как PcNumberValue не меняется при переименовании.
         /// </summary>
         public async Task SetClientCustomNameByValue(int pcNumberValue, string customName)
         {
@@ -943,47 +943,47 @@ namespace BibAdminWeb
                 var oldName = client.PcNumber;
                 var oldConnectionId = client.ConnectionId;
                 
-                // РћР±РЅРѕРІР»СЏРµРј CustomName
+                // Обновляем CustomName
                 client.CustomName = customName;
                 
-                // Р’С‹С‡РёСЃР»СЏРµРј РЅРѕРІРѕРµ РѕС‚РѕР±СЂР°Р¶Р°РµРјРѕРµ РёРјСЏ (С‚РµРїРµСЂСЊ СЌС‚Рѕ "{CustomName} {PcNumberValue}" РёР»Рё "РџРљ {PcNumberValue}")
-                var newName = string.IsNullOrEmpty(customName) ? $"РџРљ {pcNumberValue}" : $"{customName} {pcNumberValue}";
+                // Вычисляем новое отображаемое имя (теперь это "{CustomName} {PcNumberValue}" или "ПК {PcNumberValue}")
+                var newName = string.IsNullOrEmpty(customName) ? $"ПК {pcNumberValue}" : $"{customName} {pcNumberValue}";
                 
-                // Р•СЃР»Рё РёРјСЏ РёР·РјРµРЅРёР»РѕСЃСЊ - РїРµСЂРµРЅРѕСЃРёРј РІ СЃР»РѕРІР°СЂРµ
+                // Если имя изменилось - переносим в словаре
                 if (oldName != newName)
                 {
                     KnownClients.TryRemove(oldName, out _);
                     KnownClients[newName] = client;
                     
-                    // РџРµСЂРµРЅРѕСЃРёРј РѕС‚Р»РѕР¶РµРЅРЅС‹Рµ РєРѕРјР°РЅРґС‹
+                    // Переносим отложенные команды
                     if (_pendingCommands.TryRemove(oldName, out var cmds))
                         _pendingCommands[newName] = cmds;
                         
-                    Logger.Info($"вњ… РРјСЏ РџРљ РёР·РјРµРЅРµРЅРѕ: {oldName} в†’ {newName} (CustomName={customName})");
+                    Logger.Info($"✅ Имя ПК изменено: {oldName} → {newName} (CustomName={customName})");
                 }
                 else
                 {
-                    Logger.Info($"вњ… CustomName РѕР±РЅРѕРІР»С‘РЅ РґР»СЏ РџРљ {pcNumberValue}: '{customName}'");
+                    Logger.Info($"✅ CustomName обновлён для ПК {pcNumberValue}: '{customName}'");
                 }
                 
                 SaveRegistry();
                 SavePending();
-                ClientUpdated?.Invoke(client);  // вњ… Р’С‹Р·С‹РІР°РµРј ClientUpdated РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ UI
+                ClientUpdated?.Invoke(client);  // ✅ Вызываем ClientUpdated для обновления UI
                 ClientsChanged?.Invoke();
                 
-                // РћС‚РїСЂР°РІР»СЏРµРј РєРѕРјР°РЅРґСѓ РЅР° РєР»РёРµРЅС‚ СЃ РЅРѕРІС‹Рј РёРјРµРЅРµРј СЃСЂР°Р·Сѓ РїРѕСЃР»Рµ РѕР±РЅРѕРІР»РµРЅРёСЏ СЃРµСЂРІРµСЂР°
+                // Отправляем команду на клиент с новым именем сразу после обновления сервера
                 if (!string.IsNullOrEmpty(oldConnectionId))
                 {
                     try
                     {
-                        // РћС‚РїСЂР°РІР»СЏРµРј С‚РѕР»СЊРєРѕ CustomName (Р±РµР· РЅРѕРјРµСЂР°), РєР»РёРµРЅС‚ СЃР°Рј СЃС„РѕСЂРјРёСЂСѓРµС‚ РїРѕР»РЅРѕРµ РёРјСЏ
+                        // Отправляем только CustomName (без номера), клиент сам сформирует полное имя
                         var cmd = new { Type = "SET_PC_NAME", Value = customName ?? "" };
                         await Clients.Client(oldConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
-                        Logger.Info($"рџ“¤ РљРѕРјР°РЅРґР° SET_PC_NAME РѕС‚РїСЂР°РІР»РµРЅР° РєР»РёРµРЅС‚Сѓ: '{customName}' (PcNumberValue={pcNumberValue})");
+                        Logger.Info($"📤 Команда SET_PC_NAME отправлена клиенту: '{customName}' (PcNumberValue={pcNumberValue})");
                     }
                     catch (Exception ex)
                     {
-                        Logger.Error($"РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё РєРѕРјР°РЅРґС‹ SET_PC_NAME: {ex.Message}");
+                        Logger.Error($"Ошибка отправки команды SET_PC_NAME: {ex.Message}");
                     }
                 }
             }
@@ -1005,7 +1005,7 @@ namespace BibAdminWeb
                         if (cmd != null) AddPendingCommand(pcNumber, cmd.Type, cmd.Value);
                     }
                     catch { }
-                    Logger.Info($"РџРљ {pcNumber} РѕС„С„Р»Р°Р№РЅ вЂ” РєРѕРјР°РЅРґР° РґРѕР±Р°РІР»РµРЅР° РІ РѕС‡РµСЂРµРґСЊ");
+                    Logger.Info($"ПК {pcNumber} оффлайн — команда добавлена в очередь");
                 }
             }
         }
@@ -1038,16 +1038,16 @@ namespace BibAdminWeb
                 Directory.CreateDirectory(filesDir);
                 var filePath = Path.Combine(filesDir, fileName);
 
-                // РџСЂРѕСЃС‚Рѕ РїРµСЂРµР·Р°РїРёСЃС‹РІР°РµРј С„Р°Р№Р» вЂ” Р±РµР· СЃРѕР·РґР°РЅРёСЏ РІРµСЂСЃРёР№ СЃ timestamp
+                // Просто перезаписываем файл — без создания версий с timestamp
                 await File.WriteAllBytesAsync(filePath, fileData);
-                Logger.Info($"Р¤РѕРЅ СЃРѕС…СЂР°РЅС‘РЅ: {fileName}");
+                Logger.Info($"Фон сохранён: {fileName}");
 
                 var command = new { Type = "SET_BACKGROUND", Value = fileName };
                 var json = JsonSerializer.Serialize(command);
 
                 if (targetPc == "*")
                 {
-                    // Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ С„РѕРЅ вЂ” РѕР±РЅРѕРІР»СЏРµРј GlobalSettings
+                    // Глобальный фон — обновляем GlobalSettings
                     var global = GlobalSettings.Load();
                     global.BackgroundFileName = fileName;
                     global.Save();
@@ -1057,11 +1057,11 @@ namespace BibAdminWeb
                         bool isIndividual = client.IsIndividual("SET_BACKGROUND");
 
                         if (isIndividual && !replaceIndividual)
-                            continue; // РћСЃС‚Р°РІР»СЏРµРј РёРЅРґРёРІРёРґСѓР°Р»СЊРЅС‹Р№ С„РѕРЅ РЅРµС‚СЂРѕРЅСѓС‚С‹Рј
+                            continue; // Оставляем индивидуальный фон нетронутым
 
                         if (isIndividual && replaceIndividual)
                         {
-                            // РЎР±СЂР°СЃС‹РІР°РµРј РёРЅРґРёРІРёРґСѓР°Р»СЊРЅС‹Р№ С„РѕРЅ
+                            // Сбрасываем индивидуальный фон
                             client.IndividualSettingKeys.Remove("SET_BACKGROUND");
                             if (client.IndividualSettingKeys.Count == 0)
                                 client.HasIndividualSettings = false;
@@ -1078,7 +1078,7 @@ namespace BibAdminWeb
                 }
                 else
                 {
-                    // РРЅРґРёРІРёРґСѓР°Р»СЊРЅС‹Р№ С„РѕРЅ вЂ” РЅРµ С‚СЂРѕРіР°РµРј GlobalSettings
+                    // Индивидуальный фон — не трогаем GlobalSettings
                     if (KnownClients.TryGetValue(targetPc, out var client))
                     {
                         client.BackgroundFileName = fileName;
@@ -1094,28 +1094,66 @@ namespace BibAdminWeb
                 }
 
                 CleanupUnusedBackgroundFiles();
-                Logger.Info($"Р¤РѕРЅ РїСЂРёРјРµРЅС‘РЅ: {fileName} в†’ {targetPc}");
+                Logger.Info($"Фон применён: {fileName} → {targetPc}");
             }
             catch (Exception ex)
             {
-                Logger.Error($"РћС€РёР±РєР° UploadFile: {ex.Message}");
+                Logger.Error($"Ошибка UploadFile: {ex.Message}");
                 Logger.Error($"Stack: {ex.StackTrace}");
                 throw;
             }
         }
 
+        public static void CleanupUnusedBackgroundFiles()
+        {
+            try
+            {
+                var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
+                if (!Directory.Exists(filesDir)) return;
+
+                // Собираем все файлы, на которые кто-то ссылается
+                var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var global = GlobalSettings.Load();
+                if (!string.IsNullOrEmpty(global.BackgroundFileName))
+                    referenced.Add(global.BackgroundFileName);
+
+                foreach (var client in KnownClients.Values)
+                {
+                    if (client.IsIndividual("SET_BACKGROUND") && !string.IsNullOrEmpty(client.BackgroundFileName))
+                        referenced.Add(client.BackgroundFileName);
+                }
+
+                // Удаляем все файлы, которые больше не используются
+                foreach (var file in Directory.GetFiles(filesDir))
+                {
+                    var name = Path.GetFileName(file);
+                    if (!referenced.Contains(name))
+                    {
+                        try
+                        {
+                            File.Delete(file);
+                            Logger.Info($"Удалён неиспользуемый фон: {name}");
+                        }
+                        catch (Exception ex) { Logger.Warn($"Не удалось удалить {name}: {ex.Message}"); }
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Error($"Ошибка очистки Files: {ex.Message}"); }
+        }
+
         public async Task<string> TransferSession(string fromPcNumber, string toPcNumber)
         {
             if (!KnownClients.TryGetValue(fromPcNumber, out var source))
-                return $"РћС€РёР±РєР°: РџРљ {fromPcNumber} РЅРµ РЅР°Р№РґРµРЅ";
+                return $"Ошибка: ПК {fromPcNumber} не найден";
             if (!KnownClients.TryGetValue(toPcNumber, out var target))
-                return $"РћС€РёР±РєР°: РџРљ {toPcNumber} РЅРµ РЅР°Р№РґРµРЅ";
+                return $"Ошибка: ПК {toPcNumber} не найден";
             if (!source.IsSession)
-                return "РћС€РёР±РєР°: РЅР° РёСЃС…РѕРґРЅРѕРј РџРљ РЅРµС‚ Р°РєС‚РёРІРЅРѕР№ СЃРµСЃСЃРёРё";
+                return "Ошибка: на исходном ПК нет активной сессии";
             if (!target.IsOnline)
-                return "РћС€РёР±РєР°: РџРљ РЅР°Р·РЅР°С‡РµРЅРёСЏ РЅРµ РІ СЃРµС‚Рё";
+                return "Ошибка: ПК назначения не в сети";
             if (target.IsSession)
-                return "РћС€РёР±РєР°: РЅР° РџРљ РЅР°Р·РЅР°С‡РµРЅРёСЏ СѓР¶Рµ РµСЃС‚СЊ Р°РєС‚РёРІРЅР°СЏ СЃРµСЃСЃРёСЏ";
+                return "Ошибка: на ПК назначения уже есть активная сессия";
 
             // Capture session data before clearing source
             var sessionType = source.SessionType;
@@ -1134,7 +1172,7 @@ namespace BibAdminWeb
                 AddPendingCommand(source.PcNumber, "REMOTE_LOCK", "true");
 
             // Clear source session state
-            source.Status = "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ";
+            source.Status = "Заблокирован";
             source.SessionType = "";
             source.ElapsedSeconds = 0;
             source.LimitSeconds = 0;
@@ -1176,7 +1214,7 @@ namespace BibAdminWeb
             ClientUpdated?.Invoke(source);
             ClientUpdated?.Invoke(target);
 
-            Logger.Info($"вњ… РЎРµСЃСЃРёСЏ РїРµСЂРµРЅРµСЃРµРЅР°: {fromPcNumber} в†’ {toPcNumber} ({sessionType}, РїСЂРѕС€Р»Рѕ {elapsed}СЃ)");
+            Logger.Info($"✅ Сессия перенесена: {fromPcNumber} → {toPcNumber} ({sessionType}, прошло {elapsed}с)");
             return "OK";
         }
 
@@ -1187,7 +1225,7 @@ namespace BibAdminWeb
                 client.MarkIndividual(commandType);
                 KnownClients[pcNumber] = client;
                 SaveRegistryStatic();
-                Logger.Info($"РРЅРґРёРІРёРґСѓР°Р»СЊРЅР°СЏ РЅР°СЃС‚СЂРѕР№РєР°: {pcNumber} в†’ {commandType}");
+                Logger.Info($"Индивидуальная настройка: {pcNumber} → {commandType}");
             }
         }
 
@@ -1198,7 +1236,7 @@ namespace BibAdminWeb
                 client.ClearIndividual();
                 KnownClients[pcNumber] = client;
                 SaveRegistryStatic();
-                Logger.Info($"РРЅРґРёРІРёРґСѓР°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё СЃР±СЂРѕС€РµРЅС‹: {pcNumber}");
+                Logger.Info($"Индивидуальные настройки сброшены: {pcNumber}");
             }
         }
 
@@ -1206,34 +1244,6 @@ namespace BibAdminWeb
         {
             try { File.WriteAllText(_registryPath, JsonSerializer.Serialize(KnownClients.Values, new JsonSerializerOptions { WriteIndented = true })); }
             catch { }
-        }
-
-        public static void CleanupUnusedBackgroundFiles()
-        {
-            try
-            {
-                var filesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
-                if (!Directory.Exists(filesDir)) return;
-                var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var global = GlobalSettings.Load();
-                if (!string.IsNullOrEmpty(global.BackgroundFileName))
-                    referenced.Add(global.BackgroundFileName);
-                foreach (var client in KnownClients.Values)
-                {
-                    if (client.IsIndividual("SET_BACKGROUND") && !string.IsNullOrEmpty(client.BackgroundFileName))
-                        referenced.Add(client.BackgroundFileName);
-                }
-                foreach (var file in Directory.GetFiles(filesDir))
-                {
-                    var name = Path.GetFileName(file);
-                    if (!referenced.Contains(name))
-                    {
-                        try { File.Delete(file); Logger.Info($"Удалён неиспользуемый фон: {name}"); }
-                        catch (Exception ex) { Logger.Warn($"Не удалось удалить {name}: {ex.Message}"); }
-                    }
-                }
-            }
-            catch (Exception ex) { Logger.Error($"Ошибка очистки Files: {ex.Message}"); }
         }
     }
 
@@ -1254,7 +1264,7 @@ namespace BibAdminWeb
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
         public string ClientTimeUtc { get; set; } = "";
-        // вњ… РќРѕРІС‹Рµ РїРѕР»СЏ РґР»СЏ СЂР°Р·РґРµР»РµРЅРёСЏ РёРјРµРЅРё Рё РЅРѕРјРµСЂР°
+        // ✅ Новые поля для разделения имени и номера
         public int PcNumberValue { get; set; }
         public string CustomName { get; set; } = "";
     }
