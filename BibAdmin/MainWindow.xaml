@@ -95,6 +95,41 @@
                             Content="⚙  Настройки"
                             Style="{StaticResource NavBtn}"
                             Click="BtnSettings_Click"/>
+
+                    <!-- Разделитель -->
+                    <Border Height="1" Background="#2E2E4E" Margin="4,12"/>
+
+                    <!-- Кнопка быстрой услуги -->
+                    <Button x:Name="BtnNewService"
+                            Content="🛎  Оказать услугу"
+                            Padding="14,11" Margin="0,2"
+                            FontSize="13" Cursor="Hand"
+                            HorizontalContentAlignment="Left"
+                            BorderThickness="1"
+                            BorderBrush="#2A7A5A"
+                            Background="#1D3D30"
+                            Foreground="#4DC79A"
+                            Click="BtnNewService_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="bd"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="8"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Left"
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="bd" Property="Background" Value="#1D9E75"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                 </StackPanel>
 
             </DockPanel>

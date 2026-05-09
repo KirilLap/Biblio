@@ -66,6 +66,18 @@ namespace BibAdmin
         // =====================
         public string ClientSortMode { get; set; } = "ByNumber"; // "ByNumber" или "ByName"
 
+        // =====================
+        // Дополнительные услуги
+        // =====================
+        public List<ServiceType> Services { get; set; } = new()
+        {
+            new() { Name = "Печать ч/б",     Unit = "лист",  Price = 300  },
+            new() { Name = "Печать цветная",  Unit = "лист",  Price = 500  },
+            new() { Name = "Сканирование",    Unit = "лист",  Price = 500  },
+            new() { Name = "Ксерокопия",      Unit = "лист",  Price = 300  },
+            new() { Name = "Ламинирование",   Unit = "штука", Price = 2000 },
+        };
+
         private static readonly string _path = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
 
@@ -139,6 +151,16 @@ namespace BibAdmin
 
             return cmds;
         }
+    }
+
+    // Модель услуги
+    public class ServiceType
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Name { get; set; } = "";
+        public string Unit { get; set; } = "лист";
+        public int Price { get; set; } = 0;
+        public bool IsActive { get; set; } = true;
     }
 
     // Модель команды

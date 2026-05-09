@@ -49,13 +49,17 @@
             </StackPanel>
 
             <Grid Grid.Row="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Левая колонка -->
-                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,0">
 
                     <!-- Тариф -->
                     <Border Style="{StaticResource CardBorder}">
@@ -261,7 +265,7 @@
                 </StackPanel>
 
                 <!-- Правая колонка -->
-                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,0">
 
                     <!-- Фон -->
                     <Border Style="{StaticResource CardBorder}">
@@ -530,6 +534,96 @@
                     </Border>
 
                 </StackPanel>
+
+                <!-- Дополнительные услуги (полная ширина) -->
+                <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                        Style="{StaticResource CardBorder}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Дополнительные услуги"
+                                           FontSize="15" FontWeight="Bold"
+                                           Foreground="#1E1E2E"/>
+                                <TextBlock Text="Услуги, доступные для оказания через администратора (печать, сканирование и т.д.)"
+                                           Foreground="#888" FontSize="12"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Список услуг (заголовок) -->
+                        <Border Background="#F8F8F8" CornerRadius="6,6,0,0"
+                                Padding="12,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="36"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Название" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="1" Text="Единица" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="2" Text="Цена (сум)" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="3" Text="Активна" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Строки услуг (динамически) -->
+                        <StackPanel x:Name="ServicesPanel"
+                                    Background="White"/>
+
+                        <!-- Форма добавления -->
+                        <Border Background="#F0FFF8" CornerRadius="0,0,6,6"
+                                Padding="12,10" BorderBrush="#C8EEE0"
+                                BorderThickness="0,1,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="TxtNewServiceName"
+                                         Padding="8,6" FontSize="12"
+                                         BorderBrush="#CCCCCC"
+                                         Margin="0,0,6,0"/>
+                                <ComboBox x:Name="CmbNewServiceUnit"
+                                          Grid.Column="1"
+                                          FontSize="12" Padding="6,5"
+                                          Margin="0,0,6,0">
+                                    <ComboBoxItem Content="лист" IsSelected="True"/>
+                                    <ComboBoxItem Content="штука"/>
+                                    <ComboBoxItem Content="страница"/>
+                                    <ComboBoxItem Content="мин"/>
+                                    <ComboBoxItem Content="шт"/>
+                                </ComboBox>
+                                <TextBox x:Name="TxtNewServicePrice"
+                                         Grid.Column="2"
+                                         Padding="8,6" FontSize="12"
+                                         BorderBrush="#CCCCCC"
+                                         Margin="0,0,6,0"/>
+                                <Button Grid.Column="3"
+                                        Content="+ Добавить"
+                                        Style="{StaticResource SettingsBtn}"
+                                        Background="#1D9E75"
+                                        BorderBrush="#1D9E75"
+                                        Foreground="White"
+                                        Click="AddService_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock x:Name="TxtServicesSaved"
+                                   Text="✓ Сохранено"
+                                   Foreground="#0F6E56" FontSize="12"
+                                   Margin="0,8,0,0"
+                                   Visibility="Collapsed"/>
+                    </StackPanel>
+                </Border>
+
             </Grid>
         </Grid>
     </ScrollViewer>

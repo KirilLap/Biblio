@@ -1103,6 +1103,19 @@ namespace BibAdmin
             if (refund > 0) msg += $"\n\n💵 Возврат пользователю: {refund:N0} сум";
             MessageBox.Show(msg, "Итог сессии", MessageBoxButton.OK, MessageBoxImage.Information);
 
+            // Проверяем неоплаченные услуги для этого читателя
+            string readerId = _selected.ReaderId ?? "";
+            if (!string.IsNullOrEmpty(readerId))
+            {
+                var unpaid = ServiceTransaction.GetUnpaidForReader(readerId);
+                if (unpaid.Count > 0)
+                {
+                    string readerLabel = !string.IsNullOrEmpty(_selected.UserName) && _selected.UserName != "—"
+                        ? _selected.UserName : readerId;
+                    new UnpaidServicesDialog(unpaid, readerLabel).ShowDialog();
+                }
+            }
+
             await SendCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
             _selected.Status = "Заблокирован";
             _selected.SessionType = "";      // ← очищаем, иначе active_sessions.json восстановит сессию при рестарте

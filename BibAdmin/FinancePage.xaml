@@ -10,6 +10,37 @@
             <Setter Property="Padding" Value="20,16"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
+        <Style x:Key="TabBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="bd" Property="Background" Value="#F0FFF8"/>
+                                <Setter Property="Foreground" Value="#0F6E56"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#F5F5F5"/>
+                                <Setter Property="Foreground" Value="#333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Page.Resources>
 
     <Grid Margin="24">
@@ -17,11 +48,12 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- Заголовок -->
-        <Grid Grid.Row="0" Margin="0,0,0,20">
+        <Grid Grid.Row="0" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -45,15 +77,13 @@
                             <Border Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="7"
-                                    Padding="{TemplateBinding Padding}">
+                                    CornerRadius="7" Padding="{TemplateBinding Padding}">
                                 <ContentPresenter HorizontalAlignment="Center"
                                                   VerticalAlignment="Center"/>
                             </Border>
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                
                 <Button Content="🗑  Очистить историю"
                         Click="ClearHistory_Click"
                         Padding="14,8" FontSize="13" Cursor="Hand"
@@ -64,8 +94,7 @@
                             <Border Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="7"
-                                    Padding="{TemplateBinding Padding}">
+                                    CornerRadius="7" Padding="{TemplateBinding Padding}">
                                 <ContentPresenter HorizontalAlignment="Center"
                                                   VerticalAlignment="Center"/>
                             </Border>
@@ -75,8 +104,28 @@
             </StackPanel>
         </Grid>
 
+        <!-- Переключатель вкладок -->
+        <Border Grid.Row="1" Background="White" CornerRadius="10"
+                Padding="6" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="BtnTabSessions"
+                        Content="📋  Сессии"
+                        Style="{StaticResource TabBtn}"
+                        Tag="active"
+                        Click="TabSessions_Click"/>
+                <Button x:Name="BtnTabServices"
+                        Content="🛎  Услуги"
+                        Style="{StaticResource TabBtn}"
+                        Click="TabServices_Click"/>
+                <Button x:Name="BtnTabAll"
+                        Content="📊  Всё"
+                        Style="{StaticResource TabBtn}"
+                        Click="TabAll_Click"/>
+            </StackPanel>
+        </Border>
+
         <!-- Статистика -->
-        <Grid Grid.Row="1" Margin="0,0,0,20">
+        <Grid Grid.Row="2" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -87,7 +136,7 @@
             <Border Grid.Column="0" Background="White"
                     CornerRadius="10" Margin="0,0,6,0" Padding="16,14">
                 <StackPanel>
-                    <TextBlock Text="Выручка сегодня"
+                    <TextBlock x:Name="TblTodayLabel" Text="Выручка сегодня"
                                Foreground="#888" FontSize="12"/>
                     <TextBlock x:Name="TxtToday" Text="0 сум"
                                FontSize="20" FontWeight="Bold"
@@ -98,7 +147,7 @@
             <Border Grid.Column="1" Background="White"
                     CornerRadius="10" Margin="3,0,3,0" Padding="16,14">
                 <StackPanel>
-                    <TextBlock Text="За неделю"
+                    <TextBlock x:Name="TblWeekLabel" Text="За неделю"
                                Foreground="#888" FontSize="12"/>
                     <TextBlock x:Name="TxtWeek" Text="0 сум"
                                FontSize="20" FontWeight="Bold"
@@ -109,7 +158,7 @@
             <Border Grid.Column="2" Background="White"
                     CornerRadius="10" Margin="3,0,3,0" Padding="16,14">
                 <StackPanel>
-                    <TextBlock Text="За месяц"
+                    <TextBlock x:Name="TblMonthLabel" Text="За месяц"
                                Foreground="#888" FontSize="12"/>
                     <TextBlock x:Name="TxtMonth" Text="0 сум"
                                FontSize="20" FontWeight="Bold"
@@ -120,7 +169,7 @@
             <Border Grid.Column="3" Background="White"
                     CornerRadius="10" Margin="6,0,0,0" Padding="16,14">
                 <StackPanel>
-                    <TextBlock Text="Всего сессий"
+                    <TextBlock x:Name="TblCountLabel" Text="Всего сессий"
                                Foreground="#888" FontSize="12"/>
                     <TextBlock x:Name="TxtTotalSessions" Text="0"
                                FontSize="20" FontWeight="Bold"
@@ -130,14 +179,13 @@
         </Grid>
 
         <!-- Фильтр -->
-        <Border Grid.Row="2" Background="White" CornerRadius="10"
+        <Border Grid.Row="3" Background="White" CornerRadius="10"
                 Padding="16,12" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Фильтр:"
                            Foreground="#888" FontSize="13"
                            VerticalAlignment="Center"
                            Margin="0,0,12,0"/>
-
                 <RadioButton x:Name="RbAll" Content="Все"
                              IsChecked="True" Margin="0,0,12,0"
                              FontSize="13" VerticalAlignment="Center"
@@ -155,17 +203,38 @@
                              VerticalAlignment="Center"
                              Checked="Filter_Changed"/>
 
-                <TextBlock Text="Тип:"
-                           Foreground="#888" FontSize="13"
-                           VerticalAlignment="Center"
-                           Margin="0,0,12,0"/>
-                <ComboBox x:Name="CmbType" Width="140"
-                          FontSize="13" Padding="8,4"
-                          SelectionChanged="Filter_Changed">
-                    <ComboBoxItem Content="Все типы" IsSelected="True"/>
-                    <ComboBoxItem Content="VIP"/>
-                    <ComboBoxItem Content="Лимит"/>
-                </ComboBox>
+                <!-- Фильтр по типу сессии (только для вкладки Сессии) -->
+                <StackPanel x:Name="PnlSessionTypeFilter"
+                            Orientation="Horizontal">
+                    <TextBlock Text="Тип:"
+                               Foreground="#888" FontSize="13"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0"/>
+                    <ComboBox x:Name="CmbType" Width="140"
+                              FontSize="13" Padding="8,4"
+                              SelectionChanged="Filter_Changed">
+                        <ComboBoxItem Content="Все типы" IsSelected="True"/>
+                        <ComboBoxItem Content="VIP"/>
+                        <ComboBoxItem Content="Лимит"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Фильтр по статусу оплаты (только для вкладки Услуги) -->
+                <StackPanel x:Name="PnlServiceStatusFilter"
+                            Orientation="Horizontal"
+                            Visibility="Collapsed">
+                    <TextBlock Text="Статус:"
+                               Foreground="#888" FontSize="13"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0"/>
+                    <ComboBox x:Name="CmbServiceStatus" Width="140"
+                              FontSize="13" Padding="8,4"
+                              SelectionChanged="Filter_Changed">
+                        <ComboBoxItem Content="Все статусы" IsSelected="True"/>
+                        <ComboBoxItem Content="Оплачено"/>
+                        <ComboBoxItem Content="Не оплачено"/>
+                    </ComboBox>
+                </StackPanel>
 
                 <TextBlock x:Name="TxtFilterResult"
                            Foreground="#888" FontSize="12"
@@ -174,16 +243,17 @@
             </StackPanel>
         </Border>
 
-        <!-- Таблица сессий -->
-        <Border Grid.Row="3" Background="White" CornerRadius="10">
+        <!-- Таблица -->
+        <Border Grid.Row="4" Background="White" CornerRadius="10">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Заголовок таблицы -->
-                <Border Grid.Row="0" Background="#F8F8F8"
+                <!-- Заголовок: Сессии -->
+                <Border x:Name="HeaderSessions"
+                        Grid.Row="0" Background="#F8F8F8"
                         CornerRadius="10,10,0,0" Padding="16,10">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -195,36 +265,69 @@
                             <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="120"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Компьютер"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
-                        <TextBlock Grid.Column="1" Text="Тип"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
-                        <TextBlock Grid.Column="2" Text="ID читателя"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
-                        <TextBlock Grid.Column="3" Text="Пользователь"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
-                        <TextBlock Grid.Column="4" Text="Длительность"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
-                        <TextBlock Grid.Column="5" Text="Сумма"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
-                        <TextBlock Grid.Column="6" Text="Дата и время"
-                                   Foreground="#888" FontSize="12"
-                                   FontWeight="Medium"/>
+                        <TextBlock Grid.Column="0" Text="Компьютер"   Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="1" Text="Тип"          Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="2" Text="ID читателя"  Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="3" Text="Пользователь" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="4" Text="Длительность" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="5" Text="Сумма"        Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="6" Text="Дата и время" Foreground="#888" FontSize="12" FontWeight="Medium"/>
                     </Grid>
                 </Border>
 
-                <!-- Список сессий + история удалений -->
-                <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto">
+                <!-- Заголовок: Услуги -->
+                <Border x:Name="HeaderServices"
+                        Grid.Row="0" Background="#F8F8F8"
+                        CornerRadius="10,10,0,0" Padding="16,10"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="110"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Услуга"       Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="1" Text="Количество"   Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="2" Text="Сумма"        Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="3" Text="Читатель"     Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="4" Text="Статус"       Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="5" Text="Дата и время" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                    </Grid>
+                </Border>
+
+                <!-- Заголовок: Всё -->
+                <Border x:Name="HeaderAll"
+                        Grid.Row="0" Background="#F8F8F8"
+                        CornerRadius="10,10,0,0" Padding="16,10"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="110"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Категория"   Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="1" Text="Описание"    Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="2" Text="Читатель"    Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="3" Text="Сумма"       Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="4" Text="Статус"      Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="5" Text="Дата"        Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                    </Grid>
+                </Border>
+
+                <!-- Содержимое -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <StackPanel x:Name="SessionsList"/>
                         <StackPanel x:Name="DeletedPcsList"/>
+                        <StackPanel x:Name="ServicesList" Visibility="Collapsed"/>
+                        <StackPanel x:Name="AllList" Visibility="Collapsed"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

@@ -74,12 +74,153 @@ namespace BibAdmin
                     }
                 }
 
+                RenderServicesPanel();
                 Logger.Info("Настройки загружены в UI");
             }
             catch (Exception ex)
             {
                 Logger.Error($"Ошибка загрузки: {ex.Message}");
             }
+        }
+
+        // =====================
+        // Дополнительные услуги
+        // =====================
+
+        private void RenderServicesPanel()
+        {
+            ServicesPanel.Children.Clear();
+
+            bool alt = false;
+            foreach (var svc in _global.Services)
+            {
+                var row = new Border
+                {
+                    Background = alt
+                        ? new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Color.FromRgb(250, 250, 250))
+                        : System.Windows.Media.Brushes.White,
+                    Padding = new Thickness(12, 8, 12, 8)
+                };
+                alt = !alt;
+
+                var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+
+                var captured = svc;
+
+                var nameText = new TextBlock
+                {
+                    Text = svc.Name,
+                    FontSize = 13,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(30, 30, 46))
+                };
+                Grid.SetColumn(nameText, 0);
+                grid.Children.Add(nameText);
+
+                var unitText = new TextBlock
+                {
+                    Text = svc.Unit,
+                    FontSize = 13,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(100, 100, 100))
+                };
+                Grid.SetColumn(unitText, 1);
+                grid.Children.Add(unitText);
+
+                var priceText = new TextBlock
+                {
+                    Text = $"{svc.Price:N0} сум",
+                    FontSize = 13,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(15, 110, 86))
+                };
+                Grid.SetColumn(priceText, 2);
+                grid.Children.Add(priceText);
+
+                var chk = new CheckBox
+                {
+                    IsChecked = svc.IsActive,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                chk.Checked += (s, e) => { captured.IsActive = true; SaveServices(); };
+                chk.Unchecked += (s, e) => { captured.IsActive = false; SaveServices(); };
+                Grid.SetColumn(chk, 3);
+                grid.Children.Add(chk);
+
+                var delBtn = new Button
+                {
+                    Content = "🗑",
+                    FontSize = 12,
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    ToolTip = "Удалить услугу"
+                };
+                delBtn.Click += (s, e) =>
+                {
+                    _global.Services.Remove(captured);
+                    SaveServices();
+                    RenderServicesPanel();
+                };
+                Grid.SetColumn(delBtn, 4);
+                grid.Children.Add(delBtn);
+
+                row.Child = grid;
+                ServicesPanel.Children.Add(row);
+            }
+        }
+
+        private void AddService_Click(object sender, RoutedEventArgs e)
+        {
+            string name = TxtNewServiceName.Text.Trim();
+            string unit = (CmbNewServiceUnit.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "лист";
+            string priceStr = TxtNewServicePrice.Text.Trim();
+
+            if (string.IsNullOrEmpty(name))
+            {
+                MessageBox.Show("Введите название услуги.", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!int.TryParse(priceStr, out int price) || price < 0)
+            {
+                MessageBox.Show("Введите корректную цену (целое число ≥ 0).", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            _global.Services.Add(new ServiceType
+            {
+                Name = name,
+                Unit = unit,
+                Price = price,
+                IsActive = true
+            });
+
+            SaveServices();
+            RenderServicesPanel();
+
+            TxtNewServiceName.Text = "";
+            TxtNewServicePrice.Text = "";
+        }
+
+        private void SaveServices()
+        {
+            _global.Save();
+            ShowSaved(TxtServicesSaved);
         }
 
         private void SelectComboByTag(ComboBox cmb, string tag)

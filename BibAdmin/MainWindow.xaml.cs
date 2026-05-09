@@ -46,10 +46,12 @@ namespace BibAdmin
                 Logger.Info("✅ Лог удалённых ПК загружен");
 
                 // ✅ 3. ЗАГРУЖАЕМ ИСТОРИЮ ФИНАНСОВ ПРИ ЗАПУСКЕ
-                // Критически важно: загружаем историю сразу при старте приложения,
-                // чтобы данные были доступны даже до перехода на вкладку "Финансы"
                 FinancePage.LoadHistory();
                 Logger.Info("✅ История финансов загружена");
+
+                // ✅ 4. ЗАГРУЖАЕМ ИСТОРИЮ УСЛУГ
+                ServiceTransaction.LoadHistory();
+                Logger.Info("✅ История услуг загружена");
 
                 // 🔄 Обновляем UI если вкладка Финансы уже активна
                 if (MainFrame.Content is FinancePage financePage)
@@ -111,6 +113,18 @@ namespace BibAdmin
         {
             SetActive(BtnSettings);
             MainFrame.Navigate(new SettingsPage());
+        }
+
+        // Быстрый заказ услуги
+        private void BtnNewService_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new ServiceOrderDialog();
+            if (dialog.ShowDialog() == true)
+            {
+                // Если открыта страница финансов — обновляем UI
+                if (MainFrame.Content is FinancePage fp)
+                    fp.RefreshUI();
+            }
         }
 
         // Подсветка активной кнопки меню
