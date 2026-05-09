@@ -62,6 +62,17 @@ namespace BibAdminWeb
                         app.UseCors("AllowAll");
                         app.UseRouting();
 
+                        // Redirect / → /admin-login.html
+                        app.Use(async (ctx, next) =>
+                        {
+                            if (ctx.Request.Path == "/" || ctx.Request.Path == "")
+                            {
+                                ctx.Response.Redirect("/admin-login.html");
+                                return;
+                            }
+                            await next(ctx);
+                        });
+
                         // wwwroot static files
                         app.UseStaticFiles(new StaticFileOptions
                         {
