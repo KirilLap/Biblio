@@ -263,6 +263,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="100"/>
+                            <ColumnDefinition Width="110"/>
                             <ColumnDefinition Width="120"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Компьютер"   Foreground="#888" FontSize="12" FontWeight="Medium"/>
@@ -271,7 +272,8 @@
                         <TextBlock Grid.Column="3" Text="Пользователь" Foreground="#888" FontSize="12" FontWeight="Medium"/>
                         <TextBlock Grid.Column="4" Text="Длительность" Foreground="#888" FontSize="12" FontWeight="Medium"/>
                         <TextBlock Grid.Column="5" Text="Сумма"        Foreground="#888" FontSize="12" FontWeight="Medium"/>
-                        <TextBlock Grid.Column="6" Text="Дата и время" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="6" Text="Оператор"     Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="7" Text="Дата и время" Foreground="#888" FontSize="12" FontWeight="Medium"/>
                     </Grid>
                 </Border>
 

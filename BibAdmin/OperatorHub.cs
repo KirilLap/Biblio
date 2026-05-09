@@ -75,6 +75,7 @@ namespace BibAdmin
             client.SessionId = Guid.NewGuid().ToString("N")[..8];
             client.UserName = string.IsNullOrWhiteSpace(userName) ? null : userName;
             client.ReaderId = string.IsNullOrWhiteSpace(readerId) ? null : readerId;
+            client.StartedByOperatorName = GetCurrentOperatorName();
             AdminHub.KnownClients[pcNumber] = client;
             AdminHub.SaveActiveSessions();
 
@@ -108,6 +109,11 @@ namespace BibAdmin
             int duration = client.ElapsedSeconds;
             var startTime = client.SessionStart ?? DateTime.Now;
 
+            // Лимит → оператор, начавший сессию; VIP → оператор, завершивший
+            string operatorName = sessionType == "VIP"
+                ? GetCurrentOperatorName()
+                : client.StartedByOperatorName;
+
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 FinancePage.AddSession(new SessionRecord
@@ -121,7 +127,8 @@ namespace BibAdmin
                     PaidAmount = paidAmount,
                     RefundAmount = refund,
                     StartTime = startTime,
-                    EndTime = DateTime.Now
+                    EndTime = DateTime.Now,
+                    OperatorName = operatorName
                 });
             });
 
@@ -337,6 +344,13 @@ namespace BibAdmin
         {
             var cookie = Context.GetHttpContext()?.Request.Cookies["bib_op"];
             return cookie != null && OperatorApi.ValidateToken(cookie, out _);
+        }
+
+        private string GetCurrentOperatorName()
+        {
+            var cookie = Context.GetHttpContext()?.Request.Cookies["bib_op"];
+            if (cookie == null || !OperatorApi.ValidateToken(cookie, out var operatorId)) return "";
+            return GlobalSettings.Load().Operators.Find(o => o.Id == operatorId)?.DisplayName ?? "";
         }
     }
 }

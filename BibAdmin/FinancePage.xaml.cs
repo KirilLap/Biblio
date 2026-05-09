@@ -24,6 +24,8 @@ namespace BibAdmin
         public int RefundAmount { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
+        // Пусто = завершено администратором
+        public string OperatorName { get; set; } = "";
     }
 
     public partial class FinancePage : Page
@@ -250,6 +252,7 @@ namespace BibAdmin
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
 
                 AddCell(grid, 0, s.PcNumber, Color.FromRgb(30, 30, 46), bold: true);
@@ -280,7 +283,9 @@ namespace BibAdmin
                 int h = s.DurationSeconds / 3600, m = (s.DurationSeconds % 3600) / 60, sec = s.DurationSeconds % 60;
                 AddCell(grid, 4, $"{h:D2}:{m:D2}:{sec:D2}", Color.FromRgb(80, 80, 80));
                 AddCell(grid, 5, $"{s.EarnedAmount:N0} сум", Color.FromRgb(15, 110, 86), bold: true);
-                AddCell(grid, 6, s.EndTime.ToString("dd.MM HH:mm"), Color.FromRgb(150, 150, 150));
+                var opLabel = string.IsNullOrEmpty(s.OperatorName) ? "Администратор" : s.OperatorName;
+                AddCell(grid, 6, opLabel, Color.FromRgb(100, 80, 160));
+                AddCell(grid, 7, s.EndTime.ToString("dd.MM HH:mm"), Color.FromRgb(150, 150, 150));
 
                 row.Child = grid;
                 SessionsList.Children.Add(row);

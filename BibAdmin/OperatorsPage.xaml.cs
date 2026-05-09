@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,8 +22,15 @@ namespace BibAdmin
         {
             try
             {
-                var host = Dns.GetHostEntry(Dns.GetHostName());
-                var ip = host.AddressList.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork);
+                // Ищем IP в приватном диапазоне (192.168.x, 10.x, 172.16-31.x) — не VPN
+                var ip = NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(ni => ni.OperationalStatus == OperationalStatus.Up &&
+                                 ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                    .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
+                    .Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork)
+                    .Select(a => a.Address)
+                    .FirstOrDefault(IsPrivateIp);
+
                 TxtWebUrl.Text = ip != null
                     ? $"Веб-интерфейс доступен по адресу: http://{ip}:8080/operator.html"
                     : "Веб-интерфейс: http://localhost:8080/operator.html";
@@ -31,6 +39,14 @@ namespace BibAdmin
             {
                 TxtWebUrl.Text = "Веб-интерфейс: http://localhost:8080/operator.html";
             }
+        }
+
+        private static bool IsPrivateIp(System.Net.IPAddress ip)
+        {
+            var b = ip.GetAddressBytes();
+            return b[0] == 10 ||
+                   (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+                   (b[0] == 192 && b[1] == 168);
         }
 
         private void RenderOperators()
@@ -54,7 +70,8 @@ namespace BibAdmin
             {
                 var row = new Grid { Margin = new Thickness(20, 6, 20, 6) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) }); // зазор
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
@@ -104,7 +121,7 @@ namespace BibAdmin
                         : new SolidColorBrush(Color.FromRgb(180, 180, 180)),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(statusText, 2);
+                Grid.SetColumn(statusText, 3);
                 row.Children.Add(statusText);
 
                 // Чекбокс активности
@@ -117,7 +134,7 @@ namespace BibAdmin
                 };
                 activeChk.Checked += ActiveToggle_Changed;
                 activeChk.Unchecked += ActiveToggle_Changed;
-                Grid.SetColumn(activeChk, 3);
+                Grid.SetColumn(activeChk, 4);
                 row.Children.Add(activeChk);
 
                 // Удалить
@@ -135,7 +152,7 @@ namespace BibAdmin
                     Tag = op.Id
                 };
                 delBtn.Click += DeleteOperator_Click;
-                Grid.SetColumn(delBtn, 4);
+                Grid.SetColumn(delBtn, 5);
                 row.Children.Add(delBtn);
 
                 OperatorsPanel.Children.Add(row);

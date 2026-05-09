@@ -65,6 +65,8 @@ namespace BibAdmin
         public int PaidAmount { get; set; } = 0;
         public string? UserName { get; set; }
         public string? ReaderId { get; set; }
+        // Имя оператора, начавшего сессию (пусто = администратор)
+        public string StartedByOperatorName { get; set; } = "";
 
         // ✅ Поля для паузы
         public bool IsPaused { get; set; } = false;
