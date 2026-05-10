@@ -106,7 +106,8 @@ namespace BibClient
                         break;
 
                     case "EXTEND_SESSION":
-                        ExtendSessionRequested?.Invoke(int.TryParse(value, out int extSecs) ? extSecs : 0);
+                        if (int.TryParse(value, out int extSecs) && extSecs > 0)
+                            ExtendSessionRequested?.Invoke(extSecs);
                         break;
 
                     case "END_SESSION":

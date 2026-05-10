@@ -38,6 +38,7 @@ namespace BibAdmin
             AdminHub.ClientTimeMismatch += OnClientTimeMismatch;
             AdminHub.ClientTimeDrift += OnClientTimeDrift;
             AdminHub.ClientNameConflict += OnClientNameConflict;
+            AdminHub.ClientNumberConflict += OnClientNumberConflict;
             Unloaded += OnUnloaded;
 
             // Загружаем сохранённый режим сортировки
@@ -61,7 +62,28 @@ namespace BibAdmin
             AdminHub.ClientTimeMismatch -= OnClientTimeMismatch;
             AdminHub.ClientTimeDrift -= OnClientTimeDrift;
             AdminHub.ClientNameConflict -= OnClientNameConflict;
+            AdminHub.ClientNumberConflict -= OnClientNumberConflict;
             _timer.Stop();
+        }
+
+        private void OnClientNumberConflict(string mac, string takenPcName, int requestedPcNumberValue, string requestedCustomName)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var requestedName = string.IsNullOrEmpty(requestedCustomName)
+                    ? $"ПК {requestedPcNumberValue}"
+                    : $"{requestedCustomName} {requestedPcNumberValue}";
+
+                var result = MessageBox.Show(
+                    $"Новый ПК (MAC: {mac}) хочет зарегистрироваться как '{requestedName}',\n" +
+                    $"но этот номер уже занят: '{takenPcName}'.\n\n" +
+                    $"Разрешить регистрацию со следующим свободным номером?",
+                    "Конфликт номера ПК",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                AdminHub.ResolveNumberConflict(mac, result == MessageBoxResult.Yes);
+            });
         }
 
         private void OnClientNameConflict(string registeredName, string requestedName, string mac, int requestedPcNumberValue, string requestedCustomName)

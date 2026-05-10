@@ -158,6 +158,13 @@ namespace BibAdminWeb
             return Task.CompletedTask;
         }
 
+        public Task ResolveNumberConflict(string mac, bool accept)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            AdminHub.ResolveNumberConflict(mac, accept);
+            return Task.CompletedTask;
+        }
+
         public async Task<string> TransferSession(string fromPc, string toPc)
         {
             if (!IsAuthorized()) return "Нет авторизации";

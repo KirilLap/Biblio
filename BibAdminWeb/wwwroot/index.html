@@ -373,6 +373,18 @@
   </div>
 </div>
 
+<!-- Number conflict dialog -->
+<div id="dlgNumberConflict" class="dlg-overlay" style="display:none">
+  <div class="dlg dlg-warn">
+    <div class="dlg-title">⚠️ Конфликт номера ПК</div>
+    <div id="dlgNumberConflictText" style="margin:16px 0;color:#ccc;line-height:1.7"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="resolveNumberConflict(false)">Отклонить</button>
+      <button class="btn btn-primary" onclick="resolveNumberConflict(true)">Разрешить со следующим свободным номером</button>
+    </div>
+  </div>
+</div>
+
 <!-- Rename PC dialog -->
 <div id="dlgRename" class="dlg-overlay" style="display:none">
   <div class="dlg">

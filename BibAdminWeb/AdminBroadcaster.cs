@@ -31,6 +31,8 @@ namespace BibAdminWeb
                 _ = _ctx.Clients.All.SendAsync("timeMismatchAlert", new { pcNumber, clientSecs, serverSecs });
             AdminHub.ClientNameConflict += (registeredAs, requestedAs, mac, pcNumberValue, customName) =>
                 _ = _ctx.Clients.All.SendAsync("nameConflictAlert", new { registeredAs, requestedAs, mac, pcNumberValue, customName });
+            AdminHub.ClientNumberConflict += (mac, takenPcName, pcNumberValue, customName) =>
+                _ = _ctx.Clients.All.SendAsync("numberConflictAlert", new { mac, takenPcName, pcNumberValue, customName });
         }
 
         public void NotifyOfflineResolved(string pcNumber, string decision)

@@ -62,6 +62,7 @@ function connectHub() {
   conn.on('timeMismatchAlert', d =>
     toast(`⚠️ ${d.pcNumber}: расхождение оффлайн-времени (клиент ${d.clientSecs}с, сервер ${d.serverSecs}с)`, 'warn'));
   conn.on('nameConflictAlert', d => showNameConflict(d));
+  conn.on('numberConflictAlert', d => showNumberConflict(d));
   conn.on('settingsUpdated', s => { settings = s; fillSettingsForm(); });
 
   conn.onreconnected(() => {
@@ -406,6 +407,27 @@ async function resolveConflict(accept) {
   await conn.invoke('ResolveNameConflict', d.mac, accept, d.pcNumberValue, d.customName);
   pendingConflict = null;
   closeDlg('dlgNameConflict');
+}
+
+// ─── Number conflict ─────────────────────────────────────────────────────────
+let pendingNumberConflict = null;
+
+function showNumberConflict(d) {
+  pendingNumberConflict = d;
+  const requestedName = d.customName ? `${d.customName} ${d.pcNumberValue}` : `ПК ${d.pcNumberValue}`;
+  document.getElementById('dlgNumberConflictText').innerHTML =
+    `Новый ПК (MAC: <code>${esc(d.mac)}</code>) хочет зарегистрироваться как <b>${esc(requestedName)}</b>,<br>
+     но этот номер уже занят: <b>${esc(d.takenPcName)}</b>.<br><br>
+     Разрешить регистрацию со следующим свободным номером?`;
+  document.getElementById('dlgNumberConflict').style.display = 'flex';
+}
+
+async function resolveNumberConflict(accept) {
+  if (!pendingNumberConflict) return;
+  const d = pendingNumberConflict;
+  await conn.invoke('ResolveNumberConflict', d.mac, accept);
+  pendingNumberConflict = null;
+  closeDlg('dlgNumberConflict');
 }
 
 // ─── Rename ──────────────────────────────────────────────────────────────────
