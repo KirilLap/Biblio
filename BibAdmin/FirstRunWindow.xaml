@@ -1,0 +1,72 @@
+<Window x:Class="BibAdmin.FirstRunWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Biblio — Первый запуск"
+        SizeToContent="Height" Width="440"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#1E1E2E">
+
+    <Grid Margin="32">
+        <StackPanel>
+
+            <!-- Логотип -->
+            <TextBlock Text="Biblio" Foreground="#1D9E75" FontSize="32"
+                       FontWeight="Bold" HorizontalAlignment="Center"/>
+            <TextBlock Text="Первый запуск — установите пароль администратора"
+                       Foreground="#888899" FontSize="12"
+                       HorizontalAlignment="Center" TextAlignment="Center"
+                       Margin="0,8,0,32"/>
+
+            <!-- Новый пароль -->
+            <TextBlock Text="НОВЫЙ ПАРОЛЬ" Foreground="#AAAACC" FontSize="11"
+                       FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <Border BorderBrush="#3D3D6B" BorderThickness="1" CornerRadius="8" Margin="0,0,0,16">
+                <PasswordBox x:Name="PbPassword"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"/>
+            </Border>
+
+            <!-- Подтверждение -->
+            <TextBlock Text="ПОВТОРИТЕ ПАРОЛЬ" Foreground="#AAAACC" FontSize="11"
+                       FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <Border BorderBrush="#3D3D6B" BorderThickness="1" CornerRadius="8" Margin="0,0,0,24">
+                <PasswordBox x:Name="PbConfirm"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"/>
+            </Border>
+
+            <!-- Ошибка -->
+            <TextBlock x:Name="TxtError" Foreground="#F87171" FontSize="12"
+                       HorizontalAlignment="Center" Margin="0,0,0,16"
+                       Visibility="Collapsed"/>
+
+            <!-- Кнопка -->
+            <Button x:Name="BtnSave" Content="Установить пароль и войти"
+                    Click="BtnSave_Click"
+                    Background="#1D9E75" Foreground="White"
+                    BorderThickness="0" FontSize="14" FontWeight="SemiBold"
+                    Padding="0,13" Cursor="Hand">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#17856A"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#2A4A40"/>
+                                <Setter Property="Foreground" Value="#556655"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+        </StackPanel>
+    </Grid>
+</Window>

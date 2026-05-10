@@ -10,6 +10,17 @@ namespace BibAdmin
         {
             base.OnStartup(e);
 
+            var settings = GlobalSettings.Load();
+            if (settings.IsFirstRun)
+            {
+                var setup = new FirstRunWindow();
+                if (setup.ShowDialog() != true)
+                {
+                    Shutdown();
+                    return;
+                }
+            }
+
             var mainWindow = new MainWindow();
             MainWindow = mainWindow;
             mainWindow.Show();

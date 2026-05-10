@@ -23,6 +23,50 @@ namespace BibAdminWeb
             return token != null && IsValidToken(token);
         }
 
+        public static async Task HandleSetup(HttpContext ctx)
+        {
+            ctx.Response.ContentType = "application/json";
+            try
+            {
+                var settings = GlobalSettings.Load();
+                if (!settings.IsFirstRun)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Первый запуск уже завершён" }));
+                    return;
+                }
+
+                using var reader = new System.IO.StreamReader(ctx.Request.Body);
+                var body = await reader.ReadToEndAsync();
+                var data = JsonSerializer.Deserialize<JsonElement>(body);
+                var password = data.GetProperty("password").GetString() ?? "";
+
+                if (password.Length < 4)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Пароль должен быть не менее 4 символов" }));
+                    return;
+                }
+
+                settings.SetPassword(password);
+                settings.IsFirstRun = false;
+                settings.Save();
+
+                var token = Guid.NewGuid().ToString("N");
+                _tokens[token] = DateTime.UtcNow.AddHours(24);
+                ctx.Response.Cookies.Append("bib_admin", token, new CookieOptions
+                {
+                    HttpOnly = true, SameSite = SameSiteMode.Lax, Expires = DateTimeOffset.UtcNow.AddHours(24)
+                });
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true }));
+            }
+            catch (Exception ex)
+            {
+                ctx.Response.StatusCode = 400;
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+            }
+        }
+
         public static async Task HandleLogin(HttpContext ctx)
         {
             ctx.Response.ContentType = "application/json";

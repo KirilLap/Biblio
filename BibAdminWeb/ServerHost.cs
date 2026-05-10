@@ -64,12 +64,20 @@ namespace BibAdminWeb
                         app.UseCors("AllowAll");
                         app.UseRouting();
 
-                        // Redirect / → /admin-login.html
+                        // Redirect / → /setup.html (первый запуск) или /admin-login.html
                         app.Use(async (ctx, next) =>
                         {
-                            if (ctx.Request.Path == "/" || ctx.Request.Path == "")
+                            var path = ctx.Request.Path.Value ?? "";
+                            if (path == "/" || path == "")
                             {
-                                ctx.Response.Redirect("/admin-login.html");
+                                var s = GlobalSettings.Load();
+                                ctx.Response.Redirect(s.IsFirstRun ? "/setup.html" : "/admin-login.html");
+                                return;
+                            }
+                            // Блокируем доступ к защищённым страницам при первом запуске
+                            if ((path == "/admin-login.html" || path == "/index.html") && GlobalSettings.Load().IsFirstRun)
+                            {
+                                ctx.Response.Redirect("/setup.html");
                                 return;
                             }
                             await next(ctx);
@@ -114,6 +122,9 @@ namespace BibAdminWeb
                         {
                             var path = ctx.Request.Path.Value ?? "";
                             var method = ctx.Request.Method;
+
+                            if (method == "POST" && path == "/api/admin/setup")
+                            { await AdminAuth.HandleSetup(ctx); return; }
 
                             if (method == "POST" && path == "/api/admin/login")
                             { await AdminAuth.HandleLogin(ctx); return; }
