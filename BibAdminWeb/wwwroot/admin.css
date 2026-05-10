@@ -486,3 +486,61 @@ body {
 .toast.success { border-color: #0f3d2e; }
 .toast.error { border-color: #5a1010; background: #1e0a0a; }
 @keyframes slideIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+
+/* ── Sort select ───────────────────────────────────────── */
+.sort-select {
+  background: #16213e;
+  color: #ccc;
+  border: 1px solid #1d4a7a;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+.sort-select:focus { border-color: #1d9e75; }
+
+/* ── Context menu ──────────────────────────────────────── */
+.ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #1c1c28;
+  border: 1px solid #3d3d6b;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 210px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+  user-select: none;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #dde;
+  position: relative;
+  transition: background .12s;
+}
+.ctx-item:hover { background: #37376b; }
+.ctx-item.danger { color: #f87171; }
+.ctx-icon { width: 18px; text-align: center; color: #aac; font-size: 12px; }
+.ctx-arrow { margin-left: auto; color: #66a; font-size: 14px; }
+.ctx-sep { height: 1px; background: #323264; margin: 4px 10px; }
+.ctx-sub { position: relative; }
+.ctx-sub-panel {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  background: #1c1c28;
+  border: 1px solid #3d3d6b;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 230px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+  z-index: 10000;
+}
+.ctx-sub:hover > .ctx-sub-panel { display: block; }

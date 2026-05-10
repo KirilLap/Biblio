@@ -44,6 +44,10 @@
         <p id="pcStats" class="page-sub">Загрузка...</p>
       </div>
       <div class="header-actions">
+        <select id="sortMode" class="sort-select" onchange="changeSortMode(this.value)">
+          <option value="ByNumber">По номеру</option>
+          <option value="ByName">По имени</option>
+        </select>
         <button class="btn btn-outline" onclick="lockAll()">🔒 Заблокировать всех</button>
         <button class="btn btn-outline" onclick="unlockAll()">🔓 Разблокировать всех</button>
       </div>
@@ -384,6 +388,25 @@
 
 <!-- Toasts -->
 <div id="toastArea"></div>
+
+<!-- Context menu -->
+<div id="ctxMenu" class="ctx-menu" style="display:none"></div>
+
+<!-- Individual PC background dialog -->
+<div id="dlgIndBg" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">🖼 Фон для <span id="dlgIndBgPcName"></span></div>
+    <p style="color:#666;font-size:12px;margin-bottom:12px">Индивидуальный фон только для этого ПК</p>
+    <div class="form-row">
+      <label>Выбрать файл</label>
+      <input type="file" id="dlgIndBgInput" accept="image/*" style="color:#ccc;font-size:13px">
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgIndBg')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmIndBg()">Загрузить</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
 <script src="/admin.js"></script>

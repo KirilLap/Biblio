@@ -357,6 +357,86 @@ namespace BibAdminWeb
             await Clients.Caller.SendAsync("serviceCreated", new { total, isPaid = payNow, serviceName = svc.Name });
         }
 
+        /// <summary>Toggle an individual per-PC setting (SHOW_PC_NUMBER, USB_BLOCK, TASKMGR_DISABLE).</summary>
+        public async Task TogglePcSetting(string pcNumber, string settingType)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+
+            string value;
+            switch (settingType.ToUpper())
+            {
+                case "SHOW_PC_NUMBER":
+                    client.ShowPcNumber = !client.ShowPcNumber;
+                    value = client.ShowPcNumber.ToString().ToLower();
+                    break;
+                case "USB_BLOCK":
+                    client.UsbBlocked = !client.UsbBlocked;
+                    value = client.UsbBlocked.ToString().ToLower();
+                    break;
+                case "TASKMGR_DISABLE":
+                    client.TaskMgrDisabled = !client.TaskMgrDisabled;
+                    value = client.TaskMgrDisabled.ToString().ToLower();
+                    break;
+                default:
+                    return;
+            }
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.MarkIndividualSetting(pcNumber, settingType);
+            var json = JsonSerializer.Serialize(new { Type = settingType, Value = value });
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+            else
+                AdminHub.AddPendingCommand(pcNumber, settingType, value);
+            AdminHub.RaiseClientUpdated(client);
+        }
+
+        /// <summary>Toggle a global setting and send the command to one specific PC (marking it individual).</summary>
+        public async Task ToggleGlobalSetting(string pcNumber, string settingType)
+        {
+            if (!IsAuthorized()) return;
+            var global = GlobalSettings.Load();
+            bool newVal;
+            switch (settingType.ToUpper())
+            {
+                case "BLOCK_REGEDIT":     global.BlockRegedit     = !global.BlockRegedit;     newVal = global.BlockRegedit;     break;
+                case "BLOCK_CMD":         global.BlockCmd         = !global.BlockCmd;         newVal = global.BlockCmd;         break;
+                case "BLOCK_POWERSHELL":  global.BlockPowerShell  = !global.BlockPowerShell;  newVal = global.BlockPowerShell;  break;
+                case "BLOCK_INSTALL_UNINSTALL": global.BlockInstall = !global.BlockInstall;   newVal = global.BlockInstall;     break;
+                default: return;
+            }
+            global.Save();
+            AdminHub.MarkIndividualSetting(pcNumber, settingType);
+            if (AdminHub.KnownClients.TryGetValue(pcNumber, out var client))
+            {
+                var json = JsonSerializer.Serialize(new { Type = settingType, Value = newVal.ToString().ToLower() });
+                if (client.IsOnline)
+                    await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                else
+                    AdminHub.AddPendingCommand(pcNumber, settingType, newVal.ToString().ToLower());
+                AdminHub.RaiseClientUpdated(client);
+            }
+            // Also update browser admin clients about the settings change
+            AdminBroadcaster.Instance?.PushSettings(global);
+        }
+
+        /// <summary>Clear all individual settings for a PC and push current global settings to it.</summary>
+        public async Task ResetIndividualSettings(string pcNumber)
+        {
+            if (!IsAuthorized()) return;
+            AdminHub.ClearIndividualSettings(pcNumber);
+            if (AdminHub.KnownClients.TryGetValue(pcNumber, out var client) && client.IsOnline)
+            {
+                var global = GlobalSettings.Load();
+                foreach (var cmd in global.ToCommands())
+                {
+                    var json = JsonSerializer.Serialize(new { cmd.Type, cmd.Value });
+                    await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+                }
+                AdminHub.RaiseClientUpdated(client);
+            }
+        }
+
         // ─── Utilities ────────────────────────────────────────────────────────
 
         internal static object ClientDto(ClientState c) => new

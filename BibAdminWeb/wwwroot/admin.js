@@ -90,7 +90,18 @@ function showPage(name) {
 // ─── PC Grid ──────────────────────────────────────────────────────────────
 function renderPcGrid() {
   const grid = document.getElementById('pcGrid');
-  const list = Object.values(pcs).sort((a, b) => a.pcNumberValue - b.pcNumberValue);
+  const sortMode = settings.clientSortMode || 'ByNumber';
+  let list = Object.values(pcs);
+  if (sortMode === 'ByName') {
+    list.sort((a, b) => {
+      const an = (a.customName || '').toLowerCase() || '￿';
+      const bn = (b.customName || '').toLowerCase() || '￿';
+      if (an !== bn) return an.localeCompare(bn);
+      return a.pcNumberValue - b.pcNumberValue;
+    });
+  } else {
+    list.sort((a, b) => a.pcNumberValue !== b.pcNumberValue ? a.pcNumberValue - b.pcNumberValue : (a.customName || '').localeCompare(b.customName || ''));
+  }
 
   let online = 0, sessions = 0, free = 0;
   list.forEach(c => {
@@ -108,6 +119,7 @@ function renderPcGrid() {
 function buildPcCard(c) {
   const div = document.createElement('div');
   div.className = 'pc-card';
+  div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
   div.id = 'pc-' + c.pcNumber.replace(/\s/g, '_');
 
   // Оффлайн + сессия: карточка с тёплым красным акцентом
@@ -415,6 +427,143 @@ async function deletePc(pcNumber) {
   await conn.invoke('DeletePc', pcNumber);
 }
 
+// ─── Sort ─────────────────────────────────────────────────────────────────────
+async function changeSortMode(mode) {
+  settings.clientSortMode = mode;
+  // Quick-save just the sort mode
+  await fetch('/api/admin/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...readSettingsForm(), clientSortMode: mode })
+  });
+  renderPcGrid();
+}
+
+// ─── Context menu ─────────────────────────────────────────────────────────────
+let ctxPc = null;
+
+function showCtxMenu(x, y, c) {
+  ctxPc = c;
+  const menu = document.getElementById('ctxMenu');
+  menu.innerHTML = buildCtxHtml(c);
+  menu.style.display = 'block';
+  // Keep within viewport
+  const rect = { w: 220, h: 380 };
+  menu.style.left = (x + rect.w > window.innerWidth  ? x - rect.w : x) + 'px';
+  menu.style.top  = (y + rect.h > window.innerHeight ? y - rect.h : y) + 'px';
+}
+
+function hideCtxMenu() {
+  document.getElementById('ctxMenu').style.display = 'none';
+  ctxPc = null;
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#ctxMenu')) hideCtxMenu();
+});
+
+function buildCtxHtml(c) {
+  const g = settings;
+  const item = (icon, label, action, danger = false) =>
+    `<div class="ctx-item${danger ? ' danger' : ''}" data-action="${action}"><span class="ctx-icon">${icon}</span>${label}</div>`;
+  const sep = '<div class="ctx-sep"></div>';
+  const sub = (icon, label, inner) =>
+    `<div class="ctx-item ctx-sub"><span class="ctx-icon">${icon}</span>${label}<span class="ctx-arrow">›</span>
+       <div class="ctx-sub-panel">${inner}</div>
+     </div>`;
+
+  let html = item('✎', 'Переименовать', `rename:${c.pcNumberValue}:${encodeURIComponent(c.customName || '')}`);
+  if (c.isSession)
+    html += item('↔', 'Пересадить пользователя', `transfer:${c.pcNumber}`);
+  html += sep;
+
+  // Settings submenu
+  const showNum = c.hasIndividualSettings && c.showPcNumber !== undefined ? c.showPcNumber : (g.showPcNumber !== false);
+  let sInner = item('▣', 'Изменить фон...', `indBg:${c.pcNumber}`);
+  sInner += item(showNum ? '◎' : '●', showNum ? 'Скрыть номер ПК' : 'Показать номер ПК', `togglePc:${c.pcNumber}:SHOW_PC_NUMBER`);
+  if (c.hasIndividualSettings) {
+    sInner += sep;
+    sInner += item('🔄', 'Сбросить к глобальным', `resetInd:${c.pcNumber}`, true);
+  }
+  html += sub('🖥', 'Настройки ПК', sInner);
+
+  // Restrictions submenu
+  const usb = c.hasIndividualSettings && c.usbBlocked !== undefined ? c.usbBlocked : !!g.usbBlocked;
+  const tm  = c.hasIndividualSettings && c.taskMgrDisabled !== undefined ? c.taskMgrDisabled : !!g.taskMgrDisabled;
+  let rInner = '';
+  rInner += item(usb ? '▶' : '■', usb ? 'Разблокировать USB' : 'Заблокировать USB', `togglePc:${c.pcNumber}:USB_BLOCK`);
+  rInner += item(tm ? '▶' : '■', tm ? 'Вкл. диспетчер задач' : 'Откл. диспетчер задач', `togglePc:${c.pcNumber}:TASKMGR_DISABLE`);
+  rInner += sep;
+  rInner += item('■', g.blockRegedit ? 'Разрешить regedit' : 'Запретить regedit', `toggleGlob:${c.pcNumber}:BLOCK_REGEDIT`);
+  rInner += item('■', g.blockCmd ? 'Разрешить CMD' : 'Запретить CMD', `toggleGlob:${c.pcNumber}:BLOCK_CMD`);
+  rInner += item('■', g.blockPowerShell ? 'Разрешить PowerShell' : 'Запретить PowerShell', `toggleGlob:${c.pcNumber}:BLOCK_POWERSHELL`);
+  rInner += item('■', g.blockInstall ? 'Разрешить установку' : 'Запретить установку', `toggleGlob:${c.pcNumber}:BLOCK_INSTALL_UNINSTALL`);
+  html += sub('🛡', 'Ограничения', rInner);
+
+  html += sep;
+  html += item('⟳', 'Переподключить клиент', `reconnect:${c.pcNumber}`);
+  if (c.isOnline) {
+    html += item('↺', 'Перезагрузить ПК', `restart:${c.pcNumber}`);
+    html += item('⏻', 'Выключить ПК', `shutdown:${c.pcNumber}`, true);
+  }
+  if (!c.isOnline && !c.isSession) {
+    html += sep;
+    html += item('✕', 'Удалить из списка', `delete:${c.pcNumber}`, true);
+  }
+  return html;
+}
+
+// Event delegation for context menu clicks
+document.addEventListener('click', async e => {
+  const el = e.target.closest('#ctxMenu .ctx-item[data-action]');
+  if (!el) return;
+  const [act, ...args] = el.dataset.action.split(':');
+  hideCtxMenu();
+  switch (act) {
+    case 'rename':   openRename(parseInt(args[0]), decodeURIComponent(args[1] || '')); break;
+    case 'transfer': openTransfer(args[0]); break;
+    case 'indBg':    openIndBg(args[0]); break;
+    case 'togglePc': await conn.invoke('TogglePcSetting', args[0], args[1]); break;
+    case 'resetInd':
+      if (confirm(`Сбросить индивидуальные настройки для ${args[0]}?`))
+        await conn.invoke('ResetIndividualSettings', args[0]);
+      break;
+    case 'toggleGlob': await conn.invoke('ToggleGlobalSetting', args[0], args[1]); break;
+    case 'reconnect': await conn.invoke('SendCommandToPc', args[0], 'RECONNECT', 'true'); break;
+    case 'restart':
+      if (confirm(`Перезагрузить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'RESTART', 'true');
+      break;
+    case 'shutdown':
+      if (confirm(`Выключить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'SHUTDOWN', 'true');
+      break;
+    case 'delete':  deletePc(args[0]); break;
+  }
+});
+
+// ─── Individual PC background ─────────────────────────────────────────────────
+let indBgPc = null;
+
+function openIndBg(pcNumber) {
+  indBgPc = pcNumber;
+  document.getElementById('dlgIndBgPcName').textContent = pcNumber;
+  document.getElementById('dlgIndBgInput').value = '';
+  document.getElementById('dlgIndBg').style.display = 'flex';
+}
+
+async function confirmIndBg() {
+  const input = document.getElementById('dlgIndBgInput');
+  if (!input.files || !input.files.length) { toast('Выберите файл', 'warn'); return; }
+  const file = input.files[0];
+  const buf  = await file.arrayBuffer();
+  const b64  = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  closeDlg('dlgIndBg');
+  try {
+    await conn.invoke('UploadFile', file.name, b64, indBgPc, false);
+    toast(`Фон установлен для ${indBgPc}`, 'success');
+  } catch (e) {
+    toast('Ошибка загрузки фона: ' + e.message, 'warn');
+  }
+}
+
 // ─── Finance ──────────────────────────────────────────────────────────────────
 async function loadFinance() {
   const [rs, sv] = await Promise.all([
@@ -605,6 +754,10 @@ function fillSettingsForm() {
 
   // Имя файла фона
   document.getElementById('sBgFileName').value = settings.backgroundFileName ?? '';
+
+  // Sort mode selector
+  const sortSel = document.getElementById('sortMode');
+  if (sortSel) sortSel.value = settings.clientSortMode || 'ByNumber';
 
   // Привязываем live-обновление подписей слайдеров (один раз)
   bindSliderLabel('sBgOpacity',        'sBgOpacityVal',       v => Math.round(v));
