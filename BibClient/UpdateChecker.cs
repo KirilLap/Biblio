@@ -3,8 +3,6 @@ using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Input;
 
 namespace BibClient
 {
@@ -37,9 +35,10 @@ namespace BibClient
                 msg += $"\n\n{info.ReleaseNotes}";
             msg += "\n\nОбновить сейчас?";
 
-            var result = MessageBox.Show(msg, "Обновление BibClient",
-                MessageBoxButton.YesNo, MessageBoxImage.Information, MessageBoxResult.Yes);
-            if (result != MessageBoxResult.Yes) return;
+            var result = System.Windows.MessageBox.Show(msg, "Обновление BibClient",
+                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Information,
+                System.Windows.MessageBoxResult.Yes);
+            if (result != System.Windows.MessageBoxResult.Yes) return;
 
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
         }
@@ -50,20 +49,20 @@ namespace BibClient
             var tempPath = Path.Combine(Path.GetTempPath(), installerFile);
             try
             {
-                Mouse.OverrideCursor = Cursors.Wait;
+                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
                 var bytes = await _http.GetByteArrayAsync(downloadUrl);
                 await File.WriteAllBytesAsync(tempPath, bytes);
             }
             catch (Exception ex)
             {
-                Mouse.OverrideCursor = null;
-                MessageBox.Show($"Ошибка загрузки обновления:\n{ex.Message}",
-                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.Input.Mouse.OverrideCursor = null;
+                System.Windows.MessageBox.Show($"Ошибка загрузки обновления:\n{ex.Message}",
+                    "Ошибка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 return;
             }
             finally
             {
-                Mouse.OverrideCursor = null;
+                System.Windows.Input.Mouse.OverrideCursor = null;
             }
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -71,7 +70,8 @@ namespace BibClient
                 FileName = tempPath,
                 UseShellExecute = true
             });
-            Application.Current.Dispatcher.Invoke(() => Application.Current.Shutdown());
+            System.Windows.Application.Current.Dispatcher.Invoke(
+                () => System.Windows.Application.Current.Shutdown());
         }
 
         private static bool IsNewer(string remote, string current) =>
