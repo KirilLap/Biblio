@@ -10,17 +10,35 @@ namespace BibAdminWeb
         public int PcNumberValue { get; set; } = 1;
         public string CustomName { get; set; } = "";
 
+        // JsonIgnore: computed from CustomName+PcNumberValue, must NOT be deserialized
+        // (without this, JSON loader calls the setter which overwrites CustomName with the full display name)
+        [System.Text.Json.Serialization.JsonIgnore]
         public string PcNumber
         {
             get => string.IsNullOrEmpty(CustomName) ? $"ПК {PcNumberValue}" : $"{CustomName} {PcNumberValue}";
             set
             {
+                // Parse "ПК N" format
                 if (value.StartsWith("ПК ") && int.TryParse(value.Substring(3), out var num))
                 { PcNumberValue = num; CustomName = ""; }
+                // Parse pure number
                 else if (int.TryParse(value, out num))
                 { PcNumberValue = num; CustomName = ""; }
+                // Parse "CustomName N" format (e.g. "Комп 1")
                 else
-                { CustomName = value; }
+                {
+                    var lastSpace = value.LastIndexOf(' ');
+                    if (lastSpace > 0 && int.TryParse(value.Substring(lastSpace + 1), out num))
+                    {
+                        PcNumberValue = num;
+                        var prefix = value.Substring(0, lastSpace).TrimEnd();
+                        CustomName = prefix == "ПК" ? "" : prefix;
+                    }
+                    else
+                    {
+                        CustomName = value;
+                    }
+                }
             }
         }
 

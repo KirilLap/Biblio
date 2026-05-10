@@ -112,6 +112,15 @@ namespace BibAdminWeb
                     {
                         foreach (var c in list)
                         {
+                            // Миграция: убираем суффикс " N" из CustomName если он попал туда
+                            // из-за старого бага (PcNumber setter перезаписывал CustomName)
+                            if (!string.IsNullOrEmpty(c.CustomName))
+                            {
+                                var sfx = " " + c.PcNumberValue;
+                                while (c.CustomName.EndsWith(sfx))
+                                    c.CustomName = c.CustomName.Substring(0, c.CustomName.Length - sfx.Length).TrimEnd();
+                                if (c.CustomName == "ПК") c.CustomName = "";
+                            }
                             c.IsOnline = false;
                             c.Status = c.IsPaused ? "Пауза" : "Оффлайн";
                             c.LastSeen = DateTime.MinValue;

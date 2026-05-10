@@ -16,29 +16,33 @@ namespace BibAdmin
         // ✅ Отображаемое имя (можно менять через админку)
         public string CustomName { get; set; } = "";
         
-        // ✅ Вычисляемое свойство для обратной совместимости
-        public string PcNumber 
-        { 
+        // ✅ Вычисляемое свойство (НЕ сериализуется: JsonIgnore)
+        // Без JsonIgnore JSON-загрузчик вызывал setter, который перезаписывал CustomName
+        // полным именем → при каждом рестарте к имени добавлялся " 1"
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string PcNumber
+        {
             get => string.IsNullOrEmpty(CustomName) ? $"ПК {PcNumberValue}" : $"{CustomName} {PcNumberValue}";
-            set 
-            { 
-                // Парсинг старого формата "ПК 1" -> PcNumberValue=1, CustomName=""
+            set
+            {
+                // Парсинг "ПК N"
                 if (value.StartsWith("ПК ") && int.TryParse(value.Substring(3), out var num))
-                {
-                    PcNumberValue = num;
-                    CustomName = "";
-                }
+                { PcNumberValue = num; CustomName = ""; }
+                // Парсинг чистого числа
+                else if (int.TryParse(value, out num))
+                { PcNumberValue = num; CustomName = ""; }
+                // Парсинг "CustomName N" (например "Комп 1")
                 else
                 {
-                    // Если просто число
-                    if (int.TryParse(value, out num))
+                    var lastSpace = value.LastIndexOf(' ');
+                    if (lastSpace > 0 && int.TryParse(value.Substring(lastSpace + 1), out num))
                     {
                         PcNumberValue = num;
-                        CustomName = "";
+                        var prefix = value.Substring(0, lastSpace).TrimEnd();
+                        CustomName = prefix == "ПК" ? "" : prefix;
                     }
                     else
                     {
-                        // Произвольное имя - сохраняем только буквенную часть
                         CustomName = value;
                     }
                 }
