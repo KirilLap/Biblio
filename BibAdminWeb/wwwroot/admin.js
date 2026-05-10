@@ -168,6 +168,7 @@ function buildPcCard(c) {
   div.innerHTML = `
     <div class="pc-card-header">
       <span class="pc-name" onclick="openRename(${c.pcNumberValue}, '${esc(c.customName)}')">${esc(c.pcNumber)}${indBadge}</span>
+      <button class="pc-menu-btn" data-pcnumber="${esc(c.pcNumber)}" title="Действия">⋮</button>
       <div class="pc-offline-dot ${dotClass} online"></div>
     </div>
     ${badge}
@@ -458,6 +459,16 @@ function hideCtxMenu() {
 }
 
 document.addEventListener('click', e => {
+  const btn = e.target.closest('.pc-menu-btn');
+  if (btn) {
+    e.stopPropagation();
+    const pcNumber = btn.dataset.pcnumber;
+    const c = pcs[pcNumber];
+    if (!c) return;
+    const r = btn.getBoundingClientRect();
+    showCtxMenu(r.right, r.bottom + 4, c);
+    return;
+  }
   if (!e.target.closest('#ctxMenu')) hideCtxMenu();
 });
 

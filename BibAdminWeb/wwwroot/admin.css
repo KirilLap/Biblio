@@ -142,10 +142,11 @@ body {
 .pc-card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   margin-bottom: 10px;
 }
 .pc-name {
+  flex: 1;
   font-size: 15px;
   font-weight: 700;
   color: #e0e0f0;
@@ -499,6 +500,21 @@ body {
   outline: none;
 }
 .sort-select:focus { border-color: #1d9e75; }
+
+/* ── PC card menu button ───────────────────────────────── */
+.pc-menu-btn {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+  flex-shrink: 0;
+}
+.pc-menu-btn:hover { color: #ccc; background: #2a2a50; }
 
 /* ── Context menu ──────────────────────────────────────── */
 .ctx-menu {
