@@ -33,7 +33,7 @@ namespace BibAdminWeb
                 var data = JsonSerializer.Deserialize<JsonElement>(body);
                 var password = data.GetProperty("password").GetString() ?? "";
                 var settings = GlobalSettings.Load();
-                if (password != settings.AdminPassword)
+                if (GlobalSettings.HashPassword(password) != settings.AdminPasswordHash)
                 {
                     ctx.Response.StatusCode = 401;
                     await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Неверный пароль" }));

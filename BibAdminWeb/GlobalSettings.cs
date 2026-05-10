@@ -32,7 +32,16 @@ namespace BibAdminWeb
         public string BackgroundFileName { get; set; } = "";
 
         public int Tariff { get; set; } = 3000;
-        public string AdminPassword { get; set; } = "1234";
+        public string AdminPasswordHash { get; set; } = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 от "1234"
+
+        public void SetPassword(string plainText)
+            => AdminPasswordHash = HashPassword(plainText);
+
+        public static string HashPassword(string password)
+        {
+            var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(password));
+            return Convert.ToHexString(bytes).ToLowerInvariant();
+        }
 
         public bool LockOnOffline { get; set; } = false;
 
@@ -95,7 +104,7 @@ namespace BibAdminWeb
                 new("SET_TIME_FONT_SIZE", TimeFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new("USB_BLOCK", UsbBlocked.ToString().ToLower()),
                 new("TASKMGR_DISABLE", TaskMgrDisabled.ToString().ToLower()),
-                new("ADMIN_PASSWORD", AdminPassword),
+                new("ADMIN_PASSWORD", AdminPasswordHash),
                 new("SET_TARIFF", Tariff.ToString()),
                 new("BLOCK_REGEDIT", BlockRegedit.ToString().ToLower()),
                 new("BLOCK_CMD", BlockCmd.ToString().ToLower()),

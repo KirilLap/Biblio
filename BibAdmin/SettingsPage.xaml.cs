@@ -288,10 +288,10 @@ namespace BibAdmin
                 "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r != MessageBoxResult.Yes) return;
 
-            _global.AdminPassword = password;
+            _global.SetPassword(password);
             _global.Save();
 
-            await ApplyCommandToAll("ADMIN_PASSWORD", password);
+            await ApplyCommandToAll("ADMIN_PASSWORD", _global.AdminPasswordHash);
             ShowSaved(TxtPasswordSaved);
             TxtNewPassword.Clear();
         }

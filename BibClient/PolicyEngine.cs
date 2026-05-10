@@ -272,8 +272,10 @@ namespace BibClient
                     case "ADMIN_PASSWORD":
                         if (!string.IsNullOrEmpty(value))
                         {
-                            // Setter хеширует пароль через MD5 перед сохранением
-                            SettingsManager.Current.AdminPassword = value;
+                            // Если пришёл уже SHA256-хеш — сохраняем напрямую, иначе хешируем
+                            SettingsManager.Current.AdminPasswordHash = ClientSettings.IsHash(value)
+                                ? value
+                                : ClientSettings.HashPassword(value);
                             SettingsManager.Save();
                             Logger.Info("🔑 Пароль обновлён");
                         }
