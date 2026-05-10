@@ -107,6 +107,8 @@ Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""BibA
 ; -------------------------------------------------------
 [Code]
 procedure StopRunningProcesses();
+var
+  ResultCode: Integer;
 begin
   Exec('sc.exe', 'stop BibClientWatchdog', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(2000);
