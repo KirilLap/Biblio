@@ -24,8 +24,10 @@
 <div class="card">
   <div class="logo">
     <h1>Biblio</h1>
-    <p>Первый запуск — установите пароль администратора</p>
+    <p>Первый запуск — настройте сервер</p>
   </div>
+  <label>Порт сервера</label>
+  <input type="number" id="port" value="8080" min="1024" max="65535">
   <label>Новый пароль</label>
   <input type="password" id="pwd" placeholder="Минимум 4 символа" autofocus>
   <label>Повторите пароль</label>
@@ -37,6 +39,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Enter') setup(); });
 
   async function setup() {
+    const port    = parseInt(document.getElementById('port').value);
     const pwd     = document.getElementById('pwd').value;
     const confirm = document.getElementById('confirm').value;
     const err     = document.getElementById('err');
@@ -44,6 +47,7 @@
 
     err.textContent = '';
 
+    if (!port || port < 1024 || port > 65535) { err.textContent = 'Порт должен быть числом от 1024 до 65535'; return; }
     if (pwd.length < 4)     { err.textContent = 'Пароль должен быть не менее 4 символов'; return; }
     if (pwd !== confirm)    { err.textContent = 'Пароли не совпадают'; return; }
 
@@ -54,7 +58,7 @@
       const r = await fetch('/api/admin/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd })
+        body: JSON.stringify({ password: pwd, port: port })
       });
       if (r.ok) {
         window.location.href = '/index.html';

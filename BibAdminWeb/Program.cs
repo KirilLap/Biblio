@@ -7,8 +7,6 @@ namespace BibAdminWeb
 {
     class Program
     {
-        private const int Port = 8080;
-
         [STAThread]
         static void Main()
         {
@@ -23,14 +21,16 @@ namespace BibAdminWeb
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            var port = GlobalSettings.Load().ServerPort;
+
             var server = new ServerHost();
             try
             {
-                server.StartAsync(Port).GetAwaiter().GetResult();
+                server.StartAsync(port).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Не удалось запустить сервер на порту {Port}:\n{ex.Message}",
+                MessageBox.Show($"Не удалось запустить сервер на порту {port}:\n{ex.Message}",
                     "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
@@ -41,14 +41,14 @@ namespace BibAdminWeb
             FinanceStore.LoadHistory();
             ServiceTransaction.LoadHistory();
 
-            Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{Port}");
+            Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{port}");
 
             // Проверяем обновления через 5 секунд после старта
             _ = Task.Delay(5000).ContinueWith(_ => UpdateChecker.CheckAsync());
 
-            OpenBrowser(Port);
+            OpenBrowser(port);
 
-            using var tray = new TrayIcon(Port, () => Application.Exit());
+            using var tray = new TrayIcon(port, () => Application.Exit());
             Application.Run();
 
             server.StopAsync().GetAwaiter().GetResult();

@@ -13,10 +13,22 @@
             <!-- Логотип -->
             <TextBlock Text="Biblio" Foreground="#1D9E75" FontSize="32"
                        FontWeight="Bold" HorizontalAlignment="Center"/>
-            <TextBlock Text="Первый запуск — установите пароль администратора"
+            <TextBlock Text="Первый запуск — настройте сервер"
                        Foreground="#888899" FontSize="12"
                        HorizontalAlignment="Center" TextAlignment="Center"
                        Margin="0,8,0,32"/>
+
+            <!-- Порт сервера -->
+            <TextBlock Text="ПОРТ СЕРВЕРА" Foreground="#AAAACC" FontSize="11"
+                       FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <Border BorderBrush="#3D3D6B" BorderThickness="1" CornerRadius="8" Margin="0,0,0,6">
+                <TextBox x:Name="TxtPort" Text="8080"
+                         Background="#2A2A3E" Foreground="White"
+                         BorderThickness="0" FontSize="14"
+                         Padding="12,10" CaretBrush="White"/>
+            </Border>
+            <TextBlock Text="Клиентские ПК будут подключаться по этому порту. По умолчанию: 8080"
+                       Foreground="#555566" FontSize="11" Margin="0,0,0,20"/>
 
             <!-- Новый пароль -->
             <TextBlock Text="НОВЫЙ ПАРОЛЬ" Foreground="#AAAACC" FontSize="11"

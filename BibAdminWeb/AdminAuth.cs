@@ -40,6 +40,14 @@ namespace BibAdminWeb
                 var body = await reader.ReadToEndAsync();
                 var data = JsonSerializer.Deserialize<JsonElement>(body);
                 var password = data.GetProperty("password").GetString() ?? "";
+                var port = data.TryGetProperty("port", out var portEl) ? portEl.GetInt32() : 8080;
+
+                if (port < 1024 || port > 65535)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Порт должен быть числом от 1024 до 65535" }));
+                    return;
+                }
 
                 if (password.Length < 4)
                 {
@@ -48,6 +56,7 @@ namespace BibAdminWeb
                     return;
                 }
 
+                settings.ServerPort = port;
                 settings.SetPassword(password);
                 settings.IsFirstRun = false;
                 settings.Save();
