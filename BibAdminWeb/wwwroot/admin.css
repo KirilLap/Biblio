@@ -505,16 +505,18 @@ body {
 .pc-menu-btn {
   background: none;
   border: none;
-  color: #666;
-  font-size: 18px;
+  color: #aaa;
+  font-size: 20px;
   line-height: 1;
-  padding: 0 4px;
+  padding: 0 6px;
   border-radius: 4px;
   cursor: pointer;
   transition: color .15s, background .15s;
   flex-shrink: 0;
+  opacity: 0.6;
 }
-.pc-menu-btn:hover { color: #ccc; background: #2a2a50; }
+.pc-menu-btn:hover { color: #fff; background: #2a2a50; opacity: 1; }
+.pc-card:hover .pc-menu-btn { opacity: 1; }
 
 /* ── Context menu ──────────────────────────────────────── */
 .ctx-menu {
