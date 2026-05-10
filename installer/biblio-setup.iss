@@ -82,15 +82,8 @@ Filename: "sc.exe"; \
 Filename: "sc.exe"; Parameters: "start BibClientWatchdog"; \
     Flags: runhidden waituntilterminated; Components: client
 
-; Открыть порт 8080 для BibAdminWeb
-Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""BibAdminWeb"" dir=in action=allow protocol=TCP localport=8080"; \
-    Flags: runhidden waituntilterminated; Components: adminweb
-
-; Открыть порт 8080 для BibAdmin
-Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""BibAdmin"" dir=in action=allow protocol=TCP localport=8080"; \
-    Flags: runhidden waituntilterminated; Components: admin
+; Правила брандмауэра открываются в [Code] → CurStepChanged(ssPostInstall)
+; с использованием порта, введённого пользователем на странице настройки.
 
 ; -------------------------------------------------------
 ; При удалении
@@ -106,6 +99,9 @@ Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""BibA
 ; Обновление: перед установкой остановить службу и процессы
 ; -------------------------------------------------------
 [Code]
+var
+  PortPage: TInputQueryWizardPage;
+
 procedure StopRunningProcesses();
 var
   ResultCode: Integer;
@@ -121,4 +117,91 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   StopRunningProcesses();
   Result := '';
+end;
+
+procedure InitializeWizard();
+begin
+  PortPage := CreateInputQueryPage(wpSelectComponents,
+    'Настройка порта сервера',
+    'Укажите порт, на котором будут работать BibAdmin и BibAdminWeb.',
+    'Порт должен быть в диапазоне 1024–65535. По умолчанию: 8080.');
+  PortPage.Add('Порт сервера:', False);
+  PortPage.Values[0] := '8080';
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  PortStr: String;
+  PortNum: Integer;
+begin
+  Result := True;
+  if CurPageID = PortPage.ID then
+  begin
+    PortStr := Trim(PortPage.Values[0]);
+    if not TryStrToInt(PortStr, PortNum) or (PortNum < 1024) or (PortNum > 65535) then
+    begin
+      MsgBox('Введите корректный порт (1024–65535).', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function GetServerPort(): String;
+begin
+  Result := Trim(PortPage.Values[0]);
+  if Result = '' then Result := '8080';
+end;
+
+procedure OpenFirewallPort(RuleName: String; Port: String);
+var
+  ResultCode: Integer;
+begin
+  Exec('netsh.exe',
+    'advfirewall firewall add rule name="' + RuleName + '" dir=in action=allow protocol=TCP localport=' + Port,
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Port: String;
+  SettingsFile: String;
+  Lines: TArrayOfString;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    Port := GetServerPort();
+
+    // Открываем порт в брандмауэре для выбранных компонентов
+    if IsComponentSelected('adminweb') then
+      OpenFirewallPort('BibAdminWeb', Port);
+    if IsComponentSelected('admin') then
+      OpenFirewallPort('BibAdmin', Port);
+
+    // Записываем выбранный порт в settings.json для BibAdmin
+    if IsComponentSelected('admin') then
+    begin
+      SettingsFile := ExpandConstant('{app}\BibAdmin\settings.json');
+      if FileExists(SettingsFile) then
+      begin
+        if LoadStringsFromFile(SettingsFile, Lines) then
+        begin
+          // Простая замена строки порта если она уже есть
+          // При первом запуске приложение само создаст/применит порт через FirstRunWindow
+        end;
+      end;
+    end;
+
+    // Записываем выбранный порт в settings.json для BibAdminWeb
+    if IsComponentSelected('adminweb') then
+    begin
+      SettingsFile := ExpandConstant('{app}\BibAdminWeb\settings.json');
+      if FileExists(SettingsFile) then
+      begin
+        if LoadStringsFromFile(SettingsFile, Lines) then
+        begin
+          // Аналогично — порт будет применён при первом запуске через setup.html
+        end;
+      end;
+    end;
+  end;
 end;

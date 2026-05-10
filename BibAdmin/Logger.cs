@@ -9,10 +9,9 @@ namespace BibAdmin
     public static class Logger
     {
         private static readonly object _lock = new();
-        private static string _logDir;
-        private static string _logFile;
+        private static string _logDir = "";
+        private static string _logFile = "";
 
-        // Автоматическая инициализация при первом использовании
         private static void EnsureInit()
         {
             if (string.IsNullOrEmpty(_logFile))
@@ -20,8 +19,23 @@ namespace BibAdmin
                 _logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
                 Directory.CreateDirectory(_logDir);
                 _logFile = Path.Combine(_logDir, $"bibadmin_{DateTime.Now:yyyy-MM-dd}.log");
+                DeleteOldLogs();
                 Log("=== Запуск Админки ===", LogLevel.Info);
             }
+        }
+
+        private static void DeleteOldLogs()
+        {
+            try
+            {
+                var cutoff = DateTime.Now.AddDays(-30);
+                foreach (var file in Directory.GetFiles(_logDir, "*.log"))
+                {
+                    if (File.GetLastWriteTime(file) < cutoff)
+                        File.Delete(file);
+                }
+            }
+            catch { }
         }
 
         public static void Log(string message, LogLevel level)

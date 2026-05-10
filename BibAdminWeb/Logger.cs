@@ -19,8 +19,23 @@ namespace BibAdminWeb
                 _logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
                 Directory.CreateDirectory(_logDir);
                 _logFile = Path.Combine(_logDir, $"bibadminweb_{DateTime.Now:yyyy-MM-dd}.log");
+                DeleteOldLogs();
                 Log("=== BibAdmin Web запущен ===", LogLevel.Info);
             }
+        }
+
+        private static void DeleteOldLogs()
+        {
+            try
+            {
+                var cutoff = DateTime.Now.AddDays(-30);
+                foreach (var file in Directory.GetFiles(_logDir, "*.log"))
+                {
+                    if (File.GetLastWriteTime(file) < cutoff)
+                        File.Delete(file);
+                }
+            }
+            catch { }
         }
 
         public static void Log(string message, LogLevel level)

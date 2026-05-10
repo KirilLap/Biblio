@@ -56,6 +56,7 @@ namespace BibAdminWeb
 
             var cmd = new { Type = "START_SESSION", SessionType = sessionType, LimitSeconds = limitSeconds, PaidAmount = paidAmount, ElapsedSeconds = 0, ServerStartTime = serverStart.ToString("o") };
             await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+            AuditLogger.SessionStarted(pcNumber, sessionType, limitSeconds, paidAmount);
             AdminHub.RaiseClientUpdated(client);
         }
 
@@ -90,6 +91,7 @@ namespace BibAdminWeb
                     .SendAsync("ReceiveCommand", JsonSerializer.Serialize(new { Type = "REMOTE_LOCK", Value = "true" }));
             }
 
+            AuditLogger.SessionEnded(pcNumber, sessionType, duration);
             client.Status = "Заблокирован"; client.SessionType = ""; client.ElapsedSeconds = 0;
             client.LimitSeconds = 0; client.PaidAmount = 0; client.SessionStart = null;
             client.IsPaused = false; client.AccumulatedSeconds = 0; client.SessionId = "";
@@ -256,6 +258,7 @@ namespace BibAdminWeb
             {
                 AdminHub.KnownClients.TryRemove(oldName, out _);
                 AdminHub.KnownClients[newName] = client;
+                AuditLogger.PcRenamed(oldName, newName);
             }
             if (!string.IsNullOrEmpty(client.ConnectionId))
             {

@@ -226,8 +226,8 @@ namespace BibAdmin
         {
             Dispatcher.Invoke(() =>
             {
-                // Если окно для этого ПК уже открыто — не создаём дублирующее
-                if (_activeOfflineWindows.TryGetValue(client.PcNumber, out var existing) && existing.IsVisible)
+                // Ключ — MacAddress (не меняется при переименовании ПК)
+                if (_activeOfflineWindows.TryGetValue(client.MacAddress, out var existing) && existing.IsVisible)
                     return;
 
                 var win = new OfflineAlertWindow(
@@ -235,8 +235,8 @@ namespace BibAdmin
                     onPause: () => OnPauseDecision(client.PcNumber),
                     onContinue: () => OnContinueDecision(client.PcNumber)
                 );
-                _activeOfflineWindows[client.PcNumber] = win;
-                win.Closed += (s, e) => _activeOfflineWindows.Remove(client.PcNumber);
+                _activeOfflineWindows[client.MacAddress] = win;
+                win.Closed += (s, e) => _activeOfflineWindows.Remove(client.MacAddress);
                 win.Show();
             });
         }
@@ -947,6 +947,7 @@ namespace BibAdmin
             if (r != MessageBoxResult.Yes) return;
 
             await SendCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
+            AuditLogger.PcLocked(_selected.PcNumber);
             _selected.Status = "Заблокирован";
             _selected.SessionType = "";
             _selected.ElapsedSeconds = 0;
@@ -1009,6 +1010,7 @@ namespace BibAdmin
             if (_selected == null) return;
             RefreshSelected();
             await SendCommand(_selected.PcNumber, "REMOTE_UNLOCK", "free");
+            AuditLogger.PcUnlocked(_selected.PcNumber);
             _selected.Status = "Свободный";
             BuildGrid();
             SelectPc(_selected);
@@ -1049,6 +1051,7 @@ namespace BibAdmin
                 {
                     var cmd = new { Type = "START_SESSION", Value = sessionType, SessionType = sessionType, LimitSeconds = limitSeconds, PaidAmount = paidAmount, ServerStartTime = serverStartTime.ToString("o") };
                     await _hub.InvokeAsync("SendCommand", pcNumber, JsonSerializer.Serialize(cmd));
+                    AuditLogger.SessionStarted(pcNumber, sessionType, limitSeconds, paidAmount);
                 }
             }
             catch (Exception ex) { Logger.Error($"Ошибка запуска сессии: {ex.Message}"); }
@@ -1075,6 +1078,7 @@ namespace BibAdmin
                 if (_hub?.State == HubConnectionState.Connected)
                 {
                     await _hub.InvokeAsync("SendCommand", pcNumber, JsonSerializer.Serialize(new { Type = "EXTEND_SESSION", Value = addSeconds.ToString(), LimitSeconds = addSeconds }));
+                    AuditLogger.SessionExtended(pcNumber, addSeconds);
                 }
             }
             catch (Exception ex) { Logger.Error($"Ошибка продления: {ex.Message}"); }
@@ -1086,8 +1090,9 @@ namespace BibAdmin
             {
                 if (_hub?.State == HubConnectionState.Connected && !string.IsNullOrEmpty(pc.ConnectionId))
                 {
-                    await _hub.InvokeAsync("SendCommand", pc.PcNumber, 
+                    await _hub.InvokeAsync("SendCommand", pc.PcNumber,
                         JsonSerializer.Serialize(new { Type = "END_SESSION", Value = "" }));
+                    AuditLogger.SessionEnded(pc.PcNumber, pc.SessionType, pc.ElapsedSeconds);
                 }
             }
             catch (Exception ex) { Logger.Error($"Ошибка завершения сессии на клиенте {pc.PcNumber}: {ex.Message}"); }
@@ -1203,27 +1208,46 @@ namespace BibAdmin
         // =====================
         private async void ShowRenameDialog(ClientState pc)
         {
-            // Передаём только CustomName (без номера), так как диалог теперь принимает только имя
             var dialog = new PcSettingDialog(pc.PcNumber, "Переименовать ПК", "Новое имя (без номера):", pc.CustomName);
-            if (dialog.ShowDialog() == true)
+            if (dialog.ShowDialog() != true) return;
+
+            var newName = dialog.Result.Trim();
+
+            // Имя не должно содержать цифр
+            if (newName.Any(char.IsDigit))
             {
-                // Результат может быть пустым - это нормально (сброс на "ПК N")
-                var newName = dialog.Result.Trim();
-                
-                // Обновляем сервер (это изменит ключ в KnownClients, вызовет ClientsChanged и отправит команду клиенту)
-                await RenameOnServer(pc.PcNumberValue, newName);
-                
-                // Обновляем _selected до актуального объекта после переименования
-                RefreshSelected();
+                MessageBox.Show("Имя ПК не должно содержать цифры. Номер добавляется автоматически.", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
+
+            // Проверяем дублирование: итоговое полное имя не должно совпадать с другим ПК
+            var fullName = string.IsNullOrEmpty(newName) ? $"ПК {pc.PcNumberValue}" : $"{newName} {pc.PcNumberValue}";
+            var duplicate = AdminHub.KnownClients.Values
+                .FirstOrDefault(c => c.MacAddress != pc.MacAddress && c.PcNumber == fullName);
+            if (duplicate != null)
+            {
+                MessageBox.Show($"Имя «{fullName}» уже занято другим ПК.", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            await RenameOnServer(pc.PcNumberValue, newName);
+            RefreshSelected();
         }
 
         private async Task RenameOnServer(int pcNumberValue, string newName)
         {
-            try 
-            { 
-                if (_hub?.State == HubConnectionState.Connected) 
-                    await _hub.InvokeAsync("SetClientCustomNameByValue", pcNumberValue, newName); 
+            try
+            {
+                if (_hub?.State == HubConnectionState.Connected)
+                {
+                    var oldName = AdminHub.KnownClients.Values
+                        .FirstOrDefault(c => c.PcNumberValue == pcNumberValue)?.PcNumber ?? pcNumberValue.ToString();
+                    await _hub.InvokeAsync("SetClientCustomNameByValue", pcNumberValue, newName);
+                    var resultName = string.IsNullOrEmpty(newName) ? $"ПК {pcNumberValue}" : $"{newName} {pcNumberValue}";
+                    AuditLogger.PcRenamed(oldName, resultName);
+                }
             }
             catch (Exception ex) { Logger.Error($"Ошибка переименования: {ex.Message}"); }
         }
