@@ -100,8 +100,16 @@ namespace BibClient
                             {
                                 Logger.Info("🔒 Вызов Lock() после полной загрузки окна...");
                                 mainWindow.Lock();
-                            }), 
+                            }),
                             System.Windows.Threading.DispatcherPriority.Background);
+
+                        // Проверяем обновления через 5 секунд после старта
+                        mainWindow.Dispatcher.BeginInvoke(async () =>
+                        {
+                            await Task.Delay(5000);
+                            var url = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                            await UpdateChecker.CheckAsync(url);
+                        });
                     }
                     else
                     {
@@ -151,6 +159,14 @@ namespace BibClient
                 // Показываем окно
                 mainWindow.Show();
                 mainWindow.Activate();
+
+                // Проверяем обновления через 5 секунд после старта
+                mainWindow.Dispatcher.BeginInvoke(async () =>
+                {
+                    await Task.Delay(5000);
+                    var url = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                    await UpdateChecker.CheckAsync(url);
+                });
 
                 // Вызываем блокировку через Dispatcher с повторной попыткой если _isReady ещё false
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(

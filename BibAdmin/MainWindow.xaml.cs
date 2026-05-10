@@ -107,6 +107,10 @@ namespace BibAdmin
                 });
 
                 Logger.Info("Сервер запущен успешно");
+
+                // Проверяем обновления через 5 секунд после старта
+                _ = Task.Delay(5000).ContinueWith(_ =>
+                    Dispatcher.InvokeAsync(() => UpdateChecker.CheckAsync()));
             }
             catch (Exception ex)
             {

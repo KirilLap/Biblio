@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace BibAdminWeb
@@ -41,6 +42,9 @@ namespace BibAdminWeb
             ServiceTransaction.LoadHistory();
 
             Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{Port}");
+
+            // Проверяем обновления через 5 секунд после старта
+            _ = Task.Delay(5000).ContinueWith(_ => UpdateChecker.CheckAsync());
 
             OpenBrowser(Port);
 

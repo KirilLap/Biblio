@@ -37,8 +37,10 @@ namespace BibAdminWeb
 
             var filesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
             var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+            var updatesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
             Directory.CreateDirectory(filesPath);
             Directory.CreateDirectory(wwwrootPath);
+            Directory.CreateDirectory(updatesPath);
 
             _host = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(webBuilder =>
@@ -98,6 +100,13 @@ namespace BibAdminWeb
                         {
                             FileProvider = new PhysicalFileProvider(filesPath),
                             RequestPath = "/files"
+                        });
+
+                        // Папка обновлений — клиенты скачивают installer отсюда
+                        app.UseStaticFiles(new StaticFileOptions
+                        {
+                            FileProvider = new PhysicalFileProvider(updatesPath),
+                            RequestPath = "/updates"
                         });
 
                         // Auth endpoints
