@@ -260,19 +260,16 @@ begin
   // Получаем родительскую папку (C:\Program Files\Biblio)
   ParentPath := ExtractFileDir(AppPath);
   
-  // Полное удаление папки установки и родительской папки Biblio при деинсталляции
+  // Полное удаление папки установки со всеми вложенными файлами и папками
   if not DelTree(AppPath, True, True, True) then
   begin
     MsgBox('Не удалось автоматически удалить некоторые файлы в папке:' + #13#10 + AppPath + #13#10 + 
            'Пожалуйста, удалите эту папку вручную после перезагрузки компьютера.', mbWarning, MB_OK);
   end;
   
-  // Пытаемся удалить родительскую папку Biblio, если она пуста
+  // Удаляем родительскую папку Biblio со всеми вложенными папками (если они остались)
   if DirExists(ParentPath) then
   begin
-    if not DelTree(ParentPath, True, True, True) then
-    begin
-      // Игнорируем ошибку, если папка не пуста (остались другие компоненты)
-    end;
+    DelTree(ParentPath, True, True, True);
   end;
 end;
