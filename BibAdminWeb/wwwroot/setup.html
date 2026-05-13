@@ -36,6 +36,14 @@
   <div class="error" id="err"></div>
 </div>
 <script>
+  // При загрузке страницы пытаемся получить порт из localStorage (если он был сохранён ранее)
+  document.addEventListener('DOMContentLoaded', () => {
+    const savedPort = localStorage.getItem('bib_server_port');
+    if (savedPort) {
+      document.getElementById('port').value = savedPort;
+    }
+  });
+
   document.addEventListener('keydown', e => { if (e.key === 'Enter') setup(); });
 
   async function setup() {
@@ -61,6 +69,7 @@
         body: JSON.stringify({ password: pwd, port: port })
       });
       if (r.ok) {
+        localStorage.setItem('bib_server_port', port);
         window.location.href = '/index.html';
       } else {
         const d = await r.json();

@@ -1,16 +1,41 @@
 ```
-# Dependencies
-node_modules/
-bower_components/
-
-# Build results
+# Build artifacts
 dist/
 build/
-target/
-release/
-debug/
+*.js.map
+*.css.map
 
-# Python
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Python specific
 __pycache__/
 *.pyc
 *.pyo
@@ -19,53 +44,52 @@ __pycache__/
 env/
 venv/
 .venv/
-.ENV
 pip-log.txt
 pip-delete-this-directory.txt
 .tox/
 .coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.pytest_cache/
-.mypy_cache/
+.nox/
 
-# Compiled and binary files
+# Node.js specific
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Java specific
 *.class
+*.jar
+*.war
+*.ear
+*.nar
+target/
+.gradle/
+!gradle-wrapper.properties
+
+# C/C++ specific
 *.o
-*.obj
-*.exe
-*.dll
-*.so
 *.a
+*.so
+*.dll
+*.exe
 *.out
+*.obj
 
-# Editor/IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
+# Go specific
+*.exe
+*.test
+*.prof
+vendor/
 
-# System files
-.DS_Store
-Thumbs.db
-.env
-.env.local
-*.env.*
+# Ruby specific
+*.gem
+*.rbc
+.bundle/
+.ruby-version
+.rbenv-vars
+.travis.yml
+ Gemfile.lock
 
-# Logs
-*.log
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Compressed files
+# Compression
 *.zip
 *.gz
 *.tar
@@ -84,4 +108,35 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# Julia specific
+.julia/
+*.ji
+*.jl.cov
+*.jl.log
+*.inferred
+*.mem
+*.stat
+
+# Zig specific
+zig-cache/
+zig-out/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# PyTest
+.pytest_cache/
+
+# VS Code
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/recommendations.json
 ```

@@ -999,12 +999,16 @@ async function detectLocalIp() {
   try {
     const resp = await fetch('/api/admin/check');
     const data = await resp.json();
-    const port = data.port || location.port || 8080;
+    const port = data.port || 8080;
+    // Сохраняем порт в localStorage для использования в случае ошибок
+    localStorage.setItem('bib_server_port', port);
     document.getElementById('opWebUrl').textContent =
       `http://${location.hostname}:${port}/login.html`;
   } catch (e) {
+    // Fallback: используем сохранённый порт или порт по умолчанию
+    const savedPort = localStorage.getItem('bib_server_port') || 8080;
     document.getElementById('opWebUrl').textContent =
-      `http://${location.hostname}:${location.port || 8080}/login.html`;
+      `http://${location.hostname}:${savedPort}/login.html`;
   }
 }
 

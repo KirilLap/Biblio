@@ -177,31 +177,30 @@ begin
     if IsComponentSelected('admin') then
       OpenFirewallPort('BibAdmin', Port);
 
-    // Записываем выбранный порт в settings.json для BibAdmin
-    if IsComponentSelected('admin') then
+    // Записываем выбранный порт в global_settings.json для BibAdminWeb
+    if IsComponentSelected('adminweb') then
     begin
-      SettingsFile := ExpandConstant('{app}\BibAdmin\settings.json');
-      if FileExists(SettingsFile) then
+      SettingsFile := ExpandConstant('{app}\BibAdminWeb\global_settings.json');
+      // Создаём файл с портом, если он ещё не существует
+      if not FileExists(SettingsFile) then
       begin
-        if LoadStringsFromFile(SettingsFile, Lines) then
-        begin
-          // Простая замена строки порта если она уже есть
-          // При первом запуске приложение само создаст/применит порт через FirstRunWindow
-        end;
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "IsFirstRun": true,' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "Tariff": 3000,' + #13#10 +
+          '  "Operators": []' + #13#10 +
+          '}',
+          False);
       end;
     end;
 
-    // Записываем выбранный порт в settings.json для BibAdminWeb
-    if IsComponentSelected('adminweb') then
+    // Записываем выбранный порт в settings.json для BibAdmin (если нужно)
+    if IsComponentSelected('admin') then
     begin
-      SettingsFile := ExpandConstant('{app}\BibAdminWeb\settings.json');
-      if FileExists(SettingsFile) then
-      begin
-        if LoadStringsFromFile(SettingsFile, Lines) then
-        begin
-          // Аналогично — порт будет применён при первом запуске через setup.html
-        end;
-      end;
+      SettingsFile := ExpandConstant('{app}\BibAdmin\settings.json');
+      // BibAdmin может иметь свою логику настроек
     end;
   end;
 end;
