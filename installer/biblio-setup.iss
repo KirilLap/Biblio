@@ -250,14 +250,17 @@ begin
   end;
 end;
 
-procedure DeinitializeSetup();
+[UninstallCode]
+procedure DeinitializeUninstall();
 var
-  ResultCode: Integer;
+  AppPath: String;
 begin
+  AppPath := ExpandConstant('{app}');
+  
   // Полное удаление папки установки при деинсталляции
-  if not DelTreeEx(ExpandConstant('{app}'), True, True, True, True) then
+  if not DelTree(AppPath, True, True, True) then
   begin
-    MsgBox('Не удалось автоматически удалить папку ' + ExpandConstant('{app}') + #13#10 + 
-           'Пожалуйста, удалите её вручную после перезагрузки.', mbError, MB_OK);
+    MsgBox('Не удалось автоматически удалить некоторые файлы в папке:' + #13#10 + AppPath + #13#10 + 
+           'Пожалуйста, удалите эту папку вручную после перезагрузки компьютера.', mbWarning, MB_OK);
   end;
 end;
