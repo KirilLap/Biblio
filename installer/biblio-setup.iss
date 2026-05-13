@@ -97,7 +97,12 @@ Filename: "{app}\BibAdminWeb\BibAdminWeb.exe"; \
 ; При удалении
 ; -------------------------------------------------------
 [UninstallRun]
-Filename: "sc.exe"; Parameters: "stop BibClientWatchdog";   Flags: runhidden; Components: client
+; Остановка всех процессов перед удалением
+Filename: "taskkill.exe"; Parameters: "/f /im BibClient.exe";    Flags: runhidden
+Filename: "taskkill.exe"; Parameters: "/f /im BibAdmin.exe";     Flags: runhidden
+Filename: "taskkill.exe"; Parameters: "/f /im BibAdminWeb.exe";  Flags: runhidden
+Filename: "sc.exe"; Parameters: "stop BibClientWatchdog";   Flags: runhidden
+
 Filename: "sc.exe"; Parameters: "delete BibClientWatchdog"; Flags: runhidden; Components: client
 
 Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""BibAdminWeb"""; Flags: runhidden; Components: adminweb
@@ -255,7 +260,17 @@ procedure DeinitializeUninstall();
 var
   AppPath: String;
   ParentPath: String;
+  ResultCode: Integer;
 begin
+  // Дополнительная попытка убить процессы, которые могли остаться
+  Exec('taskkill.exe', '/f /im BibClient.exe', '', SW_HIDE, ewNoWait, ResultCode);
+  Exec('taskkill.exe', '/f /im BibAdmin.exe', '', SW_HIDE, ewNoWait, ResultCode);
+  Exec('taskkill.exe', '/f /im BibAdminWeb.exe', '', SW_HIDE, ewNoWait, ResultCode);
+  Exec('sc.exe', 'stop BibClientWatchdog', '', SW_HIDE, ewNoWait, ResultCode);
+  
+  // Ждем 5 секунд чтобы процессы точно освободили файлы
+  Sleep(5000);
+  
   AppPath := ExpandConstant('{app}');
   // Получаем родительскую папку (C:\Program Files\Biblio)
   ParentPath := ExtractFileDir(AppPath);
