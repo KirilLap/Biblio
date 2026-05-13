@@ -11,7 +11,9 @@ namespace BibAdmin
             base.OnStartup(e);
 
             var settings = GlobalSettings.Load();
-            if (settings.IsFirstRun)
+            // Показываем окно первого запуска только если файл настроек НЕ существует
+            // Установщик теперь создаёт файл с IsFirstRun=false, поэтому окно не появится
+            if (!System.IO.File.Exists(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json")))
             {
                 var setup = new FirstRunWindow();
                 if (setup.ShowDialog() != true)
