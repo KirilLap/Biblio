@@ -995,11 +995,17 @@ async function deleteOp(id) {
 }
 
 // ─── Local IP for operator URL ────────────────────────────────────────────────
-function detectLocalIp() {
-  fetch('/api/admin/check').then(() => {
+async function detectLocalIp() {
+  try {
+    const resp = await fetch('/api/admin/check');
+    const data = await resp.json();
+    const port = data.port || location.port || 8080;
+    document.getElementById('opWebUrl').textContent =
+      `http://${location.hostname}:${port}/login.html`;
+  } catch (e) {
     document.getElementById('opWebUrl').textContent =
       `http://${location.hostname}:${location.port || 8080}/login.html`;
-  });
+  }
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

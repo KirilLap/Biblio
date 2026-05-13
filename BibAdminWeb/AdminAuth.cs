@@ -120,7 +120,8 @@ namespace BibAdminWeb
         {
             ctx.Response.ContentType = "application/json";
             if (!IsAuthorized(ctx)) { ctx.Response.StatusCode = 401; await ctx.Response.WriteAsync("{}"); return; }
-            await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true }));
+            var port = GlobalSettings.Load().ServerPort;
+            await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true, port = port }));
         }
     }
 }
