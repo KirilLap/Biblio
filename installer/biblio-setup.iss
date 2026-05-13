@@ -82,6 +82,14 @@ Filename: "sc.exe"; \
 Filename: "sc.exe"; Parameters: "start BibClientWatchdog"; \
     Flags: runhidden waituntilterminated; Components: client
 
+; Автозапуск BibAdmin от имени администратора
+Filename: "{app}\BibAdmin\BibAdmin.exe"; \
+    Flags: postinstall nowait runascurrentuser; Components: admin
+
+; Автозапуск BibAdminWeb от имени администратора
+Filename: "{app}\BibAdminWeb\BibAdminWeb.exe"; \
+    Flags: postinstall nowait runascurrentuser; Components: adminweb
+
 ; Правила брандмауэра открываются в [Code] → CurStepChanged(ssPostInstall)
 ; с использованием порта, введённого пользователем на странице настройки.
 
@@ -239,5 +247,17 @@ begin
         '}',
         False);
     end;
+  end;
+end;
+
+procedure DeinitializeSetup();
+var
+  ResultCode: Integer;
+begin
+  // Полное удаление папки установки при деинсталляции
+  if not DelTreeEx(ExpandConstant('{app}'), True, True, True, True) then
+  begin
+    MsgBox('Не удалось автоматически удалить папку ' + ExpandConstant('{app}') + #13#10 + 
+           'Пожалуйста, удалите её вручную после перезагрузки.', mbError, MB_OK);
   end;
 end;

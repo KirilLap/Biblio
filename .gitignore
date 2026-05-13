@@ -1,15 +1,13 @@
 ```
-# Installer output files
+# Build artifacts
 *.exe
 *.msi
-*.zip
-*.tar.gz
-
-# Temporary installer files
+*.iss~
 *.tmp
 *.log
 
-# Inno Setup specific
-Output/
-{#MyAppExeName}
+# Installer specific
+Setup*
+setup*
+uninst*
 ```
