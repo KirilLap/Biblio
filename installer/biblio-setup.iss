@@ -133,12 +133,22 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 var
   PortStr: String;
   PortNum: Integer;
+  IsValid: Boolean;
 begin
   Result := True;
   if CurPageID = PortPage.ID then
   begin
     PortStr := Trim(PortPage.Values[0]);
-    if not TryStrToInt(PortStr, PortNum) or (PortNum < 1024) or (PortNum > 65535) then
+    IsValid := False;
+    try
+      PortNum := StrToInt(PortStr);
+      if (PortNum >= 1024) and (PortNum <= 65535) then
+        IsValid := True;
+    except
+      // Порт не является числом, оставляем IsValid = False
+    end;
+    
+    if not IsValid then
     begin
       MsgBox('Введите корректный порт (1024–65535).', mbError, MB_OK);
       Result := False;
