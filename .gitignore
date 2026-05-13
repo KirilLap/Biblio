@@ -1,32 +1,27 @@
 ```
 # Build artifacts
+bin/
+obj/
 *.exe
 *.dll
-*.so
-*.a
-*.obj
-*.out
+*.pdb
+*.nupkg
+*.snupkg
 
-# Logs and temp files
+# Dependencies
+packages/
+node_modules/
+vendor/
+
+# Logs
 *.log
-*.tmp
-*.swp
 
-# Editors
-.vscode/
+# Environment specific
+.vs/
 .idea/
+*.userprefs
 
-# Environment
-.env
-.env.local
-*.env.*
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# OS specific
+# OS generated files
 .DS_Store
 Thumbs.db
 ```
