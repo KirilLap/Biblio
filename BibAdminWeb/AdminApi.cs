@@ -190,6 +190,18 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Stop Server ──────────────────────────────────────────────────
+            if (path == "/api/admin/stop" && method == "POST")
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(500);
+                    Environment.Exit(0);
+                });
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             await next(ctx);
         }
 

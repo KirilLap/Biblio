@@ -187,7 +187,7 @@ begin
         SaveStringToFile(SettingsFile,
           '{' + #13#10 +
           '  "ServerPort": ' + Port + ',' + #13#10 +
-          '  "IsFirstRun": true,' + #13#10 +
+          '  "IsFirstRun": false,' + #13#10 +
           '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
           '  "Tariff": 3000,' + #13#10 +
           '  "Operators": []' + #13#10 +
@@ -196,11 +196,47 @@ begin
       end;
     end;
 
-    // Записываем выбранный порт в settings.json для BibAdmin (если нужно)
+    // Записываем выбранный порт в global_settings.json для BibAdmin
     if IsComponentSelected('admin') then
     begin
-      SettingsFile := ExpandConstant('{app}\BibAdmin\settings.json');
-      // BibAdmin может иметь свою логику настроек
+      SettingsFile := ExpandConstant('{app}\BibAdmin\global_settings.json');
+      // Создаём файл с портом и IsFirstRun=false, чтобы не показывать окно настройки
+      if not FileExists(SettingsFile) then
+      begin
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "IsFirstRun": false,' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "Tariff": 3000,' + #13#10 +
+          '  "PreventClose": true,' + #13#10 +
+          '  "AutoStartWithUser": true' + #13#10 +
+          '}',
+          False);
+      end;
+    end;
+
+    // Записываем настройки для BibClient (порт сервера и локальный IP)
+    if IsComponentSelected('client') then
+    begin
+      SettingsFile := ExpandConstant('{app}\BibClient\settings.json');
+      // Создаём файл с настройками по умолчанию
+      if not FileExists(SettingsFile) then
+      begin
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "PcNumberValue": 1,' + #13#10 +
+          '  "CustomName": "",' + #13#10 +
+          '  "ServerIp": "127.0.0.1",' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "ShowPcName": true,' + #13#10 +
+          '  "ShowPcNumber": true,' + #13#10 +
+          '  "PreventClose": true,' + #13#10 +
+          '  "AutoStartWithUser": true' + #13#10 +
+          '}',
+          False);
+      end;
     end;
   end;
 end;
