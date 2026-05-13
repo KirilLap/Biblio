@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Удаление BibAdminWeb</title>
+    <title>Остановка сервера BibAdminWeb</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -53,31 +53,22 @@
 </head>
 <body>
     <div class="container">
-        <h1>🗑️ Удаление BibAdminWeb</h1>
-        <p>Нажмите кнопку ниже, чтобы остановить сервер и удалить программу.</p>
+        <h1>⏹️ Остановка сервера BibAdminWeb</h1>
+        <p>Нажмите кнопку ниже, чтобы остановить сервер.</p>
         
         <div class="warning">
             ⚠️ <strong>Внимание!</strong> Это действие остановит сервер BibAdminWeb. 
-            Все активные сессии будут сохранены. Для полного удаления используйте 
-            "Удалить Biblio" в меню Пуск.
+            Все активные сессии будут сохранены.
         </div>
         
         <div class="success" id="successMsg">
-            ✅ Сервер остановлен. Теперь вы можете удалить папку программы вручную 
-            или использовать стандартное удаление Windows.
+            ✅ Сервер остановлен.
         </div>
         
         <button class="btn" onclick="stopServer()">Остановить сервер</button>
-        
-        <p style="margin-top: 30px; font-size: 14px;">
-            Путь к программе: <code id="appPath"></code>
-        </p>
     </div>
 
     <script>
-        // Показываем путь к приложению
-        document.getElementById('appPath').textContent = window.location.origin;
-        
         async function stopServer() {
             try {
                 const response = await fetch('/api/admin/stop', { method: 'POST' });

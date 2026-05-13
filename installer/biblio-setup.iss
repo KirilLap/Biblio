@@ -254,13 +254,25 @@ end;
 procedure DeinitializeUninstall();
 var
   AppPath: String;
+  ParentPath: String;
 begin
   AppPath := ExpandConstant('{app}');
+  // Получаем родительскую папку (C:\Program Files\Biblio)
+  ParentPath := ExtractFileDir(AppPath);
   
-  // Полное удаление папки установки при деинсталляции
+  // Полное удаление папки установки и родительской папки Biblio при деинсталляции
   if not DelTree(AppPath, True, True, True) then
   begin
     MsgBox('Не удалось автоматически удалить некоторые файлы в папке:' + #13#10 + AppPath + #13#10 + 
            'Пожалуйста, удалите эту папку вручную после перезагрузки компьютера.', mbWarning, MB_OK);
+  end;
+  
+  // Пытаемся удалить родительскую папку Biblio, если она пуста
+  if DirExists(ParentPath) then
+  begin
+    if not DelTree(ParentPath, True, True, True) then
+    begin
+      // Игнорируем ошибку, если папка не пуста (остались другие компоненты)
+    end;
   end;
 end;
