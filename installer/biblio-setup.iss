@@ -237,7 +237,7 @@ begin
         '{' + #13#10 +
         '  "PcNumberValue": 1,' + #13#10 +
         '  "CustomName": "",' + #13#10 +
-        '  "ServerIp": "127.0.0.1",' + #13#10 +
+        '  "ServerIp": "",' + #13#10 +
         '  "ServerPort": ' + Port + ',' + #13#10 +
         '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
         '  "ShowPcName": true,' + #13#10 +

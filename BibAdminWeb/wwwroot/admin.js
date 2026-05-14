@@ -572,6 +572,16 @@ document.addEventListener('click', async e => {
   }
 });
 
+// ─── Base64 helper (chunked, works for large files) ──────────────────────────
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk)
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+
 // ─── Individual PC background ─────────────────────────────────────────────────
 let indBgPc = null;
 
@@ -587,7 +597,7 @@ async function confirmIndBg() {
   if (!input.files || !input.files.length) { toast('Выберите файл', 'warn'); return; }
   const file = input.files[0];
   const buf  = await file.arrayBuffer();
-  const b64  = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const b64  = arrayBufferToBase64(buf);
   closeDlg('dlgIndBg');
   try {
     await conn.invoke('UploadFile', file.name, b64, indBgPc, false);
@@ -868,8 +878,7 @@ async function uploadBgFile() {
   const file = input.files[0];
   const fileName = file.name;
   const buf = await file.arrayBuffer();
-  // SignalR/System.Text.Json deserialization requires byte[] as base64 string
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const b64 = arrayBufferToBase64(buf);
   try {
     await conn.invoke('UploadFile', fileName, b64, '*', true);
     document.getElementById('sBgFileName').value = fileName;

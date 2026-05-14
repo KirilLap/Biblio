@@ -62,8 +62,14 @@ namespace BibClient
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string settingsPath = Path.Combine(baseDir, "settings.json");
 
-            // 🔹 Если настроек нет — показываем окно первоначальной настройки
-            if (!File.Exists(settingsPath))
+            // 🔹 Если настроек нет ИЛИ ServerIp не задан — показываем окно первоначальной настройки
+            bool settingsExist = File.Exists(settingsPath);
+            if (settingsExist)
+            {
+                SettingsManager.Load();
+                settingsExist = !string.IsNullOrWhiteSpace(SettingsManager.Current.ServerIp);
+            }
+            if (!settingsExist)
             {
                 Logger.Info("⚙️ Настроек нет, запускаем окно настройки...");
                 var setup = new SetupWindow();
