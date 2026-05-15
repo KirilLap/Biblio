@@ -645,6 +645,37 @@ namespace BibAdmin
             await UpdateChecker.CheckAsync();
         }
 
+        private async void UpdateAllClients_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Отправить команду обновления всем клиентским ПК?\n\nОни автоматически скачают и тихо установят новую версию BibClient. Клиенты перезапустятся сами.",
+                "Обновить все клиенты",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+
+            BtnUpdateClients.IsEnabled = false;
+            BtnUpdateClients.Content = "⏳ Отправка...";
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(new { Type = "UPDATE_NOW", Value = "" });
+                await _hub!.InvokeAsync("SendCommandToAll", json);
+                TxtUpdateClientsStatus.Text = "✓ Команда обновления отправлена всем ПК";
+                TxtUpdateClientsStatus.Visibility = Visibility.Visible;
+                BtnUpdateClients.Content = "✓ Отправлено";
+                await Task.Delay(4000);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                BtnUpdateClients.IsEnabled = true;
+                BtnUpdateClients.Content = "⬆️ Обновить все клиенты";
+                TxtUpdateClientsStatus.Visibility = Visibility.Collapsed;
+            }
+        }
+
         private void ShowSaved(TextBlock txt)
         {
             txt.Visibility = Visibility.Visible;

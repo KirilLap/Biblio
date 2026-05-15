@@ -371,6 +371,12 @@ namespace BibClient
                         Process.Start("shutdown", "/r /f /t 0");
                         break;
 
+                    case "UPDATE_NOW":
+                        Logger.Info("⬆️ Получена команда UPDATE_NOW — запуск тихого обновления");
+                        var serverBase = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                        _ = UpdateChecker.CheckAsync(serverBase);
+                        break;
+
                     default:
                         // Неизвестная команда — просто уведомляем подписчиков
                         Logger.Warn($"⚠️ Неизвестная команда: {type}");

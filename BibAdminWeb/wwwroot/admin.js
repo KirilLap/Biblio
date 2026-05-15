@@ -368,6 +368,23 @@ async function restartAll() {
   toast('Команда перезагрузки отправлена всем ПК');
 }
 
+async function updateAllClients() {
+  if (!confirm('Отправить команду обновления всем клиентским ПК?\n\nОни автоматически скачают и тихо установят новую версию BibClient. Клиенты перезапустятся сами.')) return;
+  const btn = document.getElementById('btnUpdateClients');
+  btn.disabled = true;
+  btn.textContent = '⏳ Отправка...';
+  try {
+    await conn.invoke('SendCommandToAll', 'UPDATE_NOW', '');
+    toast('Команда обновления отправлена всем ПК', 'good');
+    btn.textContent = '✓ Отправлено';
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⬆️ Обновить все клиенты'; }, 4000);
+  } catch (e) {
+    toast('Ошибка отправки команды', 'error');
+    btn.disabled = false;
+    btn.textContent = '⬆️ Обновить все клиенты';
+  }
+}
+
 // ─── Extend session ──────────────────────────────────────────────────────────
 let _extTariff = 0;
 let _extSyncing = false;

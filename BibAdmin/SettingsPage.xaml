@@ -282,7 +282,7 @@
                                      FontSize="12" Margin="0,0,0,8"
                                      Padding="6,4"
                                      ToolTip="Локальный путь или сетевой путь, например \\server\updates"/>
-                            <StackPanel Orientation="Horizontal">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <Button Content="💾 Сохранить путь"
                                         Style="{StaticResource SettingsBtn}"
                                         HorizontalAlignment="Left"
@@ -296,6 +296,17 @@
                                         HorizontalAlignment="Left"
                                         Click="CheckUpdates_Click"/>
                             </StackPanel>
+                            <Button x:Name="BtnUpdateClients"
+                                    Content="⬆️ Обновить все клиенты"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#E8F8F2"
+                                    BorderBrush="#1D9E75"
+                                    Foreground="#1D9E75"
+                                    HorizontalAlignment="Left"
+                                    Click="UpdateAllClients_Click"/>
+                            <TextBlock x:Name="TxtUpdateClientsStatus"
+                                       FontSize="11" Foreground="#1D9E75"
+                                       Margin="0,4,0,0" Visibility="Collapsed"/>
                         </StackPanel>
                     </Border>
 
