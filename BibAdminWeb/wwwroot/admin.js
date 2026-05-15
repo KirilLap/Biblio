@@ -863,6 +863,9 @@ function fillSettingsForm() {
   // Имя файла фона
   document.getElementById('sBgFileName').value = settings.backgroundFileName ?? '';
 
+  // Путь к папке обновлений
+  document.getElementById('sUpdatesPath').value = settings.updatesPath ?? '';
+
   // Sort mode selector
   const sortSel = document.getElementById('sortMode');
   if (sortSel) sortSel.value = settings.clientSortMode || 'ByNumber';
@@ -917,6 +920,7 @@ function readSettingsForm() {
     // Сохраняем поля которые не редактируются на этой странице
     clientSortMode: settings.clientSortMode,
     operators: settings.operators,
+    updatesPath: document.getElementById('sUpdatesPath').value.trim(),
   };
 }
 

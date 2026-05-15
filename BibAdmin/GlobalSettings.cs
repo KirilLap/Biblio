@@ -166,6 +166,9 @@ namespace BibAdmin
         // Операторы
         // =====================
         public List<OperatorAccount> Operators { get; set; } = new();
+
+        // Путь к папке обновлений (пусто = ../BibAdminWeb/updates/ рядом с BibAdmin.exe)
+        public string UpdatesPath { get; set; } = "";
     }
 
     // Модель услуги

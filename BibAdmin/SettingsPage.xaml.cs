@@ -75,6 +75,7 @@ namespace BibAdmin
                 }
 
                 TxtCurrentVersion.Text = $"Текущая версия: {UpdateChecker.CurrentVersion}";
+                TxtUpdatesPath.Text = _global.UpdatesPath ?? "";
                 RenderServicesPanel();
                 Logger.Info("Настройки загружены в UI");
             }
@@ -630,6 +631,13 @@ namespace BibAdmin
                 Logger.Error($"Ошибка команды: {ex.Message}");
                 AdminHub.AddPendingCommand(pcNumber, type, value);
             }
+        }
+
+        private void SaveUpdatesPath_Click(object sender, RoutedEventArgs e)
+        {
+            _global.UpdatesPath = TxtUpdatesPath.Text.Trim();
+            _global.Save();
+            MessageBox.Show("Путь сохранён.", "Обновления", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private async void CheckUpdates_Click(object sender, RoutedEventArgs e)

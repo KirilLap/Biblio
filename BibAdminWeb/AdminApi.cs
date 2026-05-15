@@ -193,7 +193,8 @@ namespace BibAdminWeb
             // ─── Check update ─────────────────────────────────────────────────
             if (path == "/api/admin/check-update" && method == "GET")
             {
-                var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "version.json");
+                var updatesDir = GetUpdatesPath();
+                var versionFile = Path.Combine(updatesDir, "version.json");
                 if (!File.Exists(versionFile))
                 {
                     await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
@@ -230,7 +231,7 @@ namespace BibAdminWeb
             // ─── Apply update ─────────────────────────────────────────────────
             if (path == "/api/admin/apply-update" && method == "POST")
             {
-                var installerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "biblio-setup.exe");
+                var installerPath = Path.Combine(GetUpdatesPath(), "biblio-setup.exe");
                 if (!File.Exists(installerPath))
                 {
                     ctx.Response.StatusCode = 404;
@@ -260,6 +261,14 @@ namespace BibAdminWeb
             }
 
             await next(ctx);
+        }
+
+        private static string GetUpdatesPath()
+        {
+            var s = GlobalSettings.Load();
+            if (!string.IsNullOrWhiteSpace(s.UpdatesPath))
+                return s.UpdatesPath.TrimEnd('\\', '/');
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
         }
 
         private static async Task<string> ReadBody(HttpContext ctx)

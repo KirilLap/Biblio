@@ -241,6 +241,11 @@
       <div class="settings-card">
         <h3>Обновления</h3>
         <p id="updateCurrentVer" style="color:#888;font-size:12px;margin-bottom:12px">Нажмите кнопку для проверки</p>
+        <div class="form-row">
+          <label>Папка обновлений</label>
+          <input type="text" id="sUpdatesPath" placeholder="Пусто = updates\ рядом с сервером">
+        </div>
+        <p style="color:#aaa;font-size:11px;margin:-8px 0 12px">Локальный или сетевой путь, например \\server\updates</p>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">🔄 Проверить обновления</button>
           <span id="updateStatus" style="display:none;font-size:12px"></span>

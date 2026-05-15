@@ -62,6 +62,9 @@ namespace BibAdminWeb
 
         public List<OperatorAccount> Operators { get; set; } = new();
 
+        // Путь к папке обновлений (пусто = {BaseDirectory}/updates/)
+        public string UpdatesPath { get; set; } = "";
+
         private static readonly string _path = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
 
