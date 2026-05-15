@@ -29,6 +29,7 @@ namespace BibClient
 
         private SessionManager? _sessionManager = null;
         private TrayIcon? _trayIcon = null;
+        private bool _sessionExpiredHandled = false;
 
         // true — экран заблокирован из-за потери сети, сессия при этом жива
         private bool _isOfflineLocked = false;
@@ -369,6 +370,7 @@ namespace BibClient
             this.Hide();
 
             // 3. Создаём SessionManager (с восстановленным временем если нужно)
+            _sessionExpiredHandled = false;
             _sessionManager = new SessionManager(
                 sessionType,
                 limitSeconds,
@@ -401,6 +403,8 @@ namespace BibClient
 
         private void OnSessionExpiredInternal()
         {
+            if (_sessionExpiredHandled) return;
+            _sessionExpiredHandled = true;
             Logger.Info("Сессия завершена — блокируем ПК");
 
             // 1. Очищаем менеджер сессии
