@@ -24,7 +24,7 @@
             </Grid.RowDefinitions>
 
             <!-- Номер ПК и статус -->
-            <StackPanel x:Name="PanelCenter" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel x:Name="PanelCenter" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
                 <TextBlock x:Name="TxtPcNumber" FontSize="52" FontWeight="Bold" Foreground="White" TextAlignment="Center" Margin="0,0,0,10"/>
                 <TextBlock x:Name="TxtLocked" Text="Компьютер заблокирован" FontSize="16" Foreground="#AAA" TextAlignment="Center"/>
                 <TextBlock x:Name="TxtClockWarning"
@@ -37,7 +37,7 @@
             </StackPanel>
 
             <!-- Время и дата -->
-            <StackPanel x:Name="PanelTime" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,40">
+            <StackPanel x:Name="PanelTime" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="20,20,20,40">
                 <TextBlock x:Name="TxtTime" FontSize="36" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>
                 <TextBlock x:Name="TxtDate" FontSize="14" Foreground="#AAA" TextAlignment="Center" Margin="0,4,0,0"/>
             </StackPanel>

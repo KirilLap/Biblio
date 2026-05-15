@@ -57,6 +57,9 @@ namespace BibAdmin
         public double UptimeHours { get; set; }
         public bool IsOnline { get; set; }
         public DateTime LastSeen { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public DateTime? PendingStartSessionSentAt { get; set; }
         public string Status { get; set; } = "Оффлайн";
 
         // =====================

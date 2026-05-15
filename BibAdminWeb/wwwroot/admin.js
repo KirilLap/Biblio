@@ -909,7 +909,8 @@ function bindSliderLabel(sliderId, labelId, fmt) {
 
 function readSettingsForm() {
   // Прозрачность: слайдер 0..100 → сервер хранит 0..1
-  const opacityPct = parseFloat(document.getElementById('sBgOpacity').value) || 30;
+  const rawOpacity = parseFloat(document.getElementById('sBgOpacity').value);
+  const opacityPct = isNaN(rawOpacity) ? 30 : rawOpacity;
   return {
     tariff: parseInt(document.getElementById('sTariff').value) || 3000,
     adminPassword: document.getElementById('sAdminPassword').value,

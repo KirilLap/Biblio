@@ -676,6 +676,9 @@ namespace BibAdmin
                 };
                 await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(restoreCmd));
 
+                client.PendingStartSessionSentAt = DateTime.UtcNow;
+                KnownClients[finalName] = client;
+
                 if (sendPause)
                 {
                     await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand",
@@ -819,6 +822,14 @@ namespace BibAdmin
             // Guard 2 ниже некорректно глотает этот статус (elapsed==0), поэтому обрабатываем первым.
             if (status == "Заблокирован")
             {
+                if (client.PendingStartSessionSentAt.HasValue &&
+                    (DateTime.UtcNow - client.PendingStartSessionSentAt.Value).TotalSeconds < 15)
+                {
+                    Logger.Info($"⏭️ {pcNumber}: Заблокирован проигнорирован (grace period, ожидается старт восстановленной сессии)");
+                    client.LastSeen = DateTime.UtcNow;
+                    KnownClients[pcNumber] = client;
+                    return;
+                }
                 bool hadSession = !string.IsNullOrEmpty(client.SessionType) && client.SessionStart.HasValue;
                 client.Status = "Заблокирован";
                 client.SessionType = "";
@@ -827,6 +838,7 @@ namespace BibAdmin
                 client.LimitSeconds = 0;
                 client.IsPaused = false;
                 client.AccumulatedSeconds = 0;
+                client.PendingStartSessionSentAt = null;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
                 if (hadSession) SaveActiveSessions();
@@ -855,6 +867,7 @@ namespace BibAdmin
 
             if (elapsedSeconds > 0)
             {
+                client.PendingStartSessionSentAt = null;
                 client.ElapsedSeconds = elapsedSeconds;
                 client.SessionStart = DateTime.UtcNow.AddSeconds(-elapsedSeconds);
                 if (!client.IsPaused)

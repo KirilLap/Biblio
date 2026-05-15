@@ -684,6 +684,11 @@ namespace BibAdminWeb
                 };
                 await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(restoreCmd));
 
+                // Grace period: клиент пришлёт «Заблокирован» сразу после RegisterClient,
+                // до того как обработает START_SESSION. Ставим метку чтобы UpdateStatus его проигнорировал.
+                client.PendingStartSessionSentAt = DateTime.UtcNow;
+                KnownClients[finalName] = client;
+
                 if (sendPause)
                 {
                     await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand",
@@ -827,6 +832,16 @@ namespace BibAdminWeb
             // Guard 2 ниже некорректно глотает этот статус (elapsed==0), поэтому обрабатываем первым.
             if (status == "Заблокирован")
             {
+                // Grace period: после реконнекта клиент всегда шлёт «Заблокирован» сразу после RegisterClient,
+                // до того как получает и обрабатывает START_SESSION. Игнорируем в течение 15 секунд.
+                if (client.PendingStartSessionSentAt.HasValue &&
+                    (DateTime.UtcNow - client.PendingStartSessionSentAt.Value).TotalSeconds < 15)
+                {
+                    Logger.Info($"⏭️ {pcNumber}: Заблокирован проигнорирован (grace period, ожидается старт восстановленной сессии)");
+                    client.LastSeen = DateTime.UtcNow;
+                    KnownClients[pcNumber] = client;
+                    return;
+                }
                 bool hadSession = !string.IsNullOrEmpty(client.SessionType) && client.SessionStart.HasValue;
                 client.Status = "Заблокирован";
                 client.SessionType = "";
@@ -835,6 +850,7 @@ namespace BibAdminWeb
                 client.LimitSeconds = 0;
                 client.IsPaused = false;
                 client.AccumulatedSeconds = 0;
+                client.PendingStartSessionSentAt = null;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
                 if (hadSession) SaveActiveSessions();
@@ -863,6 +879,7 @@ namespace BibAdminWeb
 
             if (elapsedSeconds > 0)
             {
+                client.PendingStartSessionSentAt = null; // сессия запущена — grace period больше не нужен
                 client.ElapsedSeconds = elapsedSeconds;
                 client.SessionStart = DateTime.UtcNow.AddSeconds(-elapsedSeconds);
                 if (!client.IsPaused)
