@@ -11,10 +11,10 @@
         Closing="Window_Closing">
     <Grid>
         <!-- Фоновое изображение -->
-        <Image x:Name="BgImage" Stretch="UniformToFill" Opacity="0.3"/>
+        <Image x:Name="BgImage" Stretch="UniformToFill"/>
 
-        <!-- Затемнение -->
-        <Rectangle Fill="Black" Opacity="0.6"/>
+        <!-- Затемнение (управляется слайдером BackgroundOpacity) -->
+        <Rectangle x:Name="DimOverlay" Fill="Black" Opacity="0.5"/>
 
         <!-- Основной контент -->
         <Grid>

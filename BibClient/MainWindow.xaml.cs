@@ -283,7 +283,8 @@ namespace BibClient
             TxtTime.FontSize = _settings.TimeFontSize;
 
             // ── Фон ──────────────────────────────────────────────────────────────
-            BgImage.Opacity = _settings.BackgroundOpacity;
+            // BackgroundOpacity управляет затемнением поверх фото, не самим фото
+            DimOverlay.Opacity = _settings.BackgroundOpacity;
 
             if (!string.IsNullOrEmpty(_settings.BackgroundImagePath) && File.Exists(_settings.BackgroundImagePath))
             {

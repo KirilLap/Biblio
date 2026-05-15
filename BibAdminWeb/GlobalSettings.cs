@@ -7,7 +7,7 @@ namespace BibAdminWeb
 {
     public class GlobalSettings
     {
-        public double BackgroundOpacity { get; set; } = 0.3;
+        public double BackgroundOpacity { get; set; } = 0.5;
         public bool ShowPcName { get; set; } = true;
         public bool ShowPcNumber { get; set; } = true;
         public string PcNumberPosition { get; set; } = "MiddleCenter";
