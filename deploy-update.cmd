@@ -2,85 +2,81 @@
 setlocal
 
 :: ============================================================
-:: deploy-update.cmd — публикация обновления на сервер по сети
+:: deploy-update.cmd
 ::
-:: Использование:
-::   deploy-update.cmd                  — спросит версию и заметки
-::   deploy-update.cmd 1.0.2 "Описание" — без вопросов
+:: 1. Спрашивает версию и описание
+:: 2. Записывает версию в файл VERSION
+:: 3. Запускает build.cmd (сборка всего)
+:: 4. Копирует установщик и version.json в папку на сервере
 :: ============================================================
 
-:: ── НАСТРОЙКИ ────────────────────────────────────────────────
-:: Сетевой путь к папке установки BibAdminWeb на сервере.
-:: Пример: \\192.168.1.10\c$\Program Files\Biblio\BibAdminWeb
-set SERVER_PATH=\\СЕРВЕР\c$\Program Files\Biblio\BibAdminWeb
-:: ─────────────────────────────────────────────────────────────
+set UPDATES_DIR=\\172.16.5.2\updates
+set SCRIPT_DIR=%~dp0
 
-set INSTALLER_DIR=%~dp0installer\Output
+echo ============================================
+echo   Biblio — сборка и публикация обновления
+echo ============================================
+echo.
 
-:: Читаем версию: аргумент → или спрашиваем
-set VERSION=%~1
-if "%VERSION%"=="" (
-    set /p VERSION=Введите версию (например 1.0.2):
-)
+:: Запрашиваем версию
+set /p VERSION=Введите новую версию (например 1.0.2):
 if "%VERSION%"=="" ( echo ОШИБКА: версия не указана! & pause & exit /b 1 )
 
-:: Читаем заметки: аргумент → или спрашиваем
-set NOTES=%~2
-if "%NOTES%"=="" (
-    set /p NOTES=Описание изменений (Enter — пропустить):
-)
+:: Запрашиваем описание
+set /p NOTES=Описание изменений (Enter — пропустить):
 if "%NOTES%"=="" set NOTES=Обновление %VERSION%
 
-set INSTALLER=%INSTALLER_DIR%\biblio-setup-%VERSION%.exe
-
 echo.
-echo ============================================
-echo   Публикация обновления %VERSION%
-echo   Сервер: %SERVER_PATH%
-echo   Заметки: %NOTES%
-echo ============================================
+echo Версия:    %VERSION%
+echo Описание:  %NOTES%
+echo Сервер:    %UPDATES_DIR%
 echo.
 
-:: Проверяем наличие установщика
+:: Записываем версию в файл VERSION
+echo %VERSION%> "%SCRIPT_DIR%VERSION"
+echo [1/3] Версия %VERSION% записана в VERSION
+
+:: Запускаем сборку (DEPLOY_MODE подавляет pause в конце build.cmd)
+echo.
+echo [2/3] Сборка...
+echo ────────────────────────────────────────────
+set DEPLOY_MODE=1
+call "%SCRIPT_DIR%build.cmd"
+if %errorlevel% neq 0 ( echo. & echo ОШИБКА сборки! Публикация отменена. & pause & exit /b 1 )
+echo ────────────────────────────────────────────
+
+:: Проверяем наличие собранного установщика
+set INSTALLER=%SCRIPT_DIR%installer\Output\biblio-setup-%VERSION%.exe
 if not exist "%INSTALLER%" (
-    echo ОШИБКА: файл не найден: %INSTALLER%
-    echo Сначала запустите build.cmd для сборки версии %VERSION%
+    echo ОШИБКА: установщик не найден после сборки: %INSTALLER%
     pause & exit /b 1
 )
 
 :: Проверяем доступность сервера
-if not exist "%SERVER_PATH%" (
-    echo ОШИБКА: сетевой путь недоступен: %SERVER_PATH%
-    echo Проверьте подключение к серверу и правильность пути в скрипте.
-    pause & exit /b 1
-)
-
-:: Создаём папку updates если её нет
-set UPDATES_DIR=%SERVER_PATH%\updates
+echo.
+echo [3/3] Публикация на сервер %UPDATES_DIR%...
 if not exist "%UPDATES_DIR%" (
-    echo Создаём папку updates на сервере...
-    mkdir "%UPDATES_DIR%"
-    if %errorlevel% neq 0 ( echo ОШИБКА создания папки! & pause & exit /b 1 )
+    echo Создаём папку %UPDATES_DIR%...
+    mkdir "%UPDATES_DIR%" 2>nul
+    if %errorlevel% neq 0 (
+        echo ОШИБКА: не удалось создать папку. Проверьте доступ к серверу 172.16.5.2
+        pause & exit /b 1
+    )
 )
 
 :: Копируем установщик
-echo Копируем установщик...
 copy /y "%INSTALLER%" "%UPDATES_DIR%\biblio-setup.exe" >nul
 if %errorlevel% neq 0 ( echo ОШИБКА копирования установщика! & pause & exit /b 1 )
 
 :: Создаём version.json
-echo Создаём version.json...
 echo {"Version":"%VERSION%","ReleaseNotes":"%NOTES%","InstallerFile":"biblio-setup.exe"} > "%UPDATES_DIR%\version.json"
 if %errorlevel% neq 0 ( echo ОШИБКА создания version.json! & pause & exit /b 1 )
 
-:: Также обновляем VERSION файл в репозитории
-echo %VERSION%> "%~dp0VERSION"
-
 echo.
 echo ============================================
-echo   Готово!
-echo   Версия %VERSION% опубликована на сервере.
-echo   Откройте веб-интерфейс BibAdminWeb -^>
-echo   Настройки -^> "Проверить обновления"
+echo   Готово! Версия %VERSION% опубликована.
+echo.
+echo   Откройте BibAdminWeb -^> Настройки
+echo   -^> "Проверить обновления" -^> Установить
 echo ============================================
 pause

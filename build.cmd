@@ -40,4 +40,4 @@ echo.
 echo ============================================
 echo   Готово! Установщик: installer\Output\biblio-setup-%VERSION%.exe
 echo ============================================
-pause
+if not defined DEPLOY_MODE pause
