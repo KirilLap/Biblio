@@ -5,22 +5,47 @@ setlocal
 :: ============================================================
 :: deploy-update.cmd
 ::
-:: 1. Спрашивает версию и описание
+:: 1. Спрашивает IP сервера, версию и описание
 :: 2. Записывает версию в файл VERSION
 :: 3. Запускает build.cmd (сборка всего)
-:: 4. Копирует установщик и version.json в папку на сервере
+:: 4. Копирует установщик и version.json на сервер
+::
+:: IP сервера сохраняется в файл SERVER_IP.txt рядом со скриптом.
+:: При следующем запуске подставляется автоматически.
 :: ============================================================
 
-set UPDATES_DIR=\\172.16.5.2\updates
 set SCRIPT_DIR=%~dp0
+set SERVER_IP_FILE=%SCRIPT_DIR%SERVER_IP.txt
 
 echo ============================================
 echo   Biblio — сборка и публикация обновления
 echo ============================================
 echo.
 
+:: Читаем сохранённый IP сервера (если есть)
+set SAVED_IP=
+if exist "%SERVER_IP_FILE%" set /p SAVED_IP=<"%SERVER_IP_FILE%"
+
+:: Спрашиваем IP — показываем сохранённый как подсказку
+if "%SAVED_IP%"=="" (
+    set /p SERVER_IP=IP адрес сервера (например 172.16.5.2):
+) else (
+    set /p SERVER_IP=IP адрес сервера (Enter = %SAVED_IP%):
+    if "!SERVER_IP!"=="" set SERVER_IP=%SAVED_IP%
+)
+
+:: Включаем расширения для !переменных!
+setlocal enabledelayedexpansion
+if "%SERVER_IP%"=="" set SERVER_IP=%SAVED_IP%
+if "%SERVER_IP%"=="" ( echo ОШИБКА: IP сервера не указан! & pause & exit /b 1 )
+
+:: Сохраняем IP для следующего раза
+echo %SERVER_IP%> "%SERVER_IP_FILE%"
+
+set UPDATES_DIR=\\%SERVER_IP%\updates
+
 :: Запрашиваем версию
-set /p VERSION=Введите новую версию (например 1.0.2):
+set /p VERSION=Новая версия (например 1.0.2):
 if "%VERSION%"=="" ( echo ОШИБКА: версия не указана! & pause & exit /b 1 )
 
 :: Запрашиваем описание
@@ -28,9 +53,10 @@ set /p NOTES=Описание изменений (Enter — пропустить
 if "%NOTES%"=="" set NOTES=Обновление %VERSION%
 
 echo.
-echo Версия:    %VERSION%
-echo Описание:  %NOTES%
-echo Сервер:    %UPDATES_DIR%
+echo IP сервера: %SERVER_IP%
+echo Папка:      %UPDATES_DIR%
+echo Версия:     %VERSION%
+echo Описание:   %NOTES%
 echo.
 
 :: Записываем версию в файл VERSION
@@ -53,14 +79,15 @@ if not exist "%INSTALLER%" (
     pause & exit /b 1
 )
 
-:: Проверяем доступность сервера
+:: Создаём папку updates на сервере если нет
 echo.
-echo [3/3] Публикация на сервер %UPDATES_DIR%...
+echo [3/3] Публикация на %UPDATES_DIR%...
 if not exist "%UPDATES_DIR%" (
     echo Создаём папку %UPDATES_DIR%...
     mkdir "%UPDATES_DIR%" 2>nul
     if %errorlevel% neq 0 (
-        echo ОШИБКА: не удалось создать папку. Проверьте доступ к серверу 172.16.5.2
+        echo ОШИБКА: нет доступа к серверу %SERVER_IP%
+        echo Проверьте что папка "updates" расшарена на сервере.
         pause & exit /b 1
     )
 )
