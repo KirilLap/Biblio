@@ -333,6 +333,7 @@ async function confirmStartSession() {
   const paidAmount = parseInt(document.getElementById('dlgAmount').value) || 0;
   const userName = document.getElementById('dlgUserName').value.trim();
   const readerId = document.getElementById('dlgReaderId').value.trim();
+  if (!readerId) { toast('Введите ID читателя', 'warn'); return; }
   closeDlg('dlgSession');
   try {
     await connection.invoke('StartSession', selectedPc, sessionType,
