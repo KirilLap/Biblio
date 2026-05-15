@@ -764,6 +764,8 @@ namespace BibAdmin
             menu.Items.Add(MakeSubMenu("🛡", "Ограничения", restrictChildren));
 
             menu.Items.Add(MakeSep());
+            if (pc.IsOnline)
+                menu.Items.Add(MakeItem("👁", "Просмотр экрана", () => OpenScreenView(pc)));
             menu.Items.Add(MakeItem("⟳", "Переподключить клиент", () => ReconnectPc(pc)));
             menu.Items.Add(MakeItem("↺", "Перезагрузить ПК",      () => RestartPc(pc)));
             menu.Items.Add(MakeItem("⏻", "Выключить ПК",           () => ShutdownPc(pc), isDanger: true));
@@ -1386,6 +1388,13 @@ namespace BibAdmin
         {
             var r = MessageBox.Show($"Выключить {pc.PcNumber}?", "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (r == MessageBoxResult.Yes) await SendCommand(pc.PcNumber, "SHUTDOWN", "true");
+        }
+
+        private void OpenScreenView(ClientState pc)
+        {
+            if (_hub == null) return;
+            var win = new ScreenViewWindow(pc.PcNumber, _hub) { Owner = Window.GetWindow(this) };
+            win.Show();
         }
 
         private async void ResetIndividualSettings(ClientState pc)

@@ -8,6 +8,10 @@ let serviceTypes = [];
 let offlinePcNumber = null;  // ПК, по которому ждём решения оффлайн
 let connection = null;
 
+// ── Просмотр экрана ───────────────────────────────────────────────────────────
+let _screenPc = null;
+let _screenInterval = null;
+
 // ── Инициализация ─────────────────────────────────────────────────────────────
 (async function init() {
   // Проверяем авторизацию
@@ -218,6 +222,9 @@ function renderActionBar() {
 
   const btns = [];
 
+  if (pc.isOnline) {
+    btns.push(`<button class="ab-btn" onclick="openScreenView('${esc(pc.pcNumber)}')" style="background:#374151;border-color:#4b5563">👁 Экран</button>`);
+  }
   if (pc.isOnline && pc.isLocked && !pc.isSession) {
     btns.push(`<button class="ab-btn green" onclick="openSessionDlg()">▶ Начать сессию</button>`);
   }
@@ -452,6 +459,50 @@ function showSessionSummary(s) {
 async function doLogout() {
   await fetch('/api/op/logout', { method: 'POST' }).catch(() => {});
   window.location.href = '/login.html';
+}
+
+// ── Просмотр экрана ───────────────────────────────────────────────────────────
+async function openScreenView(pcNumber) {
+  if (_screenPc) await closeScreenView();
+  _screenPc = pcNumber;
+  document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
+  document.getElementById('screenViewImg').src = '';
+  document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  openDlg('dlgScreenView');
+  try { await fetch(`/api/screenshot/${encodeURIComponent(pcNumber)}/watch`, { method: 'POST' }); }
+  catch (e) { /* ignore */ }
+  _screenInterval = setInterval(pollScreen, 500);
+}
+
+async function closeScreenView() {
+  const pc = _screenPc;
+  _screenPc = null;
+  clearInterval(_screenInterval);
+  _screenInterval = null;
+  closeDlg('dlgScreenView');
+  if (pc) {
+    try { await fetch(`/api/screenshot/${encodeURIComponent(pc)}/unwatch`, { method: 'POST' }); }
+    catch (e) { /* ignore */ }
+  }
+}
+
+async function pollScreen() {
+  if (!_screenPc) return;
+  try {
+    const r = await fetch(`/api/screenshot/${encodeURIComponent(_screenPc)}`, { cache: 'no-store' });
+    if (r.status === 204) {
+      document.getElementById('screenViewStatus').textContent = 'Ожидание кадра...';
+      return;
+    }
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById('screenViewImg');
+    const old = img.src;
+    img.src = url;
+    if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+    document.getElementById('screenViewStatus').textContent = `Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`;
+  } catch (e) { /* ignore */ }
 }
 
 // ── Диалоги ───────────────────────────────────────────────────────────────────

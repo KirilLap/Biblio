@@ -10,6 +10,8 @@ let activePc = null;    // selected pc for dialogs
 let pendingOfflinePc = null;
 let pendingConflict = null;
 let renamePcVal = null;
+let _screenPc = null;
+let _screenInterval = null;
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
@@ -211,6 +213,7 @@ function buildActions(c) {
   if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑</button>`;
 
   const btns = [];
+  btns.push(`<button class="btn btn-outline" onclick="openScreenView('${esc(c.pcNumber)}')" title="Просмотр экрана">👁</button>`);
   if (!c.isSession && !c.isFree) {
     btns.push(`<button class="btn btn-primary" onclick="openStartSession('${esc(c.pcNumber)}')">▶ Старт</button>`);
     btns.push(`<button class="btn btn-outline" onclick="unlock('${esc(c.pcNumber)}')">🔓</button>`);
@@ -1188,6 +1191,47 @@ function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// ─── Screen viewer ────────────────────────────────────────────────────────────
+async function openScreenView(pcNumber) {
+  if (_screenPc) await closeScreenView();
+  _screenPc = pcNumber;
+  document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
+  document.getElementById('screenViewImg').src = '';
+  document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  document.getElementById('dlgScreenView').style.display = 'flex';
+  try { await fetch(`/api/screenshot/${encodeURIComponent(pcNumber)}/watch`, { method: 'POST' }); }
+  catch (e) { /* ignore */ }
+  _screenInterval = setInterval(pollScreen, 500);
+}
+
+async function closeScreenView() {
+  const pc = _screenPc;
+  _screenPc = null;
+  clearInterval(_screenInterval);
+  _screenInterval = null;
+  document.getElementById('dlgScreenView').style.display = 'none';
+  if (pc) {
+    try { await fetch(`/api/screenshot/${encodeURIComponent(pc)}/unwatch`, { method: 'POST' }); }
+    catch (e) { /* ignore */ }
+  }
+}
+
+async function pollScreen() {
+  if (!_screenPc) return;
+  try {
+    const r = await fetch(`/api/screenshot/${encodeURIComponent(_screenPc)}`, { cache: 'no-store' });
+    if (r.status === 204) { document.getElementById('screenViewStatus').textContent = 'Ожидание кадра...'; return; }
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById('screenViewImg');
+    const old = img.src;
+    img.src = url;
+    if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+    document.getElementById('screenViewStatus').textContent = `Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`;
+  } catch (e) { /* ignore */ }
+}
+
 function periodFrom(p) {
   const t = new Date(); t.setHours(0,0,0,0);
   if (p === 'today') return t;

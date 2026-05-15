@@ -399,6 +399,7 @@ body {
   box-shadow: 0 20px 60px rgba(0,0,0,.6);
 }
 .dlg-warn { border-color: #5a3010; }
+.dlg-wide { width: min(900px, 92vw); }
 .dlg-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; color: #e0e0f0; }
 .dlg .form-row input, .dlg .form-row select {
   background: #111128; border: 1px solid #333355; border-radius: 7px;

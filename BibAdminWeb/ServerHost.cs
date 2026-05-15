@@ -143,6 +143,9 @@ namespace BibAdminWeb
                             await next(ctx);
                         });
 
+                        // Screenshot API (upload = no auth, watch/get = admin or operator)
+                        app.Use(ScreenshotApi.Handle);
+
                         // Admin REST API
                         app.Use(AdminApi.Handle);
 

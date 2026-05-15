@@ -35,6 +35,16 @@ namespace BibAdminWeb
                 _ = _ctx.Clients.All.SendAsync("numberConflictAlert", new { mac, takenPcName, pcNumberValue, customName });
         }
 
+        public Task SendCommandToClient(string pcNumber, string type, string value = "")
+        {
+            if (AdminHub.KnownClients.TryGetValue(pcNumber, out var client) && client.IsOnline)
+            {
+                var json = JsonSerializer.Serialize(new { Type = type, Value = value });
+                return _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+            }
+            return Task.CompletedTask;
+        }
+
         public void NotifyOfflineResolved(string pcNumber, string decision)
             => _ = _ctx.Clients.All.SendAsync("offlineResolved", new { pcNumber, decision });
 

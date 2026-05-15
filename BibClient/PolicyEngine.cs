@@ -377,6 +377,17 @@ namespace BibClient
                         _ = UpdateChecker.CheckAsync(serverBase);
                         break;
 
+                    case "START_SCREENSHOT_STREAM":
+                        Logger.Info("📸 Запуск трансляции скриншотов");
+                        var streamBase = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                        ScreenshotStreamer.Start(streamBase, SettingsManager.Current.PcNumber);
+                        break;
+
+                    case "STOP_SCREENSHOT_STREAM":
+                        Logger.Info("📸 Остановка трансляции скриншотов");
+                        ScreenshotStreamer.Stop();
+                        break;
+
                     default:
                         // Неизвестная команда — просто уведомляем подписчиков
                         Logger.Warn($"⚠️ Неизвестная команда: {type}");
