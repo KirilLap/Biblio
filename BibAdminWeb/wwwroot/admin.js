@@ -68,10 +68,24 @@ function connectHub() {
   conn.onreconnected(() => {
     setConnStatus(true);
     conn.invoke('RequestSnapshot');
+    loadSettings();
+    loadOperators();
   });
-  conn.onclose(() => setConnStatus(false));
+  conn.onclose(() => {
+    setConnStatus(false);
+    waitForServerAndReload();
+  });
 
-  conn.start().then(() => setConnStatus(true)).catch(() => setConnStatus(false));
+  conn.start().then(() => setConnStatus(true)).catch(() => { setConnStatus(false); waitForServerAndReload(); });
+}
+
+function waitForServerAndReload() {
+  const interval = setInterval(async () => {
+    try {
+      const r = await fetch('/api/admin/check', { cache: 'no-store' });
+      if (r.ok) { clearInterval(interval); window.location.reload(); }
+    } catch (e) { /* сервер ещё не поднялся */ }
+  }, 3000);
 }
 
 function setConnStatus(ok) {

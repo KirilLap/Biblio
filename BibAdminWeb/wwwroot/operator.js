@@ -89,12 +89,22 @@ function startSignalR() {
   });
   connection.onclose(() => {
     setDot(false);
-    toast('Соединение потеряно. Ожидание сервера...', 'warn');
+    toast('Соединение потеряно. Ожидание перезапуска сервера...', 'warn');
+    waitForServerAndReload();
   });
 
   connection.start()
     .then(() => setDot(true))
-    .catch(err => { setDot(false); console.error('SignalR error:', err); });
+    .catch(err => { setDot(false); console.error('SignalR error:', err); waitForServerAndReload(); });
+}
+
+function waitForServerAndReload() {
+  const interval = setInterval(async () => {
+    try {
+      const r = await fetch('/api/op/me', { cache: 'no-store' });
+      if (r.ok) { clearInterval(interval); window.location.reload(); }
+    } catch (e) { /* сервер ещё не поднялся */ }
+  }, 3000);
 }
 
 function setDot(online) {
