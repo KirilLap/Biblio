@@ -2,41 +2,33 @@
 chcp 65001 > nul
 setlocal enabledelayedexpansion
 
-:: ============================================================
-:: deploy-update.cmd
-:: 1. Спрашивает IP сервера (запоминает в SERVER_IP.txt)
-:: 2. Спрашивает версию и описание
-:: 3. Записывает версию в VERSION, запускает build.cmd
-:: 4. Копирует установщик и version.json на сервер
-:: ============================================================
-
 set SCRIPT_DIR=%~dp0
 set SERVER_IP_FILE=%SCRIPT_DIR%SERVER_IP.txt
 
 echo ============================================
-echo   Biblio — сборка и публикация обновления
+echo   Biblio - сборка и публикация обновления
 echo ============================================
 echo.
 
-:: Читаем сохранённый IP
+:: Читаем сохраненный IP
 set SERVER_IP=
 if exist "%SERVER_IP_FILE%" set /p SERVER_IP=<"%SERVER_IP_FILE%"
 
-:: Спрашиваем IP (показываем текущий)
-if not "%SERVER_IP%"=="" (
-    echo Текущий сервер: %SERVER_IP%
-    set /p NEW_IP=IP сервера (Enter чтобы оставить %SERVER_IP%):
-    if not "!NEW_IP!"=="" set SERVER_IP=!NEW_IP!
-) else (
-    set /p SERVER_IP=IP сервера (например 172.16.5.2):
-)
+:: Спрашиваем IP
+if "%SERVER_IP%"=="" goto ask_ip_new
+echo Текущий сервер: %SERVER_IP%
+set /p NEW_IP=IP сервера (Enter - оставить %SERVER_IP%):
+if not "!NEW_IP!"=="" set SERVER_IP=!NEW_IP!
+goto ask_ip_done
 
+:ask_ip_new
+set /p SERVER_IP=IP сервера (например 172.16.5.2):
+
+:ask_ip_done
 if "%SERVER_IP%"=="" (
     echo ОШИБКА: IP сервера не указан!
     pause & exit /b 1
 )
-
-:: Сохраняем IP
 echo %SERVER_IP%> "%SERVER_IP_FILE%"
 
 :: Спрашиваем версию
@@ -47,7 +39,7 @@ if "%VERSION%"=="" (
 )
 
 :: Спрашиваем описание
-set /p NOTES=Описание изменений (Enter — пропустить):
+set /p NOTES=Описание изменений (Enter - пропустить):
 if "%NOTES%"=="" set NOTES=Обновление %VERSION%
 
 set UPDATES_DIR=\\%SERVER_IP%\updates
