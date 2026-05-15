@@ -102,6 +102,26 @@
   </div>
 </div>
 
+<!-- Диалог: Добавить время -->
+<div id="dlgExtend" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgExtend')">
+  <div class="dlg">
+    <div class="dlg-title">⏱ Добавить время</div>
+    <div class="dlg-pc-name" id="dlgExtPc"></div>
+    <div class="field-row">
+      <label>Добавить минут</label>
+      <input id="dlgExtMin" type="number" min="1" max="999" value="30" oninput="calcExtAmount()">
+    </div>
+    <div class="field-row">
+      <label>Добавить сумму (сум)</label>
+      <input id="dlgExtAmount" type="number" min="0" value="0" oninput="calcExtTime()">
+    </div>
+    <div class="dlg-actions">
+      <button class="btn-cancel" onclick="closeDlg('dlgExtend')">Отмена</button>
+      <button class="btn-primary" onclick="confirmExtend()">Добавить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Диалог: Услуга -->
 <div id="dlgService" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgService')">
   <div class="dlg">
@@ -147,6 +167,8 @@
     <div class="stat-item stat-green"><span id="stSessions">0</span><small>сессий</small></div>
     <div class="stat-item stat-amber"><span id="stLocked">0</span><small>заблок.</small></div>
     <button class="btn-service-top" onclick="openServiceDlg()">🛎 Услуга</button>
+    <button class="btn-service-top" onclick="restartAll()" style="background:#f5a623;margin-left:4px">🔄 Рестарт</button>
+    <button class="btn-service-top" onclick="shutdownAll()" style="background:#E24B4A;margin-left:4px">⏻ Выкл. все</button>
   </div>
 
   <!-- Грид ПК -->

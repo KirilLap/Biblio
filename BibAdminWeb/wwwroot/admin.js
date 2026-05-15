@@ -209,6 +209,8 @@ function buildActions(c) {
     btns.push(`<button class="btn btn-danger" onclick="endSession('${esc(c.pcNumber)}')">⏹ Стоп</button>`);
     btns.push(`<button class="btn btn-outline" onclick="togglePause('${esc(c.pcNumber)}')">${c.isPaused ? '▶' : '⏸'}</button>`);
     btns.push(`<button class="btn btn-outline" onclick="openTransfer('${esc(c.pcNumber)}')">↔</button>`);
+    if (c.sessionType === 'Лимит')
+      btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
   }
   return btns.join('');
 }
@@ -338,6 +340,55 @@ async function lockAll() {
 
 async function unlockAll() {
   await conn.invoke('SendCommandToAll', 'REMOTE_LOCK', 'false');
+}
+
+async function shutdownAll() {
+  if (!confirm('Выключить все ПК?')) return;
+  await conn.invoke('SendCommandToAll', 'SHUTDOWN', 'true');
+  toast('Команда выключения отправлена всем ПК');
+}
+
+async function restartAll() {
+  if (!confirm('Перезагрузить все ПК?')) return;
+  await conn.invoke('SendCommandToAll', 'RESTART', 'true');
+  toast('Команда перезагрузки отправлена всем ПК');
+}
+
+// ─── Extend session ──────────────────────────────────────────────────────────
+let _extTariff = 0;
+let _extSyncing = false;
+
+function openExtend(pcNumber) {
+  activePc = pcNumber;
+  _extTariff = settings?.tariff || 0;
+  document.getElementById('dlgExtPc').textContent = pcNumber;
+  document.getElementById('dlgExtMin').value = 30;
+  document.getElementById('dlgExtAmount').value = _extTariff ? Math.round(_extTariff * 30 / 60) : 0;
+  document.getElementById('dlgExtend').style.display = 'flex';
+}
+
+function calcExtAmount() {
+  if (_extSyncing || !_extTariff) return;
+  _extSyncing = true;
+  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  document.getElementById('dlgExtAmount').value = Math.round(_extTariff * min / 60);
+  _extSyncing = false;
+}
+
+function calcExtTime() {
+  if (_extSyncing || !_extTariff) return;
+  _extSyncing = true;
+  const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
+  document.getElementById('dlgExtMin').value = Math.round(amount * 60 / _extTariff) || 0;
+  _extSyncing = false;
+}
+
+async function confirmExtend() {
+  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
+  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  closeDlg('dlgExtend');
+  await conn.invoke('ExtendSession', activePc, min * 60, amount);
 }
 
 function showSummary(d) {
@@ -1022,6 +1073,47 @@ async function detectLocalIp() {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+async function checkUpdates() {
+  const btn = document.getElementById('btnCheckUpdate');
+  const status = document.getElementById('updateStatus');
+  const verLabel = document.getElementById('updateCurrentVer');
+  btn.disabled = true;
+  btn.textContent = '⏳ Проверка...';
+  status.style.display = 'none';
+  try {
+    const data = await fetch('/api/admin/check-update').then(r => r.json());
+    verLabel.textContent = `Текущая версия: ${data.currentVersion}`;
+    if (data.hasUpdate) {
+      let msg = `Доступна версия ${data.newVersion} (у вас ${data.currentVersion})`;
+      if (data.releaseNotes) msg += `\n\n${data.releaseNotes}`;
+      msg += '\n\nОбновить сейчас? Сервер перезапустится.';
+      if (confirm(msg)) {
+        status.style.display = 'inline';
+        status.style.color = '#888';
+        status.textContent = '⏳ Запуск установщика...';
+        await fetch('/api/admin/apply-update', { method: 'POST' });
+        status.style.color = '#1d9e75';
+        status.textContent = '✓ Установщик запущен. Соединение скоро прервётся.';
+      } else {
+        status.style.display = 'inline';
+        status.style.color = '#888';
+        status.textContent = `Обновление отложено`;
+      }
+    } else {
+      status.style.display = 'inline';
+      status.style.color = '#1d9e75';
+      status.textContent = '✓ Установлена последняя версия';
+    }
+  } catch {
+    status.style.display = 'inline';
+    status.style.color = '#c0392b';
+    status.textContent = 'Ошибка проверки обновлений';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Проверить обновления';
+  }
+}
+
 async function logout() {
   await fetch('/api/admin/logout', { method: 'POST' });
   window.location.href = '/admin-login.html';

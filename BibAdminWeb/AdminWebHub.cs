@@ -150,6 +150,7 @@ namespace BibAdminWeb
             if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return Task.CompletedTask;
             var client = AdminHub.SetOfflineDecision(pcNumber, d);
             if (client != null) AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+            if (client != null) AdminHub.RaiseClientUpdated(client);
             return Task.CompletedTask;
         }
 
@@ -244,6 +245,23 @@ namespace BibAdminWeb
                 else
                     AdminHub.AddPendingCommand(client.PcNumber, type, value);
             }
+        }
+
+        public async Task ExtendSession(string pcNumber, int addSeconds, int addAmount)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession) return;
+            client.LimitSeconds += addSeconds;
+            client.PaidAmount += addAmount;
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            var cmd = new { Type = "EXTEND_SESSION", Value = addSeconds.ToString(), LimitSeconds = addSeconds };
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+            else
+                AdminHub.AddPendingCommand(pcNumber, "EXTEND_SESSION", addSeconds.ToString());
+            AdminHub.RaiseClientUpdated(client);
         }
 
         public async Task RenameClient(int pcNumberValue, string customName)

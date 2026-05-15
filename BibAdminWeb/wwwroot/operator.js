@@ -206,6 +206,8 @@ function renderActionBar() {
     const pauseCls = pc.isPaused ? 'green' : 'amber';
     btns.push(`<button class="ab-btn ${pauseCls}" onclick="doTogglePause()">${pauseLabel}</button>`);
     btns.push(`<button class="ab-btn blue" onclick="openTransferDlg()">↔ Пересадить</button>`);
+    if (pc.sessionType === 'Лимит')
+      btns.push(`<button class="ab-btn blue" onclick="openExtendDlg()">+⏱ Время</button>`);
     btns.push(`<button class="ab-btn red" onclick="doEndSession()">⏹ Завершить</button>`);
   }
 
@@ -272,6 +274,60 @@ async function doTogglePause() {
   if (!selectedPc) return;
   try {
     await connection.invoke('TogglePause', selectedPc);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+// ── Extend session ────────────────────────────────────────────────────────────
+let _extSyncing = false;
+
+function openExtendDlg() {
+  if (!selectedPc) return;
+  document.getElementById('dlgExtPc').textContent = selectedPc;
+  document.getElementById('dlgExtMin').value = 30;
+  document.getElementById('dlgExtAmount').value = tariff ? Math.round(tariff * 30 / 60) : 0;
+  openDlg('dlgExtend');
+}
+
+function calcExtAmount() {
+  if (_extSyncing || !tariff) return;
+  _extSyncing = true;
+  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  document.getElementById('dlgExtAmount').value = Math.round(tariff * min / 60);
+  _extSyncing = false;
+}
+
+function calcExtTime() {
+  if (_extSyncing || !tariff) return;
+  _extSyncing = true;
+  const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
+  document.getElementById('dlgExtMin').value = Math.round(amount * 60 / tariff) || 0;
+  _extSyncing = false;
+}
+
+async function confirmExtend() {
+  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
+  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  closeDlg('dlgExtend');
+  try {
+    await connection.invoke('ExtendSession', selectedPc, min * 60, amount);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+// ── Управление всеми ПК ───────────────────────────────────────────────────────
+async function shutdownAll() {
+  if (!confirm('Выключить все ПК?')) return;
+  try {
+    await connection.invoke('ShutdownAll');
+    toast('Команда выключения отправлена всем ПК');
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+async function restartAll() {
+  if (!confirm('Перезагрузить все ПК?')) return;
+  try {
+    await connection.invoke('RestartAll');
+    toast('Команда перезагрузки отправлена всем ПК');
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 

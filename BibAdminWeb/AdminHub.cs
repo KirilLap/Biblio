@@ -252,6 +252,15 @@ namespace BibAdminWeb
                     if (string.IsNullOrEmpty(sessionType) || sessionType == "Заблокирован" || sessionType == "Свободный")
                         continue;
 
+                    // Пропускаем сессии старше 8 часов (защита от "фантомных" сессий после ночного выключения)
+                    if (s.TryGetProperty("SavedAtUtc", out var savedAtProp) && savedAtProp.GetString() is string savedAtStr &&
+                        DateTime.TryParse(savedAtStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var savedAt) &&
+                        (DateTime.UtcNow - savedAt).TotalHours > 8)
+                    {
+                        Logger.Warn($"⚠️ Сессия {pcNumber} пропущена: устарела (сохранена {savedAt:HH:mm} UTC)");
+                        continue;
+                    }
+
                     DateTime? sessionStart = null;
                     if (s.TryGetProperty("SessionStartUtc", out var startProp))
                     {

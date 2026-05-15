@@ -238,6 +238,24 @@
         <span id="bgUploadStatus" style="display:none;color:#1d9e75;font-size:12px;margin-left:10px">✓ Отправлено</span>
       </div>
 
+      <div class="settings-card">
+        <h3>Обновления</h3>
+        <p id="updateCurrentVer" style="color:#888;font-size:12px;margin-bottom:12px">Нажмите кнопку для проверки</p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">🔄 Проверить обновления</button>
+          <span id="updateStatus" style="display:none;font-size:12px"></span>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Управление ПК</h3>
+        <p style="color:#666;font-size:12px;margin-bottom:12px">Команды рассылаются всем подключённым ПК</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="shutdownAll()" style="border-color:#E24B4A;color:#E24B4A">⏻ Выключить все</button>
+          <button class="btn btn-outline" onclick="restartAll()">🔄 Перезагрузить все</button>
+        </div>
+      </div>
+
       <div class="settings-card full-width">
         <h3>Услуги <button class="btn-sm" onclick="addService()">+ Добавить</button></h3>
         <div id="servicesList"></div>
@@ -410,6 +428,25 @@
 
 <!-- Context menu -->
 <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
+
+<!-- Extend session dialog -->
+<div id="dlgExtend" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">⏱ Добавить время — <span id="dlgExtPc"></span></div>
+    <div class="form-row">
+      <label>Добавить минут</label>
+      <input type="number" id="dlgExtMin" min="1" max="999" value="30" oninput="calcExtAmount()">
+    </div>
+    <div class="form-row">
+      <label>Добавить сумму (сум)</label>
+      <input type="number" id="dlgExtAmount" min="0" value="0" oninput="calcExtTime()">
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgExtend')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmExtend()">Добавить</button>
+    </div>
+  </div>
+</div>
 
 <!-- Individual PC background dialog -->
 <div id="dlgIndBg" class="dlg-overlay" style="display:none">
