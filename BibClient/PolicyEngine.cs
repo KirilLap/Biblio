@@ -191,7 +191,7 @@ namespace BibClient
                     case "SET_PC_NUMBER_FONT_SIZE":
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double pcFont))
                         {
-                            SettingsManager.Current.PcNumberFontSize = Math.Clamp(pcFont, 8, 200);
+                            SettingsManager.Current.PcNumberFontSize = Math.Clamp(pcFont, 8, 2000);
                             SettingsManager.Save();
                             SettingsChanged?.Invoke();
                         }

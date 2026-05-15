@@ -238,13 +238,21 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Файл установщика не найден\"}");
                     return;
                 }
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = installerPath,
-                    UseShellExecute = true
-                });
-                _ = Task.Run(async () => { await Task.Delay(500); Environment.Exit(0); });
                 await ctx.Response.WriteAsync("{\"ok\":true}");
+                _ = Task.Run(async () =>
+                {
+                    // Уведомляем операторов, даём им 2 секунды увидеть сообщение
+                    if (OperatorBroadcaster.Instance != null)
+                        await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление системы");
+                    await Task.Delay(2000);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = installerPath,
+                        UseShellExecute = true
+                    });
+                    await Task.Delay(500);
+                    Environment.Exit(0);
+                });
                 return;
             }
 

@@ -11,7 +11,7 @@ namespace BibAdminWeb
         public bool ShowPcName { get; set; } = true;
         public bool ShowPcNumber { get; set; } = true;
         public string PcNumberPosition { get; set; } = "MiddleCenter";
-        public double PcNumberFontSize { get; set; } = 52;
+        public double PcNumberFontSize { get; set; } = 120;
         public bool ShowLockedText { get; set; } = true;
         public string LockedTextPosition { get; set; } = "MiddleCenter";
         public double LockedTextFontSize { get; set; } = 16;

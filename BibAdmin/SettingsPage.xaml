@@ -433,14 +433,14 @@
                                     <ColumnDefinition Width="44"/>
                                 </Grid.ColumnDefinitions>
                                 <Slider x:Name="SliderPcFontSize"
-                                        Minimum="16" Maximum="120"
-                                        Value="52" TickFrequency="4"
+                                        Minimum="50" Maximum="1500"
+                                        Value="120" TickFrequency="10"
                                         IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center"
                                         ValueChanged="SliderFont_Changed"/>
                                 <TextBlock x:Name="TxtPcFontValue"
                                            Grid.Column="1"
-                                           Text="52"
+                                           Text="120"
                                            Foreground="#1D9E75"
                                            FontSize="12" FontWeight="Bold"
                                            VerticalAlignment="Center"

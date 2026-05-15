@@ -70,6 +70,10 @@ function startSignalR() {
     }
   });
 
+  connection.on('serverRestarting', data => {
+    showRestartOverlay(data.reason || 'Обновление системы');
+  });
+
   connection.on('sessionSummary', s => {
     showSessionSummary(s);
   });
@@ -89,13 +93,19 @@ function startSignalR() {
   });
   connection.onclose(() => {
     setDot(false);
-    toast('Соединение потеряно. Ожидание перезапуска сервера...', 'warn');
+    showRestartOverlay('Сервер недоступен');
     waitForServerAndReload();
   });
 
   connection.start()
     .then(() => setDot(true))
-    .catch(err => { setDot(false); console.error('SignalR error:', err); waitForServerAndReload(); });
+    .catch(err => { setDot(false); console.error('SignalR error:', err); showRestartOverlay('Сервер недоступен'); waitForServerAndReload(); });
+}
+
+function showRestartOverlay(reason) {
+  const overlay = document.getElementById('overlayRestart');
+  document.getElementById('overlayRestartReason').textContent = reason;
+  overlay.style.display = 'flex';
 }
 
 function waitForServerAndReload() {

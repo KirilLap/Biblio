@@ -14,7 +14,7 @@ namespace BibAdmin
         public bool ShowPcName { get; set; } = true;      // Показывать кастомное имя (например, "ПК" или "Комп")
         public bool ShowPcNumber { get; set; } = true;    // Показывать цифровой номер (например, "1")
         public string PcNumberPosition { get; set; } = "MiddleCenter";  // Общая позиция для имени и номера
-        public double PcNumberFontSize { get; set; } = 52;
+        public double PcNumberFontSize { get; set; } = 120;
         public bool ShowLockedText { get; set; } = true;
         public string LockedTextPosition { get; set; } = "MiddleCenter";
         public double LockedTextFontSize { get; set; } = 16;
