@@ -823,8 +823,27 @@ namespace BibAdminWeb
             client.LastSeen = DateTime.UtcNow;
             client.IsOnline = true;
 
+            // Клиент явно сообщает что заблокирован — очищаем сессию немедленно.
+            // Guard 2 ниже некорректно глотает этот статус (elapsed==0), поэтому обрабатываем первым.
+            if (status == "Заблокирован")
+            {
+                bool hadSession = !string.IsNullOrEmpty(client.SessionType) && client.SessionStart.HasValue;
+                client.Status = "Заблокирован";
+                client.SessionType = "";
+                client.SessionStart = null;
+                client.ElapsedSeconds = 0;
+                client.LimitSeconds = 0;
+                client.IsPaused = false;
+                client.AccumulatedSeconds = 0;
+                KnownClients[pcNumber] = client;
+                ClientUpdated?.Invoke(client);
+                if (hadSession) SaveActiveSessions();
+                Logger.Info($"🔒 {pcNumber}: клиент заблокирован{(hadSession ? " — сессия очищена" : "")}");
+                return;
+            }
+
             if (string.IsNullOrEmpty(client.SessionType) && !client.SessionStart.HasValue &&
-                status != "Заблокирован" && status != "Свободный")
+                status != "Свободный")
             {
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
@@ -835,7 +854,7 @@ namespace BibAdminWeb
             {
                 // Применяем IsPaused как приоритет — клиент ещё не прислал elapsed,
                 // но пауза уже стоит на сервере (например, решение администратора).
-                if (status != "Заблокирован" && status != "Свободный")
+                if (status != "Свободный")
                     client.Status = client.IsPaused ? "Пауза" : status;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
