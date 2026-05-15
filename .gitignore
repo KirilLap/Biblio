@@ -1,8 +1,13 @@
 # Локальные настройки деплоя (у каждого разработчика свои)
 SERVER_IP.txt
 
-# Рабочие файлы сервера (создаются при запуске)
+# Рабочие файлы сервера (создаются при запуске, не коммитятся)
 auth_tokens.json
+clients.json
+active_sessions.json
+deleted_pcs.json
+pending_commands.json
+server_heartbeat.json
 
 # Build artifacts
 *.o
