@@ -262,6 +262,26 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Обновления -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Обновления"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock x:Name="TxtCurrentVersion"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,12"/>
+                            <Button Content="🔄 Проверить обновления"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#EEF3FF"
+                                    BorderBrush="#378ADD"
+                                    Foreground="#185FA5"
+                                    HorizontalAlignment="Left"
+                                    Click="CheckUpdates_Click"/>
+                        </StackPanel>
+                    </Border>
+
                 </StackPanel>
 
                 <!-- Правая колонка -->

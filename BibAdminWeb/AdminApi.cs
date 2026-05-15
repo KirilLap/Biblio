@@ -190,6 +190,63 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Check update ─────────────────────────────────────────────────
+            if (path == "/api/admin/check-update" && method == "GET")
+            {
+                var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "version.json");
+                if (!File.Exists(versionFile))
+                {
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                        hasUpdate = false,
+                        currentVersion = UpdateChecker.CurrentVersion,
+                        newVersion = (string?)null,
+                        releaseNotes = (string?)null
+                    }, _json));
+                    return;
+                }
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(versionFile));
+                    var root = doc.RootElement;
+                    var newVer = root.TryGetProperty("Version", out var vp) ? vp.GetString() ?? "" : "";
+                    var notes = root.TryGetProperty("ReleaseNotes", out var np) ? np.GetString() ?? "" : "";
+                    var hasUpdate = Version.TryParse(newVer, out var r) &&
+                                    Version.TryParse(UpdateChecker.CurrentVersion, out var c) && r > c;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                        hasUpdate,
+                        currentVersion = UpdateChecker.CurrentVersion,
+                        newVersion = newVer,
+                        releaseNotes = notes
+                    }, _json));
+                }
+                catch
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync("{\"error\":\"Ошибка чтения version.json\"}");
+                }
+                return;
+            }
+
+            // ─── Apply update ─────────────────────────────────────────────────
+            if (path == "/api/admin/apply-update" && method == "POST")
+            {
+                var installerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "biblio-setup.exe");
+                if (!File.Exists(installerPath))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Файл установщика не найден\"}");
+                    return;
+                }
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = installerPath,
+                    UseShellExecute = true
+                });
+                _ = Task.Run(async () => { await Task.Delay(500); Environment.Exit(0); });
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Stop Server ──────────────────────────────────────────────────
             if (path == "/api/admin/stop" && method == "POST")
             {

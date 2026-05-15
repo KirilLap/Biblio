@@ -74,6 +74,7 @@ namespace BibAdmin
                     }
                 }
 
+                TxtCurrentVersion.Text = $"Текущая версия: {UpdateChecker.CurrentVersion}";
                 RenderServicesPanel();
                 Logger.Info("Настройки загружены в UI");
             }
@@ -629,6 +630,11 @@ namespace BibAdmin
                 Logger.Error($"Ошибка команды: {ex.Message}");
                 AdminHub.AddPendingCommand(pcNumber, type, value);
             }
+        }
+
+        private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            await UpdateChecker.CheckAsync();
         }
 
         private void ShowSaved(TextBlock txt)

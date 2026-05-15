@@ -1,16 +1,34 @@
 @echo off
 setlocal
+
+:: ============================================================
+:: Использование:
+::   update-server.cmd "Описание изменений"
+::
+:: Версия читается из файла VERSION (рядом со скриптом).
+:: Установщик ищется: installer\Output\biblio-setup-<VERSION>.exe
+:: ============================================================
+
 :: Путь к установленному BibAdminWeb (менять если другая папка)
 set INSTALL_DIR=C:\Program Files\Biblio
+
+:: Читаем версию из файла VERSION
+set /p VERSION=<"%~dp0VERSION"
+if "%VERSION%"=="" ( echo ОШИБКА: файл VERSION пустой или не найден! & pause & exit /b 1 )
+
+:: Описание релиза (первый аргумент скрипта, или пустое)
+set NOTES=%~1
+if "%NOTES%"=="" set NOTES=Обновление %VERSION%
 
 :: Папка с новыми собранными файлами
 set SRC_ADMINWEB=%~dp0BibAdminWeb\bin\Publish\win-x64
 set SRC_ADMIN=%~dp0BibAdmin\bin\Publish\win-x64
-set INSTALLER=%~dp0installer\Output\biblio-setup-1.0.0.exe
+set INSTALLER=%~dp0installer\Output\biblio-setup-%VERSION%.exe
 
 echo ============================================
-echo   Biblio - обновление сервера
+echo   Biblio %VERSION% - обновление сервера
 echo ============================================
+echo   Описание: %NOTES%
 echo.
 
 :: Остановить BibAdminWeb и BibAdmin
@@ -33,12 +51,16 @@ if %errorlevel% neq 0 ( echo ОШИБКА копирования BibAdmin! & pau
 echo [4/5] Публикуем установщик для клиентов...
 if not exist "%INSTALL_DIR%\BibAdminWeb\updates" mkdir "%INSTALL_DIR%\BibAdminWeb\updates"
 
-:: Копируем установщик
+if not exist "%INSTALLER%" (
+    echo ОШИБКА: установщик не найден: %INSTALLER%
+    echo Сначала запустите build.cmd
+    pause & exit /b 1
+)
+
 copy /y "%INSTALLER%" "%INSTALL_DIR%\BibAdminWeb\updates\biblio-setup.exe" >nul
-if %errorlevel% neq 0 ( echo ОШИБКА: установщик не найден: %INSTALLER% & pause & exit /b 1 )
 
 :: Создаём version.json (клиенты сравнивают версию с этим файлом)
-echo {"Version":"1.0.1","ReleaseNotes":"Исправлена настройка IP, загрузка фона, окно настроек","InstallerFile":"biblio-setup.exe"} > "%INSTALL_DIR%\BibAdminWeb\updates\version.json"
+echo {"Version":"%VERSION%","ReleaseNotes":"%NOTES%","InstallerFile":"biblio-setup.exe"} > "%INSTALL_DIR%\BibAdminWeb\updates\version.json"
 
 :: Запустить BibAdminWeb
 echo [5/5] Запускаем BibAdminWeb...
@@ -46,7 +68,7 @@ start "" "%INSTALL_DIR%\BibAdminWeb\BibAdminWeb.exe"
 
 echo.
 echo ============================================
-echo   Готово!
+echo   Готово! Версия %VERSION% развёрнута.
 echo   BibAdminWeb обновлён и запущен.
 echo   Клиенты получат уведомление об обновлении
 echo   при следующем запуске BibClient.

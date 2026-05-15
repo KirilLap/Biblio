@@ -1,5 +1,9 @@
 #define AppName    "Biblio"
-#define AppVersion "1.0.0"
+; AppVersion передаётся из build.cmd через /DAppVersion=X.Y.Z
+; При ручной компиляции через ISCC без параметра используется "0.0.0"
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
 #define AppPublisher "Biblio"
 
 ; Папки с результатами publish (относительно этого .iss файла)
