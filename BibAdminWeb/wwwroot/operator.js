@@ -154,7 +154,6 @@ function renderCard(pcNumber) {
     card.className = 'pc-card';
     card.dataset.pc = pcNumber;
     card.addEventListener('click', () => selectPc(pcNumber));
-    // Вставляем в правильном порядке по pcNumberValue
     const keys = Object.keys(pcs).sort((a, b) => pcs[a].pcNumberValue - pcs[b].pcNumberValue);
     const idx = keys.indexOf(pcNumber);
     const cards = grid.querySelectorAll('.pc-card');
@@ -165,16 +164,54 @@ function renderCard(pcNumber) {
   const statusClass = getStatusClass(pc);
   const isSelected = selectedPc === pcNumber;
   card.className = 'pc-card ' + statusClass + (isSelected ? ' selected' : '');
+  card.innerHTML = buildCardHtml(pc);
+}
 
-  const timer = getDisplayTime(pc);
+function buildCardHtml(pc) {
+  const pcNumber = pc.pcNumber;
+
+  // Badge (тип сессии)
+  let badge = '';
+  if (pc.isSession) {
+    const cls = pc.sessionType === 'VIP' ? 'badge-vip' : 'badge-limit';
+    badge = `<span class="pc-session-badge ${cls}">${esc(pc.sessionType)}</span>`;
+  }
+
+  // Таймер
+  let timerBlock = '';
+  if (pc.isSession || pc.isPaused) {
+    timerBlock = `<div class="pc-timer" data-pc-timer="${esc(pcNumber)}">${fmtTime(pc.elapsedSeconds)}</div>`;
+    // VIP: стоимость
+    if (pc.sessionType === 'VIP') {
+      const cost = Math.floor(pc.elapsedSeconds * tariff / 3600);
+      timerBlock += `<div class="pc-cost" data-pc-cost="${esc(pcNumber)}">К оплате: ${cost.toLocaleString('ru-RU')} сум</div>`;
+    }
+    // Лимит: остаток
+    if (pc.sessionType === 'Лимит' && pc.limitSeconds > 0) {
+      const rem = Math.max(0, pc.limitSeconds - pc.elapsedSeconds);
+      const remCls = rem <= 300 ? 'pc-remaining urgent' : 'pc-remaining';
+      timerBlock += `<div class="${remCls}" data-pc-rem="${esc(pcNumber)}">Осталось: ${fmtTime(rem)}</div>`;
+    }
+  } else {
+    timerBlock = `<div class="pc-timer" data-pc-timer="${esc(pcNumber)}">—</div>`;
+  }
+
+  // Мета-информация
+  const metaParts = [];
+  if (pc.ip) metaParts.push(`<span>${esc(pc.ip)}</span>`);
+  if (pc.isSession && pc.userName) metaParts.push(`<span>👤 ${esc(pc.userName)}</span>`);
+  if (pc.isSession && pc.readerId) metaParts.push(`<span>🪪 ${esc(pc.readerId)}</span>`);
+  if (pc.isSession && pc.paidAmount) metaParts.push(`<span>💵 ${pc.paidAmount.toLocaleString('ru-RU')} сум</span>`);
+  const meta = metaParts.length ? `<div class="pc-meta-op">${metaParts.join('')}</div>` : '';
+
   const statusLabel = getStatusLabel(pc);
-  const userLine = pc.userName ? `<div class="pc-user">${esc(pc.userName)}</div>` : '';
 
-  card.innerHTML = `
+  return `
     <div class="pc-name">${esc(pcNumber)}</div>
-    <div class="pc-timer" data-pc-timer="${esc(pcNumber)}">${timer}</div>
+    ${badge}
+    ${timerBlock}
     <div class="pc-status-label">${statusLabel}</div>
-    ${userLine}
+    ${meta}
   `;
 }
 
@@ -183,8 +220,23 @@ function tickTimers() {
   Object.values(pcs).forEach(pc => {
     if (!pc.isSession || pc.isPaused || !pc.isOnline) return;
     pc.elapsedSeconds += 1;
-    const el = document.querySelector(`[data-pc-timer="${CSS.escape(pc.pcNumber)}"]`);
-    if (el) el.textContent = getDisplayTime(pc);
+    const timerEl = document.querySelector(`[data-pc-timer="${CSS.escape(pc.pcNumber)}"]`);
+    if (timerEl) timerEl.textContent = fmtTime(pc.elapsedSeconds);
+    if (pc.sessionType === 'VIP') {
+      const costEl = document.querySelector(`[data-pc-cost="${CSS.escape(pc.pcNumber)}"]`);
+      if (costEl) {
+        const cost = Math.floor(pc.elapsedSeconds * tariff / 3600);
+        costEl.textContent = `К оплате: ${cost.toLocaleString('ru-RU')} сум`;
+      }
+    }
+    if (pc.sessionType === 'Лимит' && pc.limitSeconds > 0) {
+      const remEl = document.querySelector(`[data-pc-rem="${CSS.escape(pc.pcNumber)}"]`);
+      if (remEl) {
+        const rem = Math.max(0, pc.limitSeconds - pc.elapsedSeconds);
+        remEl.textContent = `Осталось: ${fmtTime(rem)}`;
+        remEl.className = rem <= 300 ? 'pc-remaining urgent' : 'pc-remaining';
+      }
+    }
   });
 }
 
