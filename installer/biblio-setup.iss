@@ -120,9 +120,10 @@ var
 begin
   Exec('sc.exe', 'stop BibClientWatchdog', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(2000);
-  Exec('taskkill.exe', '/f /im BibClient.exe',    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('taskkill.exe', '/f /im BibAdmin.exe',     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('taskkill.exe', '/f /im BibAdminWeb.exe',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibClientGuardian.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibClient.exe',         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibAdmin.exe',          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibAdminWeb.exe',       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

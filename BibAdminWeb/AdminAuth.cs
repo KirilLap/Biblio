@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -9,11 +11,45 @@ namespace BibAdminWeb
     public static class AdminAuth
     {
         private static readonly ConcurrentDictionary<string, DateTime> _tokens = new();
+        private static readonly string _tokensFile = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "auth_tokens.json");
+
+        static AdminAuth()
+        {
+            LoadTokens();
+        }
+
+        private static void LoadTokens()
+        {
+            try
+            {
+                if (!File.Exists(_tokensFile)) return;
+                var json = File.ReadAllText(_tokensFile);
+                var dict = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(json);
+                if (dict == null) return;
+                var now = DateTime.UtcNow;
+                foreach (var kv in dict)
+                    if (kv.Value > now)
+                        _tokens[kv.Key] = kv.Value;
+            }
+            catch { }
+        }
+
+        private static void SaveTokens()
+        {
+            try
+            {
+                var snapshot = new Dictionary<string, DateTime>(_tokens);
+                File.WriteAllText(_tokensFile,
+                    JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false }));
+            }
+            catch { }
+        }
 
         public static bool IsValidToken(string token)
         {
             if (!_tokens.TryGetValue(token, out var exp)) return false;
-            if (exp < DateTime.UtcNow) { _tokens.TryRemove(token, out _); return false; }
+            if (exp < DateTime.UtcNow) { _tokens.TryRemove(token, out _); SaveTokens(); return false; }
             return true;
         }
 
@@ -63,6 +99,7 @@ namespace BibAdminWeb
 
                 var token = Guid.NewGuid().ToString("N");
                 _tokens[token] = DateTime.UtcNow.AddHours(24);
+                SaveTokens();
                 ctx.Response.Cookies.Append("bib_admin", token, new CookieOptions
                 {
                     HttpOnly = true, SameSite = SameSiteMode.Lax, Expires = DateTimeOffset.UtcNow.AddHours(24)
@@ -94,6 +131,7 @@ namespace BibAdminWeb
                 }
                 var token = Guid.NewGuid().ToString("N");
                 _tokens[token] = DateTime.UtcNow.AddHours(24);
+                SaveTokens();
                 ctx.Response.Cookies.Append("bib_admin", token, new CookieOptions
                 {
                     HttpOnly = true, SameSite = SameSiteMode.Lax, Expires = DateTimeOffset.UtcNow.AddHours(24)
@@ -110,7 +148,7 @@ namespace BibAdminWeb
         public static Task HandleLogout(HttpContext ctx)
         {
             var token = ctx.Request.Cookies["bib_admin"];
-            if (token != null) _tokens.TryRemove(token, out _);
+            if (token != null) { _tokens.TryRemove(token, out _); SaveTokens(); }
             ctx.Response.Cookies.Delete("bib_admin");
             ctx.Response.ContentType = "application/json";
             return ctx.Response.WriteAsync("{}");

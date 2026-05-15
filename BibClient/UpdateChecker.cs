@@ -30,16 +30,7 @@ namespace BibClient
 
             if (info == null || !IsNewer(info.Version, CurrentVersion)) return;
 
-            var msg = $"Доступна версия {info.Version}  (у вас {CurrentVersion})";
-            if (!string.IsNullOrWhiteSpace(info.ReleaseNotes))
-                msg += $"\n\n{info.ReleaseNotes}";
-            msg += "\n\nОбновить сейчас?";
-
-            var result = System.Windows.MessageBox.Show(msg, "Обновление BibClient",
-                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Information,
-                System.Windows.MessageBoxResult.Yes);
-            if (result != System.Windows.MessageBoxResult.Yes) return;
-
+            Logger.Info($"Доступна версия {info.Version}, текущая {CurrentVersion} — запуск тихого обновления");
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
         }
 
@@ -49,27 +40,26 @@ namespace BibClient
             var tempPath = Path.Combine(Path.GetTempPath(), installerFile);
             try
             {
-                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
                 var bytes = await _http.GetByteArrayAsync(downloadUrl);
                 await File.WriteAllBytesAsync(tempPath, bytes);
             }
             catch (Exception ex)
             {
-                System.Windows.Input.Mouse.OverrideCursor = null;
-                System.Windows.MessageBox.Show($"Ошибка загрузки обновления:\n{ex.Message}",
-                    "Ошибка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                Logger.Error($"Ошибка загрузки обновления: {ex.Message}");
                 return;
             }
-            finally
-            {
-                System.Windows.Input.Mouse.OverrideCursor = null;
-            }
 
+            // /VERYSILENT — без окон, /NORESTART — без перезагрузки ПК,
+            // /COMPONENTS=client — только BibClient, без серверных компонентов
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = tempPath,
+                Arguments = "/VERYSILENT /NORESTART /COMPONENTS=client",
                 UseShellExecute = true
             });
+
+            // Завершаем процесс — установщик остановит нас принудительно,
+            // но лучше выйти чисто чтобы Guardian не мешал установке
             System.Windows.Application.Current.Dispatcher.Invoke(
                 () => System.Windows.Application.Current.Shutdown());
         }
