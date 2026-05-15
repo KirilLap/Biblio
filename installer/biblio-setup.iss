@@ -166,10 +166,11 @@ begin
     'Укажите порт, на котором будут работать BibAdmin и BibAdminWeb.',
     'Порт должен быть в диапазоне 1024–65535. По умолчанию: 8080.');
   PortPage.Add('Порт сервера:', False);
-  // Пробуем прочитать порт из уже установленных настроек
-  ExistingPort := ReadPortFromSettings(ExpandConstant('{app}\BibAdminWeb\global_settings.json'));
+  // Пробуем прочитать порт из уже установленных настроек.
+  // {app} недоступен в InitializeWizard, используем путь по умолчанию.
+  ExistingPort := ReadPortFromSettings(ExpandConstant('{autopf}\Biblio\BibAdminWeb\global_settings.json'));
   if ExistingPort = '' then
-    ExistingPort := ReadPortFromSettings(ExpandConstant('{app}\BibAdmin\global_settings.json'));
+    ExistingPort := ReadPortFromSettings(ExpandConstant('{autopf}\Biblio\BibAdmin\global_settings.json'));
   if ExistingPort = '' then
     ExistingPort := '8080';
   PortPage.Values[0] := ExistingPort;
