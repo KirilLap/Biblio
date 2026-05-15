@@ -135,7 +135,7 @@ end;
 // Возвращает пустую строку если файл не найден или поле отсутствует.
 function ReadPortFromSettings(SettingsFile: String): String;
 var
-  Content: String;
+  Content: AnsiString;
   Pos1, Pos2: Integer;
   Token: String;
 begin
