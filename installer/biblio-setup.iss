@@ -131,14 +131,48 @@ begin
   Result := '';
 end;
 
+// Читает значение поля ServerPort из существующего JSON-файла настроек.
+// Возвращает пустую строку если файл не найден или поле отсутствует.
+function ReadPortFromSettings(SettingsFile: String): String;
+var
+  Content: String;
+  Pos1, Pos2: Integer;
+  Token: String;
+begin
+  Result := '';
+  if not FileExists(SettingsFile) then Exit;
+  if not LoadStringFromFile(SettingsFile, Content) then Exit;
+  Token := '"ServerPort":';
+  Pos1 := Pos(Token, Content);
+  if Pos1 = 0 then Exit;
+  Pos1 := Pos1 + Length(Token);
+  // Пропускаем пробелы
+  while (Pos1 <= Length(Content)) and (Content[Pos1] = ' ') do
+    Pos1 := Pos1 + 1;
+  Pos2 := Pos1;
+  while (Pos2 <= Length(Content)) and
+        (Content[Pos2] >= '0') and (Content[Pos2] <= '9') do
+    Pos2 := Pos2 + 1;
+  if Pos2 > Pos1 then
+    Result := Copy(Content, Pos1, Pos2 - Pos1);
+end;
+
 procedure InitializeWizard();
+var
+  ExistingPort: String;
 begin
   PortPage := CreateInputQueryPage(wpSelectComponents,
     'Настройка порта сервера',
     'Укажите порт, на котором будут работать BibAdmin и BibAdminWeb.',
     'Порт должен быть в диапазоне 1024–65535. По умолчанию: 8080.');
   PortPage.Add('Порт сервера:', False);
-  PortPage.Values[0] := '8080';
+  // Пробуем прочитать порт из уже установленных настроек
+  ExistingPort := ReadPortFromSettings(ExpandConstant('{app}\BibAdminWeb\global_settings.json'));
+  if ExistingPort = '' then
+    ExistingPort := ReadPortFromSettings(ExpandConstant('{app}\BibAdmin\global_settings.json'));
+  if ExistingPort = '' then
+    ExistingPort := '8080';
+  PortPage.Values[0] := ExistingPort;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -187,7 +221,6 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   Port: String;
   SettingsFile: String;
-  Lines: TArrayOfString;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -199,57 +232,58 @@ begin
     if IsComponentSelected('admin') then
       OpenFirewallPort('BibAdmin', Port);
 
-    // Записываем выбранный порт в global_settings.json для BibAdminWeb
-    // Всегда перезаписываем при установке/обновлении
+    // BibAdminWeb: создаём global_settings.json только при первой установке.
+    // При обновлении файл уже существует — не трогаем, настройки сохраняются.
     if IsComponentSelected('adminweb') then
     begin
       SettingsFile := ExpandConstant('{app}\BibAdminWeb\global_settings.json');
-      SaveStringToFile(SettingsFile,
-        '{' + #13#10 +
-        '  "ServerPort": ' + Port + ',' + #13#10 +
-        '  "IsFirstRun": false,' + #13#10 +
-        '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
-        '  "Tariff": 3000,' + #13#10 +
-        '  "Operators": []' + #13#10 +
-        '}',
-        False);
+      if not FileExists(SettingsFile) then
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "IsFirstRun": false,' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "Tariff": 3000,' + #13#10 +
+          '  "Operators": []' + #13#10 +
+          '}',
+          False);
     end;
 
-    // Записываем выбранный порт в global_settings.json для BibAdmin
-    // Всегда перезаписываем при установке/обновлении
+    // BibAdmin: создаём global_settings.json только при первой установке.
     if IsComponentSelected('admin') then
     begin
       SettingsFile := ExpandConstant('{app}\BibAdmin\global_settings.json');
-      SaveStringToFile(SettingsFile,
-        '{' + #13#10 +
-        '  "ServerPort": ' + Port + ',' + #13#10 +
-        '  "IsFirstRun": false,' + #13#10 +
-        '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
-        '  "Tariff": 3000,' + #13#10 +
-        '  "PreventClose": true,' + #13#10 +
-        '  "AutoStartWithUser": true' + #13#10 +
-        '}',
-        False);
+      if not FileExists(SettingsFile) then
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "IsFirstRun": false,' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "Tariff": 3000,' + #13#10 +
+          '  "PreventClose": true,' + #13#10 +
+          '  "AutoStartWithUser": true' + #13#10 +
+          '}',
+          False);
     end;
 
-    // Записываем настройки для BibClient (порт сервера и локальный IP)
-    // Всегда перезаписываем при установке/обновлении
+    // BibClient: создаём settings.json только при первой установке.
     if IsComponentSelected('client') then
     begin
       SettingsFile := ExpandConstant('{app}\BibClient\settings.json');
-      SaveStringToFile(SettingsFile,
-        '{' + #13#10 +
-        '  "PcNumberValue": 1,' + #13#10 +
-        '  "CustomName": "",' + #13#10 +
-        '  "ServerIp": "",' + #13#10 +
-        '  "ServerPort": ' + Port + ',' + #13#10 +
-        '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
-        '  "ShowPcName": true,' + #13#10 +
-        '  "ShowPcNumber": true,' + #13#10 +
-        '  "PreventClose": true,' + #13#10 +
-        '  "AutoStartWithUser": true' + #13#10 +
-        '}',
-        False);
+      if not FileExists(SettingsFile) then
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "PcNumberValue": 1,' + #13#10 +
+          '  "CustomName": "",' + #13#10 +
+          '  "ServerIp": "",' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "ShowPcName": true,' + #13#10 +
+          '  "ShowPcNumber": true,' + #13#10 +
+          '  "PreventClose": true,' + #13#10 +
+          '  "AutoStartWithUser": true' + #13#10 +
+          '}',
+          False);
     end;
   end;
 end;
