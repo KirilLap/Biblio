@@ -74,10 +74,12 @@ namespace BibClient
                 UseShellExecute = true
             });
 
-            // Даём инсталлятору 1 сек на старт, затем завершаем процесс.
-            // Используем Environment.Exit, а не Application.Shutdown — иначе
-            // настройка PreventClose может отменить закрытие через Window.Closing.
-            // Инсталлятор сам убьёт процесс через taskkill, но лучше выйти чисто.
+            // Сигнализируем Guardian и Windows-службе что закрытие легальное —
+            // иначе они немедленно перезапустят BibClient и инсталлятор не сможет
+            // заменить заблокированный exe-файл.
+            Watchdog.StopGuardian();
+            ServiceManager.SignalLegalClose();
+
             await Task.Delay(1000);
             Logger.Info("⬆️ Завершаем BibClient для установки обновления...");
             Environment.Exit(0);
