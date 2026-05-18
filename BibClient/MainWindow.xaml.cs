@@ -133,7 +133,6 @@ namespace BibClient
                 Dispatcher.Invoke(() =>
                 {
                     NetDot.Fill = isConnected ? WpfBrushes.Green : WpfBrushes.Red;
-                    NetStatusText.Text = isConnected ? "Онлайн" : "Оффлайн";
 
                     if (!isConnected && _sessionManager != null && PolicyEngine.LockOnOffline && !_isOfflineLocked)
                     {

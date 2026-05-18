@@ -56,10 +56,7 @@
             </Border>
 
             <!-- Индикатор сети -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                <Ellipse x:Name="NetDot" Width="10" Height="10" Fill="Red" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="NetStatusText" Text="Оффлайн" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
-            </StackPanel>
+            <Ellipse x:Name="NetDot" Width="10" Height="10" Fill="Red" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,4,0"/>
         </Grid>
     </Grid>
 </Window>
