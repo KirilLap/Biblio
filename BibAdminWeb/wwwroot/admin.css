@@ -192,6 +192,8 @@ body {
 
 .pc-meta { font-size: 11px; color: #555; margin-bottom: 12px; line-height: 1.6; }
 .pc-meta span { display: block; }
+.pc-ver        { font-size: 10px; color: #888; }
+.pc-ver.pc-ver-old { color: #f59e0b; font-weight: 600; }
 
 .pc-actions {
   display: flex;

@@ -13,6 +13,22 @@ namespace BibClient
         public static string CurrentVersion =>
             System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
+        /// <summary>
+        /// Запускает фоновую задачу с периодической проверкой раз в час.
+        /// Возвращается сразу — проверка идёт в фоне.
+        /// </summary>
+        public static Task StartPeriodicCheckAsync(string serverBaseUrl)
+        {
+            return Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(TimeSpan.FromHours(1));
+                    await CheckAsync(serverBaseUrl);
+                }
+            });
+        }
+
         public static async Task CheckAsync(string serverBaseUrl)
         {
             VersionInfo? info = null;

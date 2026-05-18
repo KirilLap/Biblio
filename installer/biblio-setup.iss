@@ -86,6 +86,10 @@ Filename: "sc.exe"; \
 Filename: "sc.exe"; Parameters: "start BibClientWatchdog"; \
     Flags: runhidden waituntilterminated; Components: client
 
+; Запуск BibClient после установки / обновления
+Filename: "{app}\BibClient\BibClient.exe"; \
+    Flags: nowait; Components: client
+
 ; Автозапуск BibAdmin от имени администратора
 Filename: "{app}\BibAdmin\BibAdmin.exe"; \
     Flags: postinstall nowait runascurrentuser; Components: admin

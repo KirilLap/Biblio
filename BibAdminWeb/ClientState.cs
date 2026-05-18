@@ -82,6 +82,8 @@ namespace BibAdminWeb
         public bool PreventClose { get; set; } = true;
         public bool AutoStartWithUser { get; set; } = true;
 
+        public string ClientVersion { get; set; } = "";
+
         public bool HasIndividualSettings { get; set; } = false;
         public List<string> IndividualSettingKeys { get; set; } = new();
 

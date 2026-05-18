@@ -109,7 +109,8 @@ namespace BibClient
                     DiskFreeGb = GetDiskFreeGb(),
                     UptimeHours = GetUptimeHours(),
                     PcNumberValue = SettingsManager.Current.PcNumberValue,
-                    CustomName = SettingsManager.Current.CustomName
+                    CustomName = SettingsManager.Current.CustomName,
+                    ClientVersion = UpdateChecker.CurrentVersion
                 };
 
                 // Читаем heartbeat-файл: SessionId и время последнего пульса → offline duration

@@ -109,12 +109,13 @@ namespace BibClient
                             }),
                             System.Windows.Threading.DispatcherPriority.Background);
 
-                        // Проверяем обновления через 5 секунд после старта
+                        // Проверяем обновления через 5 секунд после старта, затем раз в час
                         mainWindow.Dispatcher.BeginInvoke(async () =>
                         {
                             await Task.Delay(5000);
                             var url = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
                             await UpdateChecker.CheckAsync(url);
+                            _ = UpdateChecker.StartPeriodicCheckAsync(url);
                         });
                     }
                     else
@@ -166,12 +167,13 @@ namespace BibClient
                 mainWindow.Show();
                 mainWindow.Activate();
 
-                // Проверяем обновления через 5 секунд после старта
+                // Проверяем обновления через 5 секунд после старта, затем раз в час
                 mainWindow.Dispatcher.BeginInvoke(async () =>
                 {
                     await Task.Delay(5000);
                     var url = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
                     await UpdateChecker.CheckAsync(url);
+                    _ = UpdateChecker.StartPeriodicCheckAsync(url);
                 });
 
                 // Вызываем блокировку через Dispatcher с повторной попыткой если _isReady ещё false

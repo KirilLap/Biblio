@@ -366,3 +366,7 @@ main { padding: 20px 24px 100px; }
 .toast.warn  { border-color: #E24B4A; }
 .toast.good  { border-color: #1D9E75; }
 @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── Версия клиента на карточке ──────────────────────────────────────────── */
+.pc-ver        { font-size: 10px; color: #888; display: block; }
+.pc-ver.pc-ver-old { color: #f59e0b; font-weight: 600; }

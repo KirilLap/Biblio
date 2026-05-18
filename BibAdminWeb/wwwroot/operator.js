@@ -8,6 +8,7 @@ let serviceTypes = [];
 let offlinePcNumber = null;  // ПК, по которому ждём решения оффлайн
 let connection = null;
 let sessionFields = { requireReaderId: true, requireUserName: false }; // настройки полей сессии
+let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/version.json)
 
 // ── Просмотр экрана ───────────────────────────────────────────────────────────
 let _screenPc = null;
@@ -25,6 +26,11 @@ let _screenInterval = null;
     .then(r => r.ok ? r.json() : null)
     .then(sf => { if (sf) sessionFields = sf; })
     .catch(() => {});
+
+  // Загружаем последнюю доступную версию BibClient
+  fetch('/updates/version.json').then(r => r.ok ? r.json() : null).then(v => {
+    if (v?.Version) { latestClientVersion = v.Version; renderGrid(); }
+  }).catch(() => {});
 
   startSignalR();
 
@@ -212,6 +218,10 @@ function buildCardHtml(pc) {
   if (pc.isSession && pc.userName) metaParts.push(`<span>👤 ${esc(pc.userName)}</span>`);
   if (pc.isSession && pc.readerId) metaParts.push(`<span>🪪 ${esc(pc.readerId)}</span>`);
   if (pc.isSession && pc.paidAmount) metaParts.push(`<span>💵 ${pc.paidAmount.toLocaleString('ru-RU')} сум</span>`);
+  if (pc.clientVersion) {
+    const isOld = latestClientVersion && pc.clientVersion !== latestClientVersion;
+    metaParts.push(`<span class="pc-ver${isOld ? ' pc-ver-old' : ''}" title="${isOld ? `Доступно обновление v${latestClientVersion}` : 'Версия BibClient'}">${isOld ? '⬆ ' : ''}v${pc.clientVersion}</span>`);
+  }
   const meta = metaParts.length ? `<div class="pc-meta-op">${metaParts.join('')}</div>` : '';
 
   const statusLabel = getStatusLabel(pc);

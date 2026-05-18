@@ -12,6 +12,7 @@ let pendingConflict = null;
 let renamePcVal = null;
 let _screenPc = null;
 let _screenInterval = null;
+let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/version.json)
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
@@ -27,6 +28,11 @@ let _screenInterval = null;
   loadSettings();
   loadOperators();
   setInterval(tickTimers, 1000);
+
+  // Загружаем последнюю доступную версию BibClient для сравнения на карточках
+  fetch('/updates/version.json').then(r => r.ok ? r.json() : null).then(v => {
+    if (v?.Version) { latestClientVersion = v.Version; renderPcGrid(); }
+  }).catch(() => {});
 })();
 
 // ─── SignalR ─────────────────────────────────────────────────────────────────
@@ -180,11 +186,13 @@ function buildPcCard(c) {
     }
   }
 
+  const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
   const meta = `<div class="pc-meta">
     ${c.ip ? `<span>${c.ip}</span>` : ''}
     ${c.isSession && c.userName ? `<span>👤 ${esc(c.userName)}</span>` : ''}
     ${c.isSession && c.readerId ? `<span>🪪 ${esc(c.readerId)}</span>` : ''}
     ${c.isSession && c.paidAmount ? `<span>💵 ${c.paidAmount.toLocaleString()} сум</span>` : ''}
+    ${c.clientVersion ? `<span class="pc-ver${isOutdated ? ' pc-ver-old' : ''}" title="${isOutdated ? `Доступно обновление v${latestClientVersion}` : 'Версия BibClient'}">${isOutdated ? '⬆ ' : ''}v${c.clientVersion}</span>` : ''}
   </div>`;
 
   const actions = buildActions(c);

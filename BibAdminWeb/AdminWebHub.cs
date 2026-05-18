@@ -483,7 +483,8 @@ namespace BibAdminWeb
             offlineDecision = c.OfflineDecision.ToString(),
             hasIndividualSettings = c.HasIndividualSettings,
             startedByOperatorName = c.StartedByOperatorName,
-            backgroundFileName = c.BackgroundFileName
+            backgroundFileName = c.BackgroundFileName,
+            clientVersion = c.ClientVersion
         };
 
         private bool IsAuthorized()

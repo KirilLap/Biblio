@@ -571,6 +571,7 @@ namespace BibAdminWeb
                 DisconnectedAt = null,
                 OfflineDecision = existingByMac?.OfflineDecision ?? OfflineDecision.None,
                 ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // ✅ КОПИРУЕМ!
+                ClientVersion = !string.IsNullOrEmpty(info.ClientVersion) ? info.ClientVersion : (existingByMac?.ClientVersion ?? ""),
             };
 
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);
@@ -1368,6 +1369,7 @@ namespace BibAdminWeb
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
         public string ClientTimeUtc { get; set; } = "";
+        public string ClientVersion { get; set; } = "";
         // ✅ Новые поля для разделения имени и номера
         public int PcNumberValue { get; set; }
         public string CustomName { get; set; } = "";
