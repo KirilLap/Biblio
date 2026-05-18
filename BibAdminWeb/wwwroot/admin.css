@@ -317,6 +317,50 @@ body {
   border: 1px solid #222240;
 }
 .settings-card.full-width { grid-column: 1 / -1; }
+
+/* ── Settings tabs ────────────────────────────────────────── */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #222240;
+}
+.stab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 18px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: 0;
+}
+.stab:hover { color: #ccc; }
+.stab.active { color: #1d9e75; border-bottom-color: #1d9e75; }
+
+.stab-panel { display: none; }
+.stab-panel.active { display: block; }
+
+.settings-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-hint {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
 .settings-card h3 {
   font-size: 14px;
   font-weight: 600;

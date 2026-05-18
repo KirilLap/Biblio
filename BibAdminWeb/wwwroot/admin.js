@@ -97,6 +97,13 @@ function setConnStatus(ok) {
 }
 
 // ─── Navigation ─────────────────────────────────────────────────────────────
+function showSettingsTab(name) {
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.stab[onclick*="'${name}'"]`).classList.add('active');
+  document.getElementById('stab-' + name).classList.add('active');
+}
+
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
