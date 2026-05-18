@@ -298,6 +298,7 @@ namespace BibClient
 
             // ── Позиции ──────────────────────────────────────────────────────────
             ApplyPosition(PanelCenter, _settings.PcNumberPosition);
+            ApplyPosition(PanelLocked, _settings.LockedTextPosition);
             ApplyPosition(PanelTime, _settings.TimePosition);
         }
 
