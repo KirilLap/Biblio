@@ -96,6 +96,10 @@ main { padding: 20px 24px 100px; }
   transition: border-color 0.15s, box-shadow 0.15s;
   user-select: none;
   position: relative;
+  /* Фиксированная высота — карточки не прыгают при старте/конце сессии */
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
 }
 .pc-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); }
 .pc-card.selected { border-color: #4A90D9; box-shadow: 0 0 0 3px rgba(74,144,217,0.2); }
@@ -175,7 +179,8 @@ main { padding: 20px 24px 100px; }
 .pc-remaining.urgent { color: #dc2626; font-weight: 700; }
 
 .pc-meta-op {
-  margin-top: 6px;
+  margin-top: auto; /* прижимает IP/мета к низу карточки */
+  padding-top: 6px;
   font-size: 11px;
   color: #777;
   line-height: 1.6;
