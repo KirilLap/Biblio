@@ -248,6 +248,7 @@ namespace BibAdminWeb
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = installerPath,
+                        Arguments = "/VERYSILENT /NORESTART /COMPONENTS=adminweb",
                         UseShellExecute = true
                     });
                     await Task.Delay(500);

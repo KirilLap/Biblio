@@ -122,7 +122,10 @@ function showRestartOverlay(reason) {
 function waitForServerAndReload() {
   const interval = setInterval(async () => {
     try {
-      const r = await fetch('/api/op/me', { cache: 'no-store' });
+      // Используем публичный эндпоинт — токен оператора теряется при рестарте
+      // сервера (хранится в памяти), поэтому /api/op/me вернёт 401 и цикл
+      // никогда не завершится. /api/session-fields не требует авторизации.
+      const r = await fetch('/api/session-fields', { cache: 'no-store' });
       if (r.ok) { clearInterval(interval); window.location.reload(); }
     } catch (e) { /* сервер ещё не поднялся */ }
   }, 3000);
