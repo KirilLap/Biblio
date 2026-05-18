@@ -255,6 +255,20 @@ function openStartSession(pcNumber) {
   document.getElementById('dlgSsMinutes').value = '';
   document.getElementById('dlgSsMoney').value = '';
   document.getElementById('dlgSsHint').textContent = '';
+
+  // Показываем/скрываем поля согласно настройкам
+  const reqReader = settings.requireReaderId !== false;
+  const reqName   = !!settings.requireUserName;
+  const rowReader = document.getElementById('rowSsReader');
+  const rowName   = document.getElementById('rowSsName');
+  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
+  if (rowName)   rowName.style.display   = reqName   ? '' : 'none';
+  // Обновляем метки
+  const lblReader = document.getElementById('lblSsReader');
+  const lblName   = document.getElementById('lblSsName');
+  if (lblReader) lblReader.textContent = reqReader ? 'ID читателя *' : 'ID читателя';
+  if (lblName)   lblName.textContent   = reqName   ? 'Имя *' : 'Имя';
+
   ssSelectType('Лимит');
   document.getElementById('dlgStartSession').style.display = 'flex';
 }
@@ -311,9 +325,12 @@ function ssSyncMoney() {
 }
 
 async function confirmStartSession() {
+  const reqReader = settings.requireReaderId !== false;
+  const reqName   = !!settings.requireUserName;
   const reader = document.getElementById('dlgSsReader').value.trim();
-  if (!reader) { toast('Введите ID читателя', 'warn'); return; }
-  const name = document.getElementById('dlgSsName').value.trim();
+  const name   = document.getElementById('dlgSsName').value.trim();
+  if (reqReader && !reader) { toast('Введите ID читателя', 'warn'); return; }
+  if (reqName   && !name)   { toast('Введите имя пользователя', 'warn'); return; }
 
   let limitSeconds = 0, paidAmount = 0;
   if (_ssType === 'Лимит') {
@@ -886,6 +903,10 @@ function fillSettingsForm() {
   // Путь к папке обновлений
   document.getElementById('sUpdatesPath').value = settings.updatesPath ?? '';
 
+  // Поля сессии
+  document.getElementById('sRequireReaderId').checked = settings.requireReaderId !== false;
+  document.getElementById('sRequireUserName').checked = !!settings.requireUserName;
+
   // Sort mode selector
   const sortSel = document.getElementById('sortMode');
   if (sortSel) sortSel.value = settings.clientSortMode || 'ByNumber';
@@ -942,6 +963,8 @@ function readSettingsForm() {
     clientSortMode: settings.clientSortMode,
     operators: settings.operators,
     updatesPath: document.getElementById('sUpdatesPath').value.trim(),
+    requireReaderId: document.getElementById('sRequireReaderId').checked,
+    requireUserName: document.getElementById('sRequireUserName').checked,
   };
 }
 

@@ -7,6 +7,7 @@ let tariff = 3000;
 let serviceTypes = [];
 let offlinePcNumber = null;  // ПК, по которому ждём решения оффлайн
 let connection = null;
+let sessionFields = { requireReaderId: true, requireUserName: false }; // настройки полей сессии
 
 // ── Просмотр экрана ───────────────────────────────────────────────────────────
 let _screenPc = null;
@@ -18,6 +19,12 @@ let _screenInterval = null;
   const me = await fetch('/api/op/me').then(r => r.ok ? r.json() : null).catch(() => null);
   if (!me) { window.location.href = '/login.html'; return; }
   document.getElementById('opName').textContent = me.displayName;
+
+  // Загружаем настройки полей сессии
+  fetch('/api/session-fields')
+    .then(r => r.ok ? r.json() : null)
+    .then(sf => { if (sf) sessionFields = sf; })
+    .catch(() => {});
 
   startSignalR();
 
@@ -304,6 +311,19 @@ function openSessionDlg() {
   document.getElementById('dlgReaderId').value = '';
   document.querySelectorAll('[name="stype"]')[0].checked = true;
   document.getElementById('limitFields').style.display = '';
+
+  // Показываем/скрываем поля согласно настройкам
+  const reqReader = sessionFields.requireReaderId !== false;
+  const reqName   = !!sessionFields.requireUserName;
+  const rowReader = document.getElementById('rowReaderId');
+  const rowName   = document.getElementById('rowUserName');
+  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
+  if (rowName)   rowName.style.display   = reqName   ? '' : 'none';
+  const lblReader = document.getElementById('lblReaderId');
+  const lblName   = document.getElementById('lblUserName');
+  if (lblReader) lblReader.innerHTML = reqReader ? 'ID читателя *' : 'ID читателя <span class="opt">(необязательно)</span>';
+  if (lblName)   lblName.innerHTML   = reqName   ? 'Имя *' : 'Имя читателя <span class="opt">(необязательно)</span>';
+
   openDlg('dlgSession');
 
   document.querySelectorAll('[name="stype"]').forEach(r => {
@@ -333,7 +353,8 @@ async function confirmStartSession() {
   const paidAmount = parseInt(document.getElementById('dlgAmount').value) || 0;
   const userName = document.getElementById('dlgUserName').value.trim();
   const readerId = document.getElementById('dlgReaderId').value.trim();
-  if (!readerId) { toast('Введите ID читателя', 'warn'); return; }
+  if (sessionFields.requireReaderId !== false && !readerId) { toast('Введите ID читателя', 'warn'); return; }
+  if (!!sessionFields.requireUserName && !userName) { toast('Введите имя пользователя', 'warn'); return; }
   closeDlg('dlgSession');
   try {
     await connection.invoke('StartSession', selectedPc, sessionType,

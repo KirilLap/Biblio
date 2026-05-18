@@ -169,6 +169,12 @@ namespace BibAdmin
 
         // Путь к папке обновлений (пусто = ../BibAdminWeb/updates/ рядом с BibAdmin.exe)
         public string UpdatesPath { get; set; } = "";
+
+        // =====================
+        // Настройки полей сессии
+        // =====================
+        public bool RequireReaderId { get; set; } = true;
+        public bool RequireUserName { get; set; } = false;
     }
 
     // Модель услуги

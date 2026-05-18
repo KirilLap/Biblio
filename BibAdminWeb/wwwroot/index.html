@@ -149,6 +149,13 @@
       </div>
 
       <div class="settings-card">
+        <h3>Поля при старте сессии</h3>
+        <p style="color:#666;font-size:12px;margin-bottom:12px">Если поле обязательно — оно отображается и включается в отчёт. Если нет — скрывается.</p>
+        <div class="form-check"><label><input type="checkbox" id="sRequireReaderId"> Обязательно: ID читателя</label></div>
+        <div class="form-check"><label><input type="checkbox" id="sRequireUserName"> Обязательно: Имя пользователя</label></div>
+      </div>
+
+      <div class="settings-card">
         <h3>Экран блокировки</h3>
         <div class="form-check"><label><input type="checkbox" id="sShowPcName"> Показывать название ПК</label></div>
         <div class="form-check"><label><input type="checkbox" id="sShowPcNumber"> Показывать номер ПК</label></div>
@@ -338,14 +345,15 @@
       Безлимитный доступ без ограничений по времени
     </div>
 
-    <!-- ID читателя (обязательно) -->
-    <div class="form-row">
-      <label>ID читателя *</label>
+    <!-- ID читателя -->
+    <div id="rowSsReader" class="form-row">
+      <label id="lblSsReader">ID читателя *</label>
       <input type="text" id="dlgSsReader" placeholder="Обязательно">
     </div>
-    <div class="form-row">
-      <label>Имя</label>
-      <input type="text" id="dlgSsName" placeholder="Необязательно">
+    <!-- Имя пользователя -->
+    <div id="rowSsName" class="form-row">
+      <label id="lblSsName">Имя *</label>
+      <input type="text" id="dlgSsName" placeholder="Иванов Иван">
     </div>
 
     <div class="dlg-btns">

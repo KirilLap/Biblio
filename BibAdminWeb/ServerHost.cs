@@ -140,6 +140,18 @@ namespace BibAdminWeb
                             if (method == "GET" && path == "/api/op/me")
                             { await OperatorApi.HandleMe(ctx); return; }
 
+                            // Публичный эндпоинт: настройки полей сессии (для панели оператора)
+                            if (method == "GET" && path == "/api/session-fields")
+                            {
+                                var sf = GlobalSettings.Load();
+                                ctx.Response.ContentType = "application/json";
+                                await ctx.Response.WriteAsync(
+                                    System.Text.Json.JsonSerializer.Serialize(
+                                        new { requireReaderId = sf.RequireReaderId, requireUserName = sf.RequireUserName },
+                                        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                                return;
+                            }
+
                             await next(ctx);
                         });
 

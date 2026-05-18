@@ -120,17 +120,36 @@
             </StackPanel>
 
             <!-- ID читателя (для всех типов сессий) -->
-            <TextBlock Text="ID читателя *"
-                       Foreground="#AAAACC" FontSize="12"
-                       Margin="0,12,0,6"/>
-            <Border BorderBrush="#3D3D6B" BorderThickness="1"
-                    CornerRadius="8" Margin="0,0,0,4">
-                <TextBox x:Name="TxtReaderId"
-                         Background="#2A2A3E" Foreground="White"
-                         BorderThickness="0" FontSize="14"
-                         Padding="12,10" CaretBrush="White"
-                         ToolTip="Введите ID читателя (обязательно)"/>
-            </Border>
+            <StackPanel x:Name="PanelReaderId">
+                <TextBlock x:Name="TxtReaderIdLabel"
+                           Text="ID читателя *"
+                           Foreground="#AAAACC" FontSize="12"
+                           Margin="0,12,0,6"/>
+                <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                        CornerRadius="8" Margin="0,0,0,4">
+                    <TextBox x:Name="TxtReaderId"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"
+                             ToolTip="Введите ID читателя"/>
+                </Border>
+            </StackPanel>
+
+            <!-- Имя пользователя -->
+            <StackPanel x:Name="PanelUserName">
+                <TextBlock x:Name="TxtUserNameLabel"
+                           Text="Имя *"
+                           Foreground="#AAAACC" FontSize="12"
+                           Margin="0,12,0,6"/>
+                <Border BorderBrush="#3D3D6B" BorderThickness="1"
+                        CornerRadius="8" Margin="0,0,0,4">
+                    <TextBox x:Name="TxtUserName"
+                             Background="#2A2A3E" Foreground="White"
+                             BorderThickness="0" FontSize="14"
+                             Padding="12,10" CaretBrush="White"
+                             ToolTip="Введите имя пользователя"/>
+                </Border>
+            </StackPanel>
 
             <!-- Сообщение для VIP -->
             <TextBlock x:Name="TxtVipInfo"

@@ -57,6 +57,8 @@ namespace BibAdmin
                 ChkLockOnOffline.IsChecked = _global.LockOnOffline;
                 ChkPreventClose.IsChecked = _global.PreventClose;
                 ChkAutoStartWithUser.IsChecked = _global.AutoStartWithUser;
+                ChkRequireReaderId.IsChecked = _global.RequireReaderId;
+                ChkRequireUserName.IsChecked = _global.RequireUserName;
 
                 SelectComboByTag(CmbPcNumberPosition, _global.PcNumberPosition);
                 SelectComboByTag(CmbLockedTextPosition, _global.LockedTextPosition);
@@ -358,6 +360,17 @@ namespace BibAdmin
             }
 
             ShowSaved(TxtRestrictionsSaved);
+        }
+
+        // =====================
+        // Поля сессии
+        // =====================
+        private void SaveSessionFields_Click(object sender, RoutedEventArgs e)
+        {
+            _global.RequireReaderId = ChkRequireReaderId.IsChecked == true;
+            _global.RequireUserName = ChkRequireUserName.IsChecked == true;
+            _global.Save();
+            ShowSaved(TxtSessionFieldsSaved);
         }
 
         // =====================

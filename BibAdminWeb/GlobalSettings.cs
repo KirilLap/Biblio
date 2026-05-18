@@ -65,6 +65,12 @@ namespace BibAdminWeb
         // Путь к папке обновлений (пусто = {BaseDirectory}/updates/)
         public string UpdatesPath { get; set; } = "";
 
+        // =====================
+        // Настройки полей сессии
+        // =====================
+        public bool RequireReaderId { get; set; } = true;
+        public bool RequireUserName { get; set; } = false;
+
         private static readonly string _path = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
 

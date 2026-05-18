@@ -1033,7 +1033,8 @@ namespace BibAdmin
                 _selected.IsPaused = false;
                 _selected.LimitSeconds = dialog.LimitSeconds;
                 _selected.PaidAmount = dialog.PaidAmount;
-                _selected.ReaderId = dialog.ReaderId;  // Сохраняем ID читателя
+                _selected.ReaderId = dialog.ReaderId;   // Сохраняем ID читателя
+                _selected.UserName = dialog.UserName;  // Сохраняем имя пользователя
                 _selected.ElapsedSeconds = 0;
 
                 _ = SendSessionCommandWithStartTime(

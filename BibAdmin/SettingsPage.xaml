@@ -199,6 +199,44 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Поля при старте сессии -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Поля при старте сессии"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Если поле обязательно — оно отображается и включается в отчёт. Если нет — скрывается."
+                                       Foreground="#888" FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,12"/>
+
+                            <CheckBox x:Name="ChkRequireReaderId"
+                                      Content="Обязательно: ID читателя"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkRequireUserName"
+                                      Content="Обязательно: Имя пользователя"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,16"/>
+
+                            <Button Content="Сохранить"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#EEF3FF"
+                                    BorderBrush="#378ADD"
+                                    Foreground="#185FA5"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,0,0,8"
+                                    Click="SaveSessionFields_Click"/>
+
+                            <TextBlock x:Name="TxtSessionFieldsSaved"
+                                       Text="✓ Настройки сохранены"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Поведение при потере сети -->
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
