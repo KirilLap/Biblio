@@ -380,7 +380,7 @@ async function lock(pcNumber) {
 }
 
 async function unlock(pcNumber) {
-  await conn.invoke('SendCommandToPc', pcNumber, 'REMOTE_LOCK', 'false');
+  await conn.invoke('SendCommandToPc', pcNumber, 'REMOTE_UNLOCK', '');
 }
 
 async function lockAll() {
@@ -388,7 +388,7 @@ async function lockAll() {
 }
 
 async function unlockAll() {
-  await conn.invoke('SendCommandToAll', 'REMOTE_LOCK', 'false');
+  await conn.invoke('SendCommandToAll', 'REMOTE_UNLOCK', '');
 }
 
 async function shutdownAll() {
