@@ -37,7 +37,10 @@ namespace BibAdminWeb
 
             var filesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
             var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-            var updatesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+            var gs = GlobalSettings.Load();
+            var updatesPath = !string.IsNullOrWhiteSpace(gs.UpdatesPath)
+                ? gs.UpdatesPath.TrimEnd('\\', '/')
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
             Directory.CreateDirectory(filesPath);
             Directory.CreateDirectory(wwwrootPath);
             Directory.CreateDirectory(updatesPath);
