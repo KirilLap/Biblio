@@ -74,10 +74,13 @@ namespace BibClient
                 UseShellExecute = true
             });
 
-            // Завершаем процесс — установщик остановит нас принудительно,
-            // но лучше выйти чисто чтобы Guardian не мешал установке
-            System.Windows.Application.Current.Dispatcher.Invoke(
-                () => System.Windows.Application.Current.Shutdown());
+            // Даём инсталлятору 1 сек на старт, затем завершаем процесс.
+            // Используем Environment.Exit, а не Application.Shutdown — иначе
+            // настройка PreventClose может отменить закрытие через Window.Closing.
+            // Инсталлятор сам убьёт процесс через taskkill, но лучше выйти чисто.
+            await Task.Delay(1000);
+            Logger.Info("⬆️ Завершаем BibClient для установки обновления...");
+            Environment.Exit(0);
         }
 
         private static bool IsNewer(string remote, string current) =>

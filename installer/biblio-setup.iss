@@ -227,6 +227,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   Port: String;
   SettingsFile: String;
+  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -290,6 +291,13 @@ begin
           '  "AutoStartWithUser": true' + #13#10 +
           '}',
           False);
+    end;
+
+    // Запускаем BibClient после установки / обновления
+    // [Run] с Flags:nowait не работает при /VERYSILENT, поэтому запускаем здесь явно.
+    if IsComponentSelected('client') then
+    begin
+      Exec(ExpandConstant('{app}\BibClient\BibClient.exe'), '', '', SW_SHOW, ewNoWait, ResultCode);
     end;
   end;
 end;
