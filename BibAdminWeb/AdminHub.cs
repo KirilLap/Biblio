@@ -856,6 +856,7 @@ namespace BibAdminWeb
                     return;
                 }
                 bool hadSession = !string.IsNullOrEmpty(client.SessionType) && client.SessionStart.HasValue;
+                bool deferredUpdate = client.UpdateStatus == "deferred";
                 client.Status = "Заблокирован";
                 client.SessionType = "";
                 client.SessionStart = null;
@@ -864,10 +865,17 @@ namespace BibAdminWeb
                 client.IsPaused = false;
                 client.AccumulatedSeconds = 0;
                 client.PendingStartSessionSentAt = null;
+                if (deferredUpdate) client.UpdateStatus = "pending";
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
                 if (hadSession) SaveActiveSessions();
                 Logger.Info($"🔒 {pcNumber}: клиент заблокирован{(hadSession ? " — сессия очищена" : "")}");
+                if (deferredUpdate)
+                {
+                    var updateJson = JsonSerializer.Serialize(new { Type = "UPDATE_NOW", Value = "" });
+                    await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", updateJson);
+                    Logger.Info($"⬆️ {pcNumber}: отправлена отложенная команда UPDATE_NOW");
+                }
                 return;
             }
 

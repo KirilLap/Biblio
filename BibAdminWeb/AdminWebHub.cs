@@ -100,6 +100,15 @@ namespace BibAdminWeb
             AdminHub.AddPendingCommand(pcNumber, "REMOTE_LOCK", "true");
             AdminHub.RaiseClientUpdated(client);
 
+            if (client.UpdateStatus == "deferred" && client.IsOnline)
+            {
+                client.UpdateStatus = "pending";
+                AdminHub.KnownClients[pcNumber] = client;
+                var updateJson = JsonSerializer.Serialize(new { Type = "UPDATE_NOW", Value = "" });
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", updateJson);
+                AdminHub.RaiseClientUpdated(client);
+            }
+
             await Clients.Caller.SendAsync("sessionSummary", new { pcNumber, sessionType, duration, earned, paidAmount, refund });
         }
 
@@ -243,6 +252,14 @@ namespace BibAdminWeb
                 if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) continue;
                 if (type == "UPDATE_NOW" && client.IsOnline && string.IsNullOrEmpty(client.UpdateStatus))
                 {
+                    if (client.IsSession)
+                    {
+                        client.UpdateStatus = "deferred";
+                        client.PreUpdateVersion = client.ClientVersion;
+                        AdminHub.KnownClients[pcNumber] = client;
+                        AdminHub.RaiseClientUpdated(client);
+                        continue; // не отправляем команду, подождём конца сессии
+                    }
                     client.UpdateStatus = "pending";
                     client.PreUpdateVersion = client.ClientVersion;
                     AdminHub.KnownClients[pcNumber] = client;

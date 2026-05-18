@@ -377,6 +377,7 @@ main { padding: 20px 24px 100px; }
 .pc-update-badge.updating { color: #60a5fa; }
 .pc-update-badge.done     { color: #34d399; }
 .pc-update-badge.failed   { color: #f87171; }
+.pc-update-badge.deferred { color: #a78bfa; }
 
 /* ── Панель прогресса обновлений ─────────────────────────────────────────── */
 .update-progress-panel {
@@ -411,3 +412,4 @@ main { padding: 20px 24px 100px; }
 .upd-st.updating { color: #60a5fa; }
 .upd-st.done     { color: #34d399; }
 .upd-st.failed   { color: #f87171; }
+.upd-st.deferred { color: #a78bfa; }

@@ -13,6 +13,7 @@ let renamePcVal = null;
 let _screenPc = null;
 let _screenInterval = null;
 let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/version.json)
+let updatePanelDismissed = false;
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
@@ -152,19 +153,21 @@ function renderUpdatePanel(list) {
   const panel = document.getElementById('updateProgressPanel');
   if (!panel) return;
   const updating = list.filter(c => c.updateStatus);
-  if (!updating.length) { panel.style.display = 'none'; return; }
+  if (!updating.length) { panel.style.display = 'none'; updatePanelDismissed = false; return; }
+  if (updatePanelDismissed) return;
 
-  const done    = updating.filter(c => c.updateStatus === 'done').length;
-  const failed  = updating.filter(c => c.updateStatus === 'failed').length;
-  const total   = updating.length;
+  const done     = updating.filter(c => c.updateStatus === 'done').length;
+  const failed   = updating.filter(c => c.updateStatus === 'failed').length;
+  const deferred = updating.filter(c => c.updateStatus === 'deferred').length;
+  const active   = updating.length - deferred;
   const finished = done + failed;
-  const pct = total ? Math.round(finished / total * 100) : 0;
+  const pct = active ? Math.round(finished / active * 100) : 0;
 
   document.getElementById('updateProgressBar').style.width = pct + '%';
   document.getElementById('updateProgressTitle').textContent =
-    `⬆️ Обновление клиентов: ${finished}/${total} завершено`;
+    `Обновление клиентов: ${finished}/${active}` + (deferred ? ` (${deferred} после сессии)` : '');
 
-  const stLabel = { pending: 'Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился' };
+  const stLabel = { pending: 'Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился', deferred: '⏸ После сессии' };
   document.getElementById('updateProgressList').innerHTML = updating.map(c => {
     const verText = c.preUpdateVersion
       ? `v${c.preUpdateVersion} → v${latestClientVersion || '?'}`
@@ -180,6 +183,7 @@ function renderUpdatePanel(list) {
 }
 
 function closeUpdatePanel() {
+  updatePanelDismissed = true;
   document.getElementById('updateProgressPanel').style.display = 'none';
 }
 
@@ -224,7 +228,7 @@ function buildPcCard(c) {
   }
 
   const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
-  const updBadgeMap = { pending: '⏳ Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился' };
+  const updBadgeMap = { pending: '⏳ Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился', deferred: '⏸ После сессии' };
   const updBadge = c.updateStatus ? `<span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus] || ''}</span>` : '';
   const meta = `<div class="pc-meta">
     ${c.ip ? `<span>${c.ip}</span>` : ''}
@@ -448,6 +452,7 @@ async function updateAllClients() {
   const btn = document.getElementById('btnUpdateClients');
   btn.disabled = true;
   btn.textContent = '⏳ Отправка...';
+  updatePanelDismissed = false;
   try {
     await conn.invoke('SendCommandToAll', 'UPDATE_NOW', '');
     toast('Команда обновления отправлена всем ПК', 'good');
