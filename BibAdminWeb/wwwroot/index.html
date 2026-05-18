@@ -52,6 +52,17 @@
         <button class="btn btn-outline" onclick="unlockAll()">🔓 Разблокировать всех</button>
       </div>
     </div>
+    <!-- Панель прогресса обновлений — скрыта когда нет активных обновлений -->
+    <div id="updateProgressPanel" class="update-progress-panel" style="display:none">
+      <div class="update-progress-header">
+        <span id="updateProgressTitle">⬆️ Обновление клиентов</span>
+        <button class="update-progress-close" onclick="closeUpdatePanel()">✕</button>
+      </div>
+      <div class="update-progress-bar-wrap">
+        <div id="updateProgressBar" class="update-progress-bar"></div>
+      </div>
+      <div id="updateProgressList" class="update-progress-list"></div>
+    </div>
     <div id="pcGrid" class="pc-grid"></div>
   </div>
 

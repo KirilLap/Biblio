@@ -84,6 +84,12 @@ namespace BibAdminWeb
 
         public string ClientVersion { get; set; } = "";
 
+        // Транзитный статус обновления — не сохраняется в clients.json
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string UpdateStatus { get; set; } = ""; // "pending" | "updating" | "done" | "failed"
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string PreUpdateVersion { get; set; } = "";
+
         public bool HasIndividualSettings { get; set; } = false;
         public List<string> IndividualSettingKeys { get; set; } = new();
 

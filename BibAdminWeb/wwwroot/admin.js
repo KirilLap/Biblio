@@ -144,6 +144,43 @@ function renderPcGrid() {
 
   grid.innerHTML = '';
   list.forEach(c => grid.appendChild(buildPcCard(c)));
+
+  renderUpdatePanel(list);
+}
+
+function renderUpdatePanel(list) {
+  const panel = document.getElementById('updateProgressPanel');
+  if (!panel) return;
+  const updating = list.filter(c => c.updateStatus);
+  if (!updating.length) { panel.style.display = 'none'; return; }
+
+  const done    = updating.filter(c => c.updateStatus === 'done').length;
+  const failed  = updating.filter(c => c.updateStatus === 'failed').length;
+  const total   = updating.length;
+  const finished = done + failed;
+  const pct = total ? Math.round(finished / total * 100) : 0;
+
+  document.getElementById('updateProgressBar').style.width = pct + '%';
+  document.getElementById('updateProgressTitle').textContent =
+    `⬆️ Обновление клиентов: ${finished}/${total} завершено`;
+
+  const stLabel = { pending: 'Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился' };
+  document.getElementById('updateProgressList').innerHTML = updating.map(c => {
+    const verText = c.preUpdateVersion
+      ? `v${c.preUpdateVersion} → v${latestClientVersion || '?'}`
+      : (c.clientVersion ? `v${c.clientVersion}` : '');
+    return `<div class="update-progress-row">
+      <span class="upd-pc">${esc(c.pcNumber)}</span>
+      <span class="upd-ver">${verText}</span>
+      <span class="upd-st ${c.updateStatus}">${stLabel[c.updateStatus] || ''}</span>
+    </div>`;
+  }).join('');
+
+  panel.style.display = 'block';
+}
+
+function closeUpdatePanel() {
+  document.getElementById('updateProgressPanel').style.display = 'none';
 }
 
 function buildPcCard(c) {
@@ -187,12 +224,15 @@ function buildPcCard(c) {
   }
 
   const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
+  const updBadgeMap = { pending: '⏳ Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился' };
+  const updBadge = c.updateStatus ? `<span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus] || ''}</span>` : '';
   const meta = `<div class="pc-meta">
     ${c.ip ? `<span>${c.ip}</span>` : ''}
     ${c.isSession && c.userName ? `<span>👤 ${esc(c.userName)}</span>` : ''}
     ${c.isSession && c.readerId ? `<span>🪪 ${esc(c.readerId)}</span>` : ''}
     ${c.isSession && c.paidAmount ? `<span>💵 ${c.paidAmount.toLocaleString()} сум</span>` : ''}
     ${c.clientVersion ? `<span class="pc-ver${isOutdated ? ' pc-ver-old' : ''}" title="${isOutdated ? `Доступно обновление v${latestClientVersion}` : 'Версия BibClient'}">${isOutdated ? '⬆ ' : ''}v${c.clientVersion}</span>` : ''}
+    ${updBadge}
   </div>`;
 
   const actions = buildActions(c);

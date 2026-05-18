@@ -222,6 +222,14 @@ namespace BibAdminWeb
         /// Нормализует тип сессии: "По времени" и "По деньгам" → "Лимит".
         /// Обеспечивает совместимость со старыми сохранёнными данными.
         /// </summary>
+        private static string ResolveUpdateStatus(ClientState? prev, string newVersion)
+        {
+            if (prev == null) return "";
+            if (prev.UpdateStatus != "updating" && prev.UpdateStatus != "pending") return "";
+            return !string.IsNullOrEmpty(newVersion) && !string.IsNullOrEmpty(prev.PreUpdateVersion)
+                   && newVersion != prev.PreUpdateVersion ? "done" : "failed";
+        }
+
         private static string NormalizeSessionType(string sessionType) =>
             sessionType is "По времени" or "По деньгам" ? "Лимит" : sessionType;
 
@@ -355,6 +363,8 @@ namespace BibAdminWeb
                 client.IsOnline = false;
                 client.Status = "Оффлайн";
                 client.LastSeen = DateTime.UtcNow;
+                if (client.UpdateStatus == "pending")
+                    client.UpdateStatus = "updating";
 
                 if (client.IsSession)
                 {
@@ -572,6 +582,8 @@ namespace BibAdminWeb
                 OfflineDecision = existingByMac?.OfflineDecision ?? OfflineDecision.None,
                 ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // ✅ КОПИРУЕМ!
                 ClientVersion = !string.IsNullOrEmpty(info.ClientVersion) ? info.ClientVersion : (existingByMac?.ClientVersion ?? ""),
+                PreUpdateVersion = existingByMac?.PreUpdateVersion ?? "",
+                UpdateStatus = ResolveUpdateStatus(existingByMac, info.ClientVersion),
             };
 
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);

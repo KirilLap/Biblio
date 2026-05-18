@@ -238,8 +238,16 @@ namespace BibAdminWeb
         {
             if (!IsAuthorized()) return;
             var json = JsonSerializer.Serialize(new { Type = type, Value = value });
-            foreach (var client in AdminHub.KnownClients.Values)
+            foreach (var pcNumber in AdminHub.KnownClients.Keys.ToList())
             {
+                if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) continue;
+                if (type == "UPDATE_NOW" && client.IsOnline && string.IsNullOrEmpty(client.UpdateStatus))
+                {
+                    client.UpdateStatus = "pending";
+                    client.PreUpdateVersion = client.ClientVersion;
+                    AdminHub.KnownClients[pcNumber] = client;
+                    AdminHub.RaiseClientUpdated(client);
+                }
                 if (client.IsOnline)
                     await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
                 else
@@ -484,7 +492,9 @@ namespace BibAdminWeb
             hasIndividualSettings = c.HasIndividualSettings,
             startedByOperatorName = c.StartedByOperatorName,
             backgroundFileName = c.BackgroundFileName,
-            clientVersion = c.ClientVersion
+            clientVersion = c.ClientVersion,
+            updateStatus = c.UpdateStatus,
+            preUpdateVersion = c.PreUpdateVersion
         };
 
         private bool IsAuthorized()
