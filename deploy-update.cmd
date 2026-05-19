@@ -12,7 +12,7 @@ title Biblio - публикация обновления
 if not exist %ISCC% (
     echo.
     echo  ОШИБКА: Inno Setup не найден!
-    echo  Путь: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
+    echo  Путь: C:\Program Files ^(x86^)\Inno Setup 6\ISCC.exe
     echo  Скачайте: https://jrsoftware.org/isdl.php
     echo.
     pause & exit /b 1
