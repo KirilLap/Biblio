@@ -96,7 +96,21 @@ function startSignalR() {
   });
 
   connection.on('serviceCreated', s => {
-    toast(`Услуга "${s.serviceName}" создана. Сумма: ${fmt(s.total)} сум${s.isPaid ? '' : ' (отложено)'}`, 'good');
+    toast(`Услуга "${s.serviceName}" создана. Сумма: ${fmt(s.total)} сум${s.isPaid ? '' : ' (отложено до расчёта)'}`, 'good');
+  });
+
+  connection.on('debtAlert', data => {
+    toast(`⚠ Долг читателя ${data.readerId}: ${fmt(data.amount)} сум`, 'warn');
+  });
+
+  connection.on('debtRecorded', data => {
+    toast(`Долг ${fmt(data.amount)} сум записан для читателя ${data.readerId}`, 'warn');
+    closeDlg('dlgDebt');
+    closeDlg('dlgSummary');
+  });
+
+  connection.on('debtCleared', data => {
+    toast(`Долг читателя ${data.readerId} погашен`, 'good');
   });
 
   connection.onreconnecting(() => {
@@ -505,8 +519,43 @@ function openServiceDlg() {
   document.getElementById('dlgSvcQty').value = 1;
   document.getElementById('dlgSvcReader').value = '';
   document.querySelectorAll('[name="svcPay"]')[0].checked = true;
+
+  // Заполняем список ПК с активными сессиями
+  const pcSel = document.getElementById('dlgSvcPc');
+  const activePcs = Object.values(pcs)
+    .filter(p => p.isSession)
+    .sort((a, b) => a.pcNumberValue - b.pcNumberValue);
+  pcSel.innerHTML = '<option value="">— выберите ПК —</option>' +
+    activePcs.map(p => {
+      const label = p.pcNumber + (p.userName ? ` (${esc(p.userName)})` : '') + (p.readerId ? ` [${esc(p.readerId)}]` : '');
+      return `<option value="${esc(p.pcNumber)}">${label}</option>`;
+    }).join('');
+
+  // Если в данный момент выбран ПК с сессией — предвыбираем его
+  if (selectedPc && pcs[selectedPc]?.isSession) {
+    pcSel.value = selectedPc;
+    const sp = pcs[selectedPc];
+    if (sp.readerId) document.getElementById('dlgSvcReader').value = sp.readerId;
+  }
+
+  document.getElementById('rowSvcPc').style.display = 'none';
   updateSvcTotal();
   openDlg('dlgService');
+}
+
+function onSvcPayChange() {
+  const isLater = document.querySelector('[name="svcPay"]:checked')?.value === 'later';
+  document.getElementById('rowSvcPc').style.display = isLater ? '' : 'none';
+}
+
+function onSvcPcChange() {
+  const pcNum = document.getElementById('dlgSvcPc').value;
+  if (!pcNum) return;
+  const pc = pcs[pcNum];
+  if (!pc) return;
+  // Автозаполняем читателя из выбранного ПК
+  const readerField = document.getElementById('dlgSvcReader');
+  if (!readerField.value && pc.readerId) readerField.value = pc.readerId;
 }
 
 function updateSvcTotal() {
@@ -524,23 +573,81 @@ async function confirmService() {
   const qty = parseInt(document.getElementById('dlgSvcQty').value) || 1;
   const reader = document.getElementById('dlgSvcReader').value.trim();
   const payNow = document.querySelector('[name="svcPay"]:checked')?.value === 'now';
+  const pcNumber = payNow ? '' : (document.getElementById('dlgSvcPc').value || '');
+  if (!payNow && !pcNumber) {
+    toast('Выберите ПК для привязки услуги', 'warn');
+    return;
+  }
   closeDlg('dlgService');
   try {
-    await connection.invoke('CreateService', id, qty, reader, reader, payNow);
+    await connection.invoke('CreateService', id, qty, reader, reader, payNow, pcNumber);
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
+// Текущие данные сессии для кнопки "Записать долг"
+let _summaryData = null;
+
 function showSessionSummary(s) {
+  _summaryData = s;
+
   let html = `
     <div class="summary-row"><span>ПК</span><span class="val">${esc(s.pcNumber)}</span></div>
     <div class="summary-row"><span>Тип</span><span class="val">${esc(s.sessionType)}</span></div>
-    <div class="summary-row"><span>Время</span><span class="val">${fmtTime(s.duration)}</span></div>
-    <div class="summary-row"><span>Оплачено</span><span class="val">${fmt(s.paidAmount)} сум</span></div>
-    <div class="summary-row"><span>Начислено</span><span class="val">${fmt(s.earned)} сум</span></div>`;
-  if (s.refund > 0)
-    html += `<div class="refund-highlight">💵 Возврат: ${fmt(s.refund)} сум</div>`;
+    <div class="summary-row"><span>Время</span><span class="val">${fmtTime(s.duration)}</span></div>`;
+
+  if (s.sessionType === 'VIP') {
+    // VIP — оплата только сейчас
+    html += `<div class="summary-row"><span>К оплате за время</span><span class="val">${fmt(s.earned)} сум</span></div>`;
+  } else {
+    // Лимит — оплачено вперёд
+    html += `<div class="summary-row"><span>Стоимость времени</span><span class="val">${fmt(s.earned)} сум</span></div>`;
+    html += `<div class="summary-row"><span>Оплачено заранее</span><span class="val">${fmt(s.paidAmount)} сум</span></div>`;
+    if (s.refund > 0)
+      html += `<div class="refund-highlight">💵 Возврат: ${fmt(s.refund)} сум</div>`;
+  }
+
+  // Услуги
+  const services = s.services || [];
+  if (services.length > 0) {
+    html += `<div class="summary-sep">Услуги</div>`;
+    services.forEach(sv => {
+      html += `<div class="summary-row summary-indent"><span>${esc(sv.name)} × ${sv.quantity} ${esc(sv.unit)}</span><span class="val">${fmt(sv.total)} сум</span></div>`;
+    });
+    html += `<div class="summary-row summary-subtotal"><span>Итого услуги</span><span class="val">${fmt(s.servicesTotal)} сум</span></div>`;
+  }
+
+  // Итоговая дополнительная оплата
+  if (s.additionalPayment > 0) {
+    html += `<div class="additional-payment">💳 Получить с клиента: ${fmt(s.additionalPayment)} сум</div>`;
+  }
+
   document.getElementById('dlgSummaryBody').innerHTML = html;
+
+  // Кнопка "Записать долг" — только если есть readerId и доп. оплата
+  const debtBtn = document.getElementById('btnRecordDebt');
+  if (debtBtn) {
+    debtBtn.style.display = (s.readerId && s.additionalPayment > 0) ? '' : 'none';
+  }
+
   openDlg('dlgSummary');
+}
+
+function openRecordDebtDlg() {
+  if (!_summaryData) return;
+  document.getElementById('dlgDebtReader').textContent = _summaryData.readerId;
+  document.getElementById('dlgDebtAmount').value = _summaryData.additionalPayment;
+  document.getElementById('dlgDebtNote').value = '';
+  openDlg('dlgDebt');
+}
+
+async function confirmRecordDebt() {
+  if (!_summaryData) return;
+  const amount = parseInt(document.getElementById('dlgDebtAmount').value) || 0;
+  const note = document.getElementById('dlgDebtNote').value.trim();
+  if (amount <= 0) { toast('Введите сумму долга', 'warn'); return; }
+  try {
+    await connection.invoke('RecordDebt', _summaryData.readerId, amount, note);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
 async function doLogout() {

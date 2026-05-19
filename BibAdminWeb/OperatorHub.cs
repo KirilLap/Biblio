@@ -64,6 +64,14 @@ namespace BibAdminWeb
             var cmd = new { Type = "START_SESSION", SessionType = sessionType, LimitSeconds = limitSeconds, PaidAmount = paidAmount, ElapsedSeconds = 0, ServerStartTime = serverStart.ToString("o") };
             await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
             AdminHub.RaiseClientUpdated(client);
+
+            // Уведомляем о долге читателя, если он есть
+            if (!string.IsNullOrEmpty(readerId))
+            {
+                int debtAmount = ReaderDebtStore.GetDebtAmount(readerId);
+                if (debtAmount > 0)
+                    await Clients.Caller.SendAsync("debtAlert", new { readerId, amount = debtAmount });
+            }
         }
 
         public async Task EndSession(string pcNumber)
@@ -119,7 +127,28 @@ namespace BibAdminWeb
             AdminHub.AddPendingCommand(pcNumber, "REMOTE_LOCK", "true");
             AdminHub.RaiseClientUpdated(client);
 
-            await Clients.Caller.SendAsync("sessionSummary", new { pcNumber, sessionType, duration, earned, paidAmount, refund });
+            // Собираем отложенные услуги для этого ПК и закрываем их
+            var deferredServices = ServiceTransaction.GetPendingForPc(pcNumber);
+            int servicesTotal = deferredServices.Sum(s => s.TotalAmount);
+            if (servicesTotal > 0) ServiceTransaction.MarkAllPaidForPc(pcNumber);
+
+            // Для VIP — вся сумма к оплате сейчас; для Лимит — только услуги дополнительно
+            int additionalPayment = sessionType == "VIP" ? earned + servicesTotal : servicesTotal;
+
+            var serviceItems = deferredServices.Select(s => new
+            {
+                name = s.ServiceName, quantity = s.Quantity, unit = s.Unit,
+                pricePerUnit = s.PricePerUnit, total = s.TotalAmount
+            }).ToList();
+
+            await Clients.Caller.SendAsync("sessionSummary", new
+            {
+                pcNumber, sessionType, duration, earned, paidAmount, refund,
+                readerId = client.ReaderId ?? "",
+                services = serviceItems,
+                servicesTotal,
+                additionalPayment
+            });
         }
 
         public async Task TogglePause(string pcNumber)
@@ -174,7 +203,7 @@ namespace BibAdminWeb
             return Task.CompletedTask;
         }
 
-        public async Task CreateService(string serviceTypeId, int quantity, string readerId, string readerName, bool payNow)
+        public async Task CreateService(string serviceTypeId, int quantity, string readerId, string readerName, bool payNow, string pcNumber = "")
         {
             if (!IsAuthorized()) return;
             var settings = GlobalSettings.Load();
@@ -186,11 +215,29 @@ namespace BibAdminWeb
                 ServiceTypeId = svc.Id, ServiceName = svc.Name, Unit = svc.Unit,
                 Quantity = quantity, PricePerUnit = svc.Price, TotalAmount = total,
                 ReaderId = string.IsNullOrWhiteSpace(readerId) ? "" : readerId,
-                ReaderName = string.IsNullOrWhiteSpace(readerName) ? "" : readerName
+                ReaderName = string.IsNullOrWhiteSpace(readerName) ? "" : readerName,
+                PcNumber = !payNow && !string.IsNullOrWhiteSpace(pcNumber) ? pcNumber : ""
             };
             ServiceTransaction.Add(tx);
             if (payNow) ServiceTransaction.MarkAsPaid(tx.Id);
             await Clients.Caller.SendAsync("serviceCreated", new { total, isPaid = payNow, serviceName = svc.Name });
+        }
+
+        /// <summary>Записывает долг читателя (вызывается из UI, если читатель не смог оплатить).</summary>
+        public async Task RecordDebt(string readerId, int amount, string note)
+        {
+            if (!IsAuthorized()) return;
+            if (string.IsNullOrEmpty(readerId) || amount <= 0) return;
+            ReaderDebtStore.Add(readerId, amount, note);
+            await Clients.Caller.SendAsync("debtRecorded", new { readerId, amount });
+        }
+
+        /// <summary>Погашает все долги читателя.</summary>
+        public async Task ClearDebt(string readerId)
+        {
+            if (!IsAuthorized()) return;
+            ReaderDebtStore.ClearDebts(readerId);
+            await Clients.Caller.SendAsync("debtCleared", new { readerId });
         }
 
         public async Task<string> TransferSession(string fromPcNumber, string toPcNumber)
