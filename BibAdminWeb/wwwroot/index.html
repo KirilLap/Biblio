@@ -552,6 +552,23 @@
   </div>
 </div>
 
+<!-- Client log viewer dialog -->
+<div id="dlgClientLogs" class="dlg-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title">📋 Логи клиента</div>
+    <div class="dlg-pc-name" id="dlgClientLogsPcName"></div>
+    <pre id="dlgClientLogsBody" style="
+      background:#0d0d1a; color:#c8d3f5; font-size:11px; font-family:monospace;
+      border-radius:8px; padding:12px; height:65vh; overflow-y:auto;
+      white-space:pre-wrap; word-break:break-all; margin-top:8px;
+    ">⏳ Запрашиваем...</pre>
+    <div class="dlg-btns" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="copyClientLogs()">📋 Копировать</button>
+      <button class="btn btn-primary" onclick="document.getElementById('dlgClientLogs').style.display='none'">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
 <script src="/admin.js"></script>
 </body>

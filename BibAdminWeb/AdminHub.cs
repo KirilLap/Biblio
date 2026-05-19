@@ -21,6 +21,8 @@ namespace BibAdminWeb
         public static event Action<ClientState>? ClientUpdated;
         public static event Action? ClientsChanged;
         public static event Action<ClientState>? ClientOfflineWithSession;
+        // pcNumber, logContent
+        public static event Action<string, string>? ClientLogsReceived;
 
         // Вызов событий из внешних классов (OperatorHub и т.п.)
         public static void RaiseClientUpdated(ClientState cs) => ClientUpdated?.Invoke(cs);
@@ -832,6 +834,14 @@ namespace BibAdminWeb
                 client.LastSeen = DateTime.UtcNow;
                 KnownClients[pcNumber] = client;
             }
+        }
+
+        /// <summary>Клиент отправляет содержимое своего лог-файла по запросу GET_LOGS.</summary>
+        public Task ReportLogs(string pcNumber, string logContent)
+        {
+            Logger.Info($"📋 {pcNumber}: получены логи ({logContent.Length} символов)");
+            ClientLogsReceived?.Invoke(pcNumber, logContent);
+            return Task.CompletedTask;
         }
 
         /// <summary>

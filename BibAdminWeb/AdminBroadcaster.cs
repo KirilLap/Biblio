@@ -33,6 +33,8 @@ namespace BibAdminWeb
                 _ = _ctx.Clients.All.SendAsync("nameConflictAlert", new { registeredAs, requestedAs, mac, pcNumberValue, customName });
             AdminHub.ClientNumberConflict += (mac, takenPcName, pcNumberValue, customName) =>
                 _ = _ctx.Clients.All.SendAsync("numberConflictAlert", new { mac, takenPcName, pcNumberValue, customName });
+            AdminHub.ClientLogsReceived += (pcNumber, logContent) =>
+                _ = _ctx.Clients.All.SendAsync("clientLogs", new { pcNumber, logContent });
         }
 
         public Task SendCommandToClient(string pcNumber, string type, string value = "")

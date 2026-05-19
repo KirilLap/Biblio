@@ -28,6 +28,12 @@ namespace BibClient
                 Logger.Info($"⬆️ Обновление не состоялось ({reason}) — сообщаем серверу");
                 await ReportUpdateResultAsync(reason);
             };
+            PolicyEngine.LogsReady += async logContent =>
+            {
+                if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
+                try { await _hub.InvokeAsync("ReportLogs", _pcNumber, logContent); }
+                catch (Exception ex) { Logger.Error($"❌ Ошибка отправки логов: {ex.Message}"); }
+            };
         }
 
         // Бесконечная политика реконнекта: 2s, 5s, 10s, 30s, 30s, ...

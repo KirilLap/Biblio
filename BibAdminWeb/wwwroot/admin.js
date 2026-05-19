@@ -73,6 +73,7 @@ function connectHub() {
   conn.on('nameConflictAlert', d => showNameConflict(d));
   conn.on('numberConflictAlert', d => showNumberConflict(d));
   conn.on('settingsUpdated', s => { settings = s; fillSettingsForm(); });
+  conn.on('clientLogs', d => showClientLogs(d.pcNumber, d.logContent));
 
   conn.onreconnected(() => {
     setConnStatus(true);
@@ -699,6 +700,8 @@ function buildCtxHtml(c) {
   if (c.isOnline) {
     html += item('↺', 'Перезагрузить ПК', `restart:${c.pcNumber}`);
     html += item('⏻', 'Выключить ПК', `shutdown:${c.pcNumber}`, true);
+    html += sep;
+    html += item('📋', 'Показать логи клиента', `logs:${c.pcNumber}`);
   }
   if (!c.isOnline && !c.isSession) {
     html += sep;
@@ -731,6 +734,7 @@ document.addEventListener('click', async e => {
       if (confirm(`Выключить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'SHUTDOWN', 'true');
       break;
     case 'delete':  deletePc(args[0]); break;
+    case 'logs':    requestClientLogs(args[0]); break;
   }
 });
 
@@ -1314,6 +1318,33 @@ async function pollScreen() {
     if (old.startsWith('blob:')) URL.revokeObjectURL(old);
     document.getElementById('screenViewStatus').textContent = `Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`;
   } catch (e) { /* ignore */ }
+}
+
+// ─── Client log viewer ───────────────────────────────────────────────────────
+async function requestClientLogs(pcNumber) {
+  const dlg = document.getElementById('dlgClientLogs');
+  document.getElementById('dlgClientLogsPcName').textContent = pcNumber;
+  document.getElementById('dlgClientLogsBody').textContent = '⏳ Запрашиваем логи...';
+  dlg.style.display = 'flex';
+  try {
+    await conn.invoke('SendCommandToPc', pcNumber, 'GET_LOGS', '');
+  } catch (e) {
+    document.getElementById('dlgClientLogsBody').textContent = 'Ошибка отправки команды: ' + e;
+  }
+}
+
+function showClientLogs(pcNumber, logContent) {
+  document.getElementById('dlgClientLogsPcName').textContent = pcNumber;
+  document.getElementById('dlgClientLogsBody').textContent = logContent || '(лог пуст)';
+  const body = document.getElementById('dlgClientLogsBody');
+  // Прокручиваем вниз чтобы видеть последние строки
+  body.scrollTop = body.scrollHeight;
+  document.getElementById('dlgClientLogs').style.display = 'flex';
+}
+
+function copyClientLogs() {
+  const text = document.getElementById('dlgClientLogsBody').textContent;
+  navigator.clipboard.writeText(text).then(() => toast('Логи скопированы', 'good'));
 }
 
 function periodFrom(p) {

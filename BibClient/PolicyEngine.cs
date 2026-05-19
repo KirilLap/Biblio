@@ -51,6 +51,8 @@ namespace BibClient
 
         // Фаза 4: дрейф системных часов — offsetSeconds > 0 → клиент отстаёт
         public static event Action<double>? ClockMismatchDetected;
+        /// <summary>Вызывается с содержимым лог-файла когда сервер запрашивает GET_LOGS.</summary>
+        public static event Action<string>? LogsReady;
 
         public static async Task HandleCommand(string json)
         {
@@ -375,6 +377,34 @@ namespace BibClient
                         Logger.Info("⬆️ Получена команда UPDATE_NOW — запуск тихого обновления");
                         var serverBase = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
                         _ = UpdateChecker.CheckAsync(serverBase);
+                        break;
+
+                    case "GET_LOGS":
+                        Logger.Info("📋 Запрос логов от сервера");
+                        try
+                        {
+                            var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+                            var logFile = Path.Combine(logDir, $"bibclient_{DateTime.Now:yyyy-MM-dd}.log");
+                            string logContent = "";
+                            if (File.Exists(logFile))
+                            {
+                                var allLines = File.ReadAllLines(logFile);
+                                // Последние 300 строк чтобы не перегружать
+                                var lastLines = allLines.Length > 300
+                                    ? allLines[^300..]
+                                    : allLines;
+                                logContent = string.Join("\n", lastLines);
+                            }
+                            else
+                            {
+                                logContent = $"Лог-файл не найден: {logFile}";
+                            }
+                            LogsReady?.Invoke(logContent);
+                        }
+                        catch (Exception ex)
+                        {
+                            LogsReady?.Invoke($"Ошибка чтения лога: {ex.Message}");
+                        }
                         break;
 
                     case "START_SCREENSHOT_STREAM":
