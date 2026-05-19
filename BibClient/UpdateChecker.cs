@@ -9,6 +9,7 @@ namespace BibClient
     internal static class UpdateChecker
     {
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
+        private static readonly HttpClient _downloadHttp = new() { Timeout = TimeSpan.FromMinutes(5) };
 
         public static string CurrentVersion =>
             System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
@@ -67,7 +68,7 @@ namespace BibClient
             var tempPath = Path.Combine(Path.GetTempPath(), installerFile);
             try
             {
-                var bytes = await _http.GetByteArrayAsync(downloadUrl);
+                var bytes = await _downloadHttp.GetByteArrayAsync(downloadUrl);
                 await File.WriteAllBytesAsync(tempPath, bytes);
             }
             catch (Exception ex)
