@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BibClient
@@ -10,6 +11,7 @@ namespace BibClient
     {
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
         private static readonly HttpClient _downloadHttp = new() { Timeout = TimeSpan.FromMinutes(5) };
+        private static int _downloading = 0;
 
         public static string CurrentVersion =>
             System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
@@ -64,6 +66,12 @@ namespace BibClient
 
         private static async Task DownloadAndRunAsync(string serverBaseUrl, string installerFile)
         {
+            if (Interlocked.CompareExchange(ref _downloading, 1, 0) != 0)
+            {
+                Logger.Info("⏳ Загрузка обновления уже идёт, пропускаем дублирующий запрос");
+                return;
+            }
+
             var downloadUrl = serverBaseUrl.TrimEnd('/') + "/updates/" + installerFile;
             var tempPath = Path.Combine(Path.GetTempPath(), installerFile);
             try
@@ -75,6 +83,7 @@ namespace BibClient
             {
                 Logger.Error($"Ошибка загрузки обновления: {ex.Message}");
                 UpdateFailed?.Invoke("download_failed");
+                Interlocked.Exchange(ref _downloading, 0);
                 return;
             }
 
