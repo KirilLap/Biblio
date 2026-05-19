@@ -13,7 +13,7 @@ namespace BibAdminWeb
 
         public static async Task CheckAsync()
         {
-            var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "version.json");
+            var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "bibadminweb-version.json");
             if (!File.Exists(versionFile)) return;
 
             VersionInfo? info = null;

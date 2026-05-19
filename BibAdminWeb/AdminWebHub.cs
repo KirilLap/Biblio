@@ -258,7 +258,7 @@ namespace BibAdminWeb
                     var updDir = !string.IsNullOrWhiteSpace(gs.UpdatesPath)
                         ? gs.UpdatesPath.TrimEnd('\\', '/')
                         : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
-                    var vf = Path.Combine(updDir, "version.json");
+                    var vf = Path.Combine(updDir, "bibclient-version.json");
                     if (File.Exists(vf))
                     {
                         using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(vf));

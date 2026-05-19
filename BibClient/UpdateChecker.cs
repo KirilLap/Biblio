@@ -43,7 +43,7 @@ namespace BibClient
             VersionInfo? info = null;
             try
             {
-                var url = serverBaseUrl.TrimEnd('/') + "/updates/version.json";
+                var url = serverBaseUrl.TrimEnd('/') + "/updates/bibclient-version.json";
                 var json = await _http.GetStringAsync(url);
                 info = JsonSerializer.Deserialize<VersionInfo>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });

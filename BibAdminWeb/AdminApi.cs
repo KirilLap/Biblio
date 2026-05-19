@@ -194,7 +194,7 @@ namespace BibAdminWeb
             if (path == "/api/admin/check-update" && method == "GET")
             {
                 var updatesDir = GetUpdatesPath();
-                var versionFile = Path.Combine(updatesDir, "version.json");
+                var versionFile = Path.Combine(updatesDir, "bibadminweb-version.json");
                 if (!File.Exists(versionFile))
                 {
                     await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
@@ -231,7 +231,19 @@ namespace BibAdminWeb
             // ─── Apply update ─────────────────────────────────────────────────
             if (path == "/api/admin/apply-update" && method == "POST")
             {
-                var installerPath = Path.Combine(GetUpdatesPath(), "biblio-setup.exe");
+                var vfPath = Path.Combine(GetUpdatesPath(), "bibadminweb-version.json");
+                string installerName = "bibadminweb-setup.exe";
+                if (File.Exists(vfPath))
+                {
+                    try
+                    {
+                        using var vDoc = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(vfPath));
+                        if (vDoc.RootElement.TryGetProperty("InstallerFile", out var ip) && !string.IsNullOrWhiteSpace(ip.GetString()))
+                            installerName = ip.GetString()!;
+                    }
+                    catch { }
+                }
+                var installerPath = Path.Combine(GetUpdatesPath(), installerName);
                 if (!File.Exists(installerPath))
                 {
                     ctx.Response.StatusCode = 404;

@@ -12,7 +12,7 @@ let pendingConflict = null;
 let renamePcVal = null;
 let _screenPc = null;
 let _screenInterval = null;
-let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/version.json)
+let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/bibclient-version.json)
 let updatePanelDismissed = false;
 
 // ─── Init ───────────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ let updatePanelDismissed = false;
   setInterval(tickTimers, 1000);
 
   // Загружаем последнюю доступную версию BibClient для сравнения на карточках
-  fetch('/updates/version.json').then(r => r.ok ? r.json() : null).then(v => {
+  fetch('/updates/bibclient-version.json').then(r => r.ok ? r.json() : null).then(v => {
     if (v?.Version) { latestClientVersion = v.Version; renderPcGrid(); }
   }).catch(() => {});
 })();
@@ -456,7 +456,7 @@ async function updateAllClients() {
   updatePanelDismissed = false;
   // Перечитываем актуальную версию с сервера перед показом панели
   try {
-    const vr = await fetch('/updates/version.json', { cache: 'no-store' });
+    const vr = await fetch('/updates/bibclient-version.json', { cache: 'no-store' });
     if (vr.ok) { const vj = await vr.json(); if (vj?.Version) latestClientVersion = vj.Version; }
   } catch {}
   try {
