@@ -47,6 +47,10 @@ namespace BibAdminWeb
                 return;
             }
 
+            // Помечаем что это перезапуск после обновления — браузер открывать не нужно
+            var flagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update_restart.flag");
+            File.WriteAllText(flagPath, DateTime.UtcNow.ToString("o"));
+
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = installerPath,

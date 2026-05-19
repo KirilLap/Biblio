@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -46,7 +47,17 @@ namespace BibAdminWeb
             // Проверяем обновления через 5 секунд после старта
             _ = Task.Delay(5000).ContinueWith(_ => UpdateChecker.CheckAsync());
 
-            OpenBrowser(port);
+            // После обновления браузер уже открыт и сам перезагружается — не открываем новое окно
+            var restartFlag = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update_restart.flag");
+            if (File.Exists(restartFlag))
+            {
+                File.Delete(restartFlag);
+                Logger.Info("🔄 Перезапуск после обновления — браузер открывать не нужно");
+            }
+            else
+            {
+                OpenBrowser(port);
+            }
 
             using var tray = new TrayIcon(port, () => Application.Exit());
             Application.Run();
