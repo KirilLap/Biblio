@@ -161,6 +161,7 @@ if "!BUILD_CLIENT!"=="1" (
     copy /y "!F!" "!UPDATES_DIR!\bibclient-setup.exe" >nul
     if errorlevel 1 ( echo  ОШИБКА копирования BibClient! & pause & exit /b 1 )
     (echo {"Version":"!NEW_VER!","ReleaseNotes":"!NOTES!","InstallerFile":"bibclient-setup.exe"})>"!UPDATES_DIR!\bibclient-version.json"
+    (echo {"Version":"!NEW_VER!","ReleaseNotes":"!NOTES!","InstallerFile":"bibclient-setup.exe"})>"!UPDATES_DIR!\version.json"
     echo  [OK] BibClient !NEW_VER! опубликован
 )
 if "!BUILD_ADMINWEB!"=="1" (
