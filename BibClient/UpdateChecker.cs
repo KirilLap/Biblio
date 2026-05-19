@@ -14,6 +14,12 @@ namespace BibClient
             System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
         /// <summary>
+        /// Вызывается когда обновление не случилось: "no_update" — версия та же, "download_failed" — ошибка загрузки.
+        /// NetworkManager подписывается и сообщает серверу.
+        /// </summary>
+        public static event Action<string>? UpdateFailed;
+
+        /// <summary>
         /// Запускает фоновую задачу с периодической проверкой раз в час.
         /// Возвращается сразу — проверка идёт в фоне.
         /// </summary>
@@ -44,7 +50,12 @@ namespace BibClient
                 return;
             }
 
-            if (info == null || !IsNewer(info.Version, CurrentVersion)) return;
+            if (info == null || !IsNewer(info.Version, CurrentVersion))
+            {
+                Logger.Info($"ℹ️ Обновление не требуется: установлена {CurrentVersion}, на сервере {info?.Version ?? "?"}");
+                UpdateFailed?.Invoke("no_update");
+                return;
+            }
 
             Logger.Info($"Доступна версия {info.Version}, текущая {CurrentVersion} — запуск тихого обновления");
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
@@ -62,6 +73,7 @@ namespace BibClient
             catch (Exception ex)
             {
                 Logger.Error($"Ошибка загрузки обновления: {ex.Message}");
+                UpdateFailed?.Invoke("download_failed");
                 return;
             }
 

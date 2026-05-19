@@ -834,6 +834,22 @@ namespace BibAdminWeb
             }
         }
 
+        /// <summary>
+        /// Клиент сообщает что обновление не состоялось: "no_update" — версия та же, "download_failed" — ошибка загрузки.
+        /// </summary>
+        public Task ReportUpdateResult(string pcNumber, string reason)
+        {
+            if (KnownClients.TryGetValue(pcNumber, out var client) &&
+                (client.UpdateStatus == "pending" || client.UpdateStatus == "updating"))
+            {
+                client.UpdateStatus = reason == "no_update" ? "" : "failed";
+                KnownClients[pcNumber] = client;
+                ClientUpdated?.Invoke(client);
+                Logger.Info($"⬆️ {pcNumber}: ReportUpdateResult={reason} → UpdateStatus='{client.UpdateStatus}'");
+            }
+            return Task.CompletedTask;
+        }
+
         public async Task UpdateStatus(string pcNumber, string status, string sessionType, int elapsedSeconds)
         {
             if (!KnownClients.TryGetValue(pcNumber, out var client)) return;

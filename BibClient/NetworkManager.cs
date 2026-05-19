@@ -20,7 +20,15 @@ namespace BibClient
         // Срабатывает после успешной регистрации на сервере
         public event Action? OnRegistered;
 
-        public NetworkManager(string serverUrl) { _serverUrl = serverUrl; }
+        public NetworkManager(string serverUrl)
+        {
+            _serverUrl = serverUrl;
+            UpdateChecker.UpdateFailed += async reason =>
+            {
+                Logger.Info($"⬆️ Обновление не состоялось ({reason}) — сообщаем серверу");
+                await ReportUpdateResultAsync(reason);
+            };
+        }
 
         // Бесконечная политика реконнекта: 2s, 5s, 10s, 30s, 30s, ...
         private sealed class InfiniteRetryPolicy : IRetryPolicy
@@ -150,6 +158,17 @@ namespace BibClient
                 Logger.Info($"✅ Статус отправлен: {status}");
             }
             catch (Exception ex) { Logger.Error($"❌ Ошибка отправки статуса: {ex.Message}"); }
+        }
+
+        private async Task ReportUpdateResultAsync(string reason)
+        {
+            if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
+            try
+            {
+                await _hub.InvokeAsync("ReportUpdateResult", _pcNumber, reason);
+                Logger.Info($"✅ Результат обновления отправлен: {reason}");
+            }
+            catch (Exception ex) { Logger.Error($"❌ Ошибка отправки результата обновления: {ex.Message}"); }
         }
 
         public async Task SendStatusUpdateAsync(string sessionType, int elapsedSeconds)
