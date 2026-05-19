@@ -454,6 +454,11 @@ async function updateAllClients() {
   btn.disabled = true;
   btn.textContent = '⏳ Отправка...';
   updatePanelDismissed = false;
+  // Перечитываем актуальную версию с сервера перед показом панели
+  try {
+    const vr = await fetch('/updates/version.json', { cache: 'no-store' });
+    if (vr.ok) { const vj = await vr.json(); if (vj?.Version) latestClientVersion = vj.Version; }
+  } catch {}
   try {
     await conn.invoke('SendCommandToAll', 'UPDATE_NOW', '');
     toast('Команда обновления отправлена всем ПК', 'good');

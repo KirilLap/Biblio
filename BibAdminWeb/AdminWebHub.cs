@@ -247,11 +247,40 @@ namespace BibAdminWeb
         {
             if (!IsAuthorized()) return;
             var json = JsonSerializer.Serialize(new { Type = type, Value = value });
+
+            // Читаем актуальную версию из version.json один раз для всего цикла
+            string latestVersion = "";
+            if (type == "UPDATE_NOW")
+            {
+                try
+                {
+                    var gs = GlobalSettings.Load();
+                    var updDir = !string.IsNullOrWhiteSpace(gs.UpdatesPath)
+                        ? gs.UpdatesPath.TrimEnd('\\', '/')
+                        : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+                    var vf = Path.Combine(updDir, "version.json");
+                    if (File.Exists(vf))
+                    {
+                        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(vf));
+                        latestVersion = doc.RootElement.TryGetProperty("Version", out var vp) ? vp.GetString() ?? "" : "";
+                    }
+                }
+                catch { }
+            }
+
             foreach (var pcNumber in AdminHub.KnownClients.Keys.ToList())
             {
                 if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) continue;
                 if (type == "UPDATE_NOW" && client.IsOnline && string.IsNullOrEmpty(client.UpdateStatus))
                 {
+                    // Клиент уже на актуальной версии — не трогаем
+                    if (!string.IsNullOrEmpty(latestVersion) &&
+                        !string.IsNullOrEmpty(client.ClientVersion) &&
+                        Version.TryParse(latestVersion, out var lv) &&
+                        Version.TryParse(client.ClientVersion, out var cv) &&
+                        lv <= cv)
+                        continue;
+
                     if (client.IsSession)
                     {
                         client.UpdateStatus = "deferred";
