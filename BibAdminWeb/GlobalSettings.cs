@@ -72,12 +72,14 @@ namespace BibAdminWeb
         public bool RequireUserName { get; set; } = false;
 
         private static readonly string _path = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "BibAdmin", "global_settings.json");
 
         public static GlobalSettings Load()
         {
             try
             {
+                MigrateIfNeeded();
                 if (File.Exists(_path))
                 {
                     var json = File.ReadAllText(_path);
@@ -88,10 +90,25 @@ namespace BibAdminWeb
             return new GlobalSettings();
         }
 
+        private static void MigrateIfNeeded()
+        {
+            if (File.Exists(_path)) return;
+            var oldPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
+            if (!File.Exists(oldPath)) return;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                File.Move(oldPath, _path);
+                Logger.Info("GlobalSettings перенесены в %APPDATA%\\BibAdmin\\");
+            }
+            catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
+        }
+
         public void Save()
         {
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(_path, json);
                 Logger.Info("GlobalSettings сохранены");
