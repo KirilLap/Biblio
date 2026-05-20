@@ -119,7 +119,21 @@ namespace BibAdminWeb
             AdminHub.AddPendingCommand(pcNumber, "REMOTE_LOCK", "true");
             AdminHub.RaiseClientUpdated(client);
 
-            await Clients.Caller.SendAsync("sessionSummary", new { pcNumber, sessionType, duration, earned, paidAmount, refund });
+            string readerId = client.ReaderId ?? "";
+            var debts = ServiceTransaction.GetUnpaidForSession(pcNumber, readerId);
+            int totalDebt = debts.Sum(d => d.DebtAmount);
+            var debtItems = debts.Select(d => new {
+                id = d.Id,
+                name = d.ServiceName,
+                qty = d.Quantity,
+                unit = d.Unit,
+                debt = d.DebtAmount
+            }).ToList();
+
+            await Clients.Caller.SendAsync("sessionSummary", new {
+                pcNumber, sessionType, duration, earned, paidAmount, refund,
+                readerId, serviceDebts = debtItems, totalServiceDebt = totalDebt
+            });
         }
 
         public async Task TogglePause(string pcNumber)
@@ -174,19 +188,32 @@ namespace BibAdminWeb
             return Task.CompletedTask;
         }
 
-        public async Task CreateService(string serviceTypeId, int quantity, string readerId, string readerName, bool payNow)
+        public async Task CreateService(string serviceTypeId, int quantity, string readerId, string readerName, bool payNow, string pcNumber = "")
         {
             if (!IsAuthorized()) return;
             var settings = GlobalSettings.Load();
             var svc = settings.Services.FirstOrDefault(s => s.Id == serviceTypeId && s.IsActive);
             if (svc == null) return;
             int total = svc.Price * quantity;
+
+            // Если передан pcNumber — подтянуть ReaderId/ReaderName из активной сессии
+            string resolvedReaderId = string.IsNullOrWhiteSpace(readerId) ? "" : readerId;
+            string resolvedReaderName = string.IsNullOrWhiteSpace(readerName) ? "" : readerName;
+            string resolvedPcNumber = string.IsNullOrWhiteSpace(pcNumber) ? "" : pcNumber;
+
+            if (!string.IsNullOrEmpty(resolvedPcNumber) && AdminHub.KnownClients.TryGetValue(resolvedPcNumber, out var pcClient) && pcClient.IsSession)
+            {
+                if (string.IsNullOrEmpty(resolvedReaderId)) resolvedReaderId = pcClient.ReaderId ?? "";
+                if (string.IsNullOrEmpty(resolvedReaderName)) resolvedReaderName = pcClient.UserName ?? "";
+            }
+
             var tx = new ServiceTransaction
             {
                 ServiceTypeId = svc.Id, ServiceName = svc.Name, Unit = svc.Unit,
                 Quantity = quantity, PricePerUnit = svc.Price, TotalAmount = total,
-                ReaderId = string.IsNullOrWhiteSpace(readerId) ? "" : readerId,
-                ReaderName = string.IsNullOrWhiteSpace(readerName) ? "" : readerName
+                ReaderId = resolvedReaderId,
+                ReaderName = resolvedReaderName,
+                PcNumber = resolvedPcNumber
             };
             ServiceTransaction.Add(tx);
             if (payNow) ServiceTransaction.MarkAsPaid(tx.Id);
@@ -263,6 +290,35 @@ namespace BibAdminWeb
             else
                 AdminHub.AddPendingCommand(pcNumber, "EXTEND_SESSION", addSeconds.ToString());
             AdminHub.RaiseClientUpdated(client);
+        }
+
+        public Task<object[]> GetAllDebts()
+        {
+            if (!IsAuthorized()) return Task.FromResult(Array.Empty<object>());
+            var debts = ServiceTransaction.GetAllUnpaid()
+                .Select(t => (object)new {
+                    id = t.Id, serviceName = t.ServiceName, unit = t.Unit,
+                    quantity = t.Quantity, pricePerUnit = t.PricePerUnit,
+                    debtAmount = t.DebtAmount, readerId = t.ReaderId,
+                    readerName = t.ReaderName, pcNumber = t.PcNumber,
+                    createdAt = t.CreatedAt.ToString("o")
+                }).ToArray();
+            return Task.FromResult(debts);
+        }
+
+        public Task PayDebt(string id)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            ServiceTransaction.MarkAsPaid(id);
+            return Task.CompletedTask;
+        }
+
+        public Task PaySessionDebts(string pcNumber, string readerId)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            if (!string.IsNullOrEmpty(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId);
+            if (!string.IsNullOrEmpty(pcNumber)) ServiceTransaction.MarkAllPaidForPc(pcNumber);
+            return Task.CompletedTask;
         }
 
         public async Task ShutdownAll()

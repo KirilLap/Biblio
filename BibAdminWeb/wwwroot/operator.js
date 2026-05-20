@@ -503,10 +503,52 @@ function openServiceDlg() {
     `<option value="${esc(s.id)}" data-price="${s.price}" data-unit="${esc(s.unit)}">${esc(s.name)} — ${fmt(s.price)} сум/${esc(s.unit)}</option>`
   ).join('');
   document.getElementById('dlgSvcQty').value = 1;
-  document.getElementById('dlgSvcReader').value = '';
   document.querySelectorAll('[name="svcPay"]')[0].checked = true;
+
+  // Заполняем список активных сессий
+  const pcSel = document.getElementById('dlgSvcPc');
+  pcSel.innerHTML = '<option value="">— Без привязки —</option>';
+  Object.values(pcs)
+    .filter(pc => pc.isSession)
+    .sort((a, b) => (a.pcNumberValue || 0) - (b.pcNumberValue || 0))
+    .forEach(pc => {
+      const reader = pc.userName || pc.readerId || '(анонимный)';
+      pcSel.innerHTML += `<option value="${esc(pc.pcNumber)}">${esc(pc.pcNumber)}  —  ${esc(reader)}</option>`;
+    });
+
+  // Если есть выбранный ПК с сессией — предвыбираем его
+  if (selectedPc && pcs[selectedPc]?.isSession) pcSel.value = selectedPc;
+  else pcSel.value = '';
+
+  document.getElementById('dlgSvcSessionInfo').style.display = 'none';
+  document.getElementById('dlgSvcDeferNote').style.display = 'none';
   updateSvcTotal();
   openDlg('dlgService');
+}
+
+function onSvcPcChanged() {
+  const pcVal = document.getElementById('dlgSvcPc').value;
+  const info = document.getElementById('dlgSvcSessionInfo');
+  if (pcVal && pcs[pcVal]) {
+    const pc = pcs[pcVal];
+    const reader = pc.userName || pc.readerId || '';
+    info.textContent = reader
+      ? `✓ Сессия на ${esc(pcVal)}: ${esc(reader)}`
+      : `✓ Сессия на ${esc(pcVal)} (анонимный пользователь)`;
+    info.style.display = 'block';
+  } else {
+    info.style.display = 'none';
+  }
+  updateDeferNote();
+}
+
+function onSvcPayChanged() { updateDeferNote(); }
+
+function updateDeferNote() {
+  const pcVal = document.getElementById('dlgSvcPc').value;
+  const wantLater = document.getElementById('rbSvcLater')?.checked;
+  document.getElementById('dlgSvcDeferNote').style.display =
+    (wantLater && !pcVal) ? 'block' : 'none';
 }
 
 function updateSvcTotal() {
@@ -522,15 +564,26 @@ async function confirmService() {
   const sel = document.getElementById('dlgSvcType');
   const id = sel.value;
   const qty = parseInt(document.getElementById('dlgSvcQty').value) || 1;
-  const reader = document.getElementById('dlgSvcReader').value.trim();
+  const pcNumber = document.getElementById('dlgSvcPc').value;
   const payNow = document.querySelector('[name="svcPay"]:checked')?.value === 'now';
+
+  const pc = pcNumber ? pcs[pcNumber] : null;
+  const readerId = pc?.readerId || '';
+  const readerName = pc?.userName || '';
+
   closeDlg('dlgService');
   try {
-    await connection.invoke('CreateService', id, qty, reader, reader, payNow);
+    await connection.invoke('CreateService', id, qty, readerId, readerName, payNow, pcNumber);
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
+let _summaryReaderId = '';
+let _summaryPcNumber = '';
+
 function showSessionSummary(s) {
+  _summaryReaderId = s.readerId || '';
+  _summaryPcNumber = s.pcNumber || '';
+
   let html = `
     <div class="summary-row"><span>ПК</span><span class="val">${esc(s.pcNumber)}</span></div>
     <div class="summary-row"><span>Тип</span><span class="val">${esc(s.sessionType)}</span></div>
@@ -539,8 +592,86 @@ function showSessionSummary(s) {
     <div class="summary-row"><span>Начислено</span><span class="val">${fmt(s.earned)} сум</span></div>`;
   if (s.refund > 0)
     html += `<div class="refund-highlight">💵 Возврат: ${fmt(s.refund)} сум</div>`;
+
+  const debts = s.serviceDebts || [];
+  if (debts.length > 0) {
+    html += `<div style="margin-top:14px;padding-top:12px;border-top:1px solid #eee">
+      <div style="font-weight:600;color:#854F0B;margin-bottom:8px">Неоплаченные услуги</div>`;
+    debts.forEach(d => {
+      html += `<div class="summary-row" style="font-size:13px">
+        <span>${esc(d.name)} × ${d.qty} ${esc(d.unit)}</span>
+        <span class="val" style="color:#854F0B">${fmt(d.debt)} сум</span>
+      </div>`;
+    });
+    const totalDebt = s.totalServiceDebt || debts.reduce((a, d) => a + d.debt, 0);
+    html += `<div class="summary-row" style="font-weight:700;color:#854F0B;margin-top:6px">
+      <span>Итого долгов</span>
+      <span class="val">${fmt(totalDebt)} сум</span>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn-primary" style="background:#854F0B;border-color:#854F0B;width:100%"
+        onclick="paySessionDebts()">Оплатить долги по услугам</button>
+    </div>`;
+    html += `</div>`;
+  }
+
   document.getElementById('dlgSummaryBody').innerHTML = html;
   openDlg('dlgSummary');
+}
+
+async function paySessionDebts() {
+  try {
+    await connection.invoke('PaySessionDebts', _summaryPcNumber, _summaryReaderId);
+    toast('Долги оплачены', 'good');
+    closeDlg('dlgSummary');
+  } catch (e) { toast('Ошибка оплаты: ' + e, 'warn'); }
+}
+
+async function openDebtsDlg() {
+  try {
+    const debts = await connection.invoke('GetAllDebts');
+    renderDebtsDlg(debts);
+    openDlg('dlgDebts');
+  } catch (e) { toast('Ошибка загрузки долгов: ' + e, 'warn'); }
+}
+
+function renderDebtsDlg(debts) {
+  const body = document.getElementById('dlgDebtsBody');
+  if (!debts || !debts.length) {
+    body.innerHTML = '<p style="text-align:center;color:#888;padding:24px">Нет непогашенных долгов</p>';
+    return;
+  }
+  let html = '';
+  debts.forEach(d => {
+    const reader = d.readerName || d.readerId || '—';
+    const pc = d.pcNumber || '—';
+    html += `<div class="summary-row" style="border-bottom:1px solid #f0f0f0;padding:10px 0;align-items:center">
+      <span style="flex:1">
+        <strong>${esc(d.serviceName)}</strong>
+        <span style="color:#888;font-size:12px"> × ${d.quantity} ${esc(d.unit)}</span><br>
+        <span style="color:#888;font-size:12px">ПК: ${esc(pc)} · Читатель: ${esc(reader)}</span>
+      </span>
+      <span style="color:#854F0B;font-weight:700;margin:0 16px">${fmt(d.debtAmount)} сум</span>
+      <button class="btn-primary" style="padding:4px 12px;font-size:12px"
+        onclick="payDebt('${esc(d.id)}', this)">Оплатить</button>
+    </div>`;
+  });
+  const total = debts.reduce((a, d) => a + d.debtAmount, 0);
+  html += `<div style="padding:12px 0;font-weight:700;color:#854F0B;text-align:right">
+    Итого: ${fmt(total)} сум
+  </div>`;
+  body.innerHTML = html;
+}
+
+async function payDebt(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    await connection.invoke('PayDebt', id);
+    const debts = await connection.invoke('GetAllDebts');
+    renderDebtsDlg(debts);
+    toast('Долг оплачен', 'good');
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); btn.disabled = false; btn.textContent = 'Оплатить'; }
 }
 
 async function doLogout() {

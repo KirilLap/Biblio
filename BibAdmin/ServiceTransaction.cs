@@ -18,6 +18,7 @@ namespace BibAdmin
         public int PaidAmount { get; set; }
         public string ReaderId { get; set; } = "";
         public string ReaderName { get; set; } = "";
+        public string PcNumber { get; set; } = "";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? PaidAt { get; set; }
 
@@ -128,6 +129,36 @@ namespace BibAdmin
         {
             if (string.IsNullOrEmpty(readerId)) return new();
             return All.Where(t => !t.IsPaid && t.ReaderId == readerId).ToList();
+        }
+
+        public static List<ServiceTransaction> GetUnpaidForPc(string pcNumber)
+        {
+            if (string.IsNullOrEmpty(pcNumber)) return new();
+            return All.Where(t => !t.IsPaid && t.PcNumber == pcNumber).ToList();
+        }
+
+        public static List<ServiceTransaction> GetAllUnpaid() =>
+            All.Where(t => !t.IsPaid).ToList();
+
+        public static List<ServiceTransaction> GetUnpaidForSession(string pcNumber, string readerId)
+        {
+            var set = new HashSet<string>();
+            var result = new List<ServiceTransaction>();
+            foreach (var t in All)
+            {
+                if (t.IsPaid) continue;
+                bool match = (!string.IsNullOrEmpty(pcNumber) && t.PcNumber == pcNumber)
+                          || (!string.IsNullOrEmpty(readerId) && t.ReaderId == readerId);
+                if (match && set.Add(t.Id)) result.Add(t);
+            }
+            return result;
+        }
+
+        public static void MarkAllPaidForPc(string pcNumber)
+        {
+            var unpaid = All.Where(t => !t.IsPaid && t.PcNumber == pcNumber).ToList();
+            foreach (var t in unpaid) { t.PaidAmount = t.TotalAmount; t.PaidAt = DateTime.UtcNow; }
+            if (unpaid.Count > 0) SaveHistory();
         }
     }
 }

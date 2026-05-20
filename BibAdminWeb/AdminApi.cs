@@ -84,6 +84,44 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Finance: debts ───────────────────────────────────────────────
+            if (path == "/api/admin/finance/debts" && method == "GET")
+            {
+                var debts = ServiceTransaction.GetAllUnpaid()
+                    .Select(t => new {
+                        t.Id, t.ServiceName, t.Unit, t.Quantity, t.PricePerUnit,
+                        t.TotalAmount, t.DebtAmount, t.ReaderId, t.ReaderName,
+                        t.PcNumber, createdAt = t.CreatedAt.ToString("o")
+                    });
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(debts, _json));
+                return;
+            }
+            if (path.StartsWith("/api/admin/finance/debts/") && path.EndsWith("/pay") && method == "POST")
+            {
+                var id = path.Replace("/api/admin/finance/debts/", "").Replace("/pay", "");
+                ServiceTransaction.MarkAsPaid(id);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+            if (path == "/api/admin/finance/debts/pay-reader" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var data = JsonSerializer.Deserialize<JsonElement>(body, _json);
+                var readerIdVal = data.TryGetProperty("readerId", out var rp) ? rp.GetString() ?? "" : "";
+                if (!string.IsNullOrEmpty(readerIdVal)) ServiceTransaction.MarkAllPaidForReader(readerIdVal);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+            if (path == "/api/admin/finance/debts/pay-pc" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var data = JsonSerializer.Deserialize<JsonElement>(body, _json);
+                var pcVal = data.TryGetProperty("pcNumber", out var pp) ? pp.GetString() ?? "" : "";
+                if (!string.IsNullOrEmpty(pcVal)) ServiceTransaction.MarkAllPaidForPc(pcVal);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Finance: export CSV ─────────────────────────────────────────
             if (path == "/api/admin/finance/export" && method == "GET")
             {

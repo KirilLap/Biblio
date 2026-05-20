@@ -1129,22 +1129,9 @@ namespace BibAdmin
                 EndTime = DateTime.Now
             });
 
-            string msg = $"Сессия завершена\n\nПК: {_selected.PcNumber}\nТип: {sessionType}\nВремя: {FormatTime(_selected.ElapsedSeconds)}\nОплачено: {_selected.PaidAmount:N0} сум\nИспользовано: {earned:N0} сум";
-            if (refund > 0) msg += $"\n\n💵 Возврат пользователю: {refund:N0} сум";
-            MessageBox.Show(msg, "Итог сессии", MessageBoxButton.OK, MessageBoxImage.Information);
-
-            // Проверяем неоплаченные услуги для этого читателя
-            string readerId = _selected.ReaderId ?? "";
-            if (!string.IsNullOrEmpty(readerId))
-            {
-                var unpaid = ServiceTransaction.GetUnpaidForReader(readerId);
-                if (unpaid.Count > 0)
-                {
-                    string readerLabel = !string.IsNullOrEmpty(_selected.UserName) && _selected.UserName != "—"
-                        ? _selected.UserName : readerId;
-                    new UnpaidServicesDialog(unpaid, readerLabel).ShowDialog();
-                }
-            }
+            // Собираем долги по ПК и/или читателю (без дублей)
+            var unpaidDebts = ServiceTransaction.GetUnpaidForSession(_selected.PcNumber, _selected.ReaderId ?? "");
+            new SessionSummaryDialog(_selected, earned, unpaidDebts).ShowDialog();
 
             await SendCommand(_selected.PcNumber, "REMOTE_LOCK", "true");
             _selected.Status = "Заблокирован";
