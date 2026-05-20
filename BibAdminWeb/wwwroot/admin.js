@@ -508,18 +508,106 @@ async function confirmExtend() {
   await conn.invoke('ExtendSession', activePc, min * 60, amount);
 }
 
+let _adminSummaryReaderId = '';
+let _adminSummaryPcNumber = '';
+
 function showSummary(d) {
   const h = Math.floor(d.duration / 3600), m = Math.floor((d.duration % 3600) / 60), s = d.duration % 60;
-  document.getElementById('dlgSummaryContent').innerHTML = `
+  _adminSummaryReaderId = d.readerId || '';
+  _adminSummaryPcNumber = d.pcNumber || '';
+
+  let html = `
     <b>ПК:</b> ${esc(d.pcNumber)}<br>
-    <b>Тип:</b> ${d.sessionType}<br>
+    <b>Тип:</b> ${esc(d.sessionType)}<br>
     <b>Длительность:</b> ${h}ч ${m}м ${s}с<br>
     <b>Заработано:</b> ${d.earned.toLocaleString()} сум<br>
     <b>Оплачено:</b> ${d.paidAmount.toLocaleString()} сум<br>
     <b>Возврат:</b> ${d.refund.toLocaleString()} сум
   `;
+
+  const debts = d.serviceDebts || [];
+  const payBtn = document.getElementById('btnSummaryPayDebts');
+  if (debts.length > 0) {
+    html += `<hr style="border-color:#333;margin:12px 0">
+      <div style="color:#E09000;font-weight:600;margin-bottom:8px">Неоплаченные услуги:</div>`;
+    debts.forEach(dbt => {
+      html += `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${esc(dbt.name)} × ${dbt.qty} ${esc(dbt.unit)}</span>
+        <b style="color:#E09000">${dbt.debt.toLocaleString()} сум</b>
+      </div>`;
+    });
+    const total = d.totalServiceDebt || debts.reduce((a, b) => a + b.debt, 0);
+    html += `<div style="display:flex;justify-content:space-between;font-weight:700;color:#E09000;margin-top:8px;padding-top:8px;border-top:1px solid #444">
+      <span>Итого долгов</span><span>${total.toLocaleString()} сум</span>
+    </div>`;
+    if (payBtn) payBtn.style.display = '';
+  } else {
+    if (payBtn) payBtn.style.display = 'none';
+  }
+
+  document.getElementById('dlgSummaryContent').innerHTML = html;
   document.getElementById('dlgSummary').style.display = 'flex';
   loadFinance();
+}
+
+async function paySessionDebtsAdmin() {
+  try {
+    await conn.invoke('PaySessionDebts', _adminSummaryPcNumber, _adminSummaryReaderId);
+    const payBtn = document.getElementById('btnSummaryPayDebts');
+    if (payBtn) payBtn.style.display = 'none';
+    toast('Долги оплачены');
+    loadFinance();
+  } catch (e) { toast('Ошибка: ' + e); }
+}
+
+async function openDebtsDlgAdmin(inline) {
+  try {
+    const debts = await conn.invoke('GetAllDebts');
+    renderDebtsDlgAdmin(debts, inline);
+    if (!inline) document.getElementById('dlgDebts').style.display = 'flex';
+  } catch (e) { toast('Ошибка загрузки долгов: ' + e); }
+}
+
+function renderDebtsDlgAdmin(debts, inline) {
+  const target = inline
+    ? document.getElementById('finTable')
+    : document.getElementById('dlgDebtsBody');
+  if (!target) return;
+  if (!debts || !debts.length) {
+    target.innerHTML = '<p style="text-align:center;color:#888;padding:24px">Нет непогашенных долгов</p>';
+    return;
+  }
+  let html = '';
+  debts.forEach(d => {
+    const reader = d.readerName || d.readerId || '—';
+    const pc = d.pcNumber || '—';
+    html += `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #333">
+      <div style="flex:1;color:#ccc">
+        <b>${esc(d.serviceName)}</b>
+        <span style="color:#888;font-size:12px"> × ${d.quantity} ${esc(d.unit)}</span><br>
+        <span style="color:#666;font-size:12px">ПК: ${esc(pc)} · Читатель: ${esc(reader)}</span>
+      </div>
+      <b style="color:#E09000">${d.debtAmount.toLocaleString()} сум</b>
+      <button class="btn btn-primary" style="padding:4px 12px;font-size:12px"
+        onclick="payOneDebtAdmin('${esc(d.id)}', this, ${inline ? 'true' : 'false'})">Оплатить</button>
+    </div>`;
+  });
+  const total = debts.reduce((a, d) => a + d.debtAmount, 0);
+  html += `<div style="text-align:right;font-weight:700;color:#E09000;padding-top:10px">
+    Итого: ${total.toLocaleString()} сум
+  </div>`;
+  target.innerHTML = html;
+}
+
+async function payOneDebtAdmin(id, btn, inline) {
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    await conn.invoke('PayDebt', id);
+    const debts = await conn.invoke('GetAllDebts');
+    renderDebtsDlgAdmin(debts, inline);
+    toast('Долг оплачен');
+    loadFinance();
+  } catch (e) { toast('Ошибка: ' + e); btn.disabled = false; btn.textContent = 'Оплатить'; }
 }
 
 // ─── Transfer ────────────────────────────────────────────────────────────────
@@ -791,12 +879,19 @@ async function loadFinance() {
 
 function setFinTab(tab) {
   finTab = tab;
-  ['sessions', 'services', 'all'].forEach(t => {
-    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+  ['sessions', 'services', 'all', 'debts'].forEach(t => {
+    const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.classList.toggle('active', t === tab);
   });
   document.getElementById('finTypeFilter').style.display = tab === 'sessions' ? '' : 'none';
   document.getElementById('finStatusFilter').style.display = tab === 'services' ? '' : 'none';
-  renderFinance();
+  const finTable = document.getElementById('finTable');
+  if (tab === 'debts') {
+    if (finTable) finTable.innerHTML = '';
+    openDebtsDlgAdmin(true);
+  } else {
+    renderFinance();
+  }
 }
 
 function renderFinance() {

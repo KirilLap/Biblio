@@ -109,7 +109,47 @@ namespace BibAdminWeb
                 AdminHub.RaiseClientUpdated(client);
             }
 
-            await Clients.Caller.SendAsync("sessionSummary", new { pcNumber, sessionType, duration, earned, paidAmount, refund });
+            string sessionReaderId = client.ReaderId ?? "";
+            var debts = ServiceTransaction.GetUnpaidForSession(pcNumber, sessionReaderId);
+            int totalDebt = debts.Sum(d => d.DebtAmount);
+            var debtItems = debts.Select(d => new {
+                id = d.Id, name = d.ServiceName, qty = d.Quantity,
+                unit = d.Unit, debt = d.DebtAmount
+            }).ToList();
+
+            await Clients.Caller.SendAsync("sessionSummary", new {
+                pcNumber, sessionType, duration, earned, paidAmount, refund,
+                readerId = sessionReaderId, serviceDebts = debtItems, totalServiceDebt = totalDebt
+            });
+        }
+
+        public Task<object[]> GetAllDebts()
+        {
+            if (!IsAuthorized()) return Task.FromResult(Array.Empty<object>());
+            var debts = ServiceTransaction.GetAllUnpaid()
+                .Select(t => (object)new {
+                    id = t.Id, serviceName = t.ServiceName, unit = t.Unit,
+                    quantity = t.Quantity, pricePerUnit = t.PricePerUnit,
+                    debtAmount = t.DebtAmount, readerId = t.ReaderId,
+                    readerName = t.ReaderName, pcNumber = t.PcNumber,
+                    createdAt = t.CreatedAt.ToString("o")
+                }).ToArray();
+            return Task.FromResult(debts);
+        }
+
+        public Task PayDebt(string id)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            ServiceTransaction.MarkAsPaid(id);
+            return Task.CompletedTask;
+        }
+
+        public Task PaySessionDebts(string pcNumber, string readerId)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            if (!string.IsNullOrEmpty(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId);
+            if (!string.IsNullOrEmpty(pcNumber)) ServiceTransaction.MarkAllPaidForPc(pcNumber);
+            return Task.CompletedTask;
         }
 
         public async Task TogglePause(string pcNumber)

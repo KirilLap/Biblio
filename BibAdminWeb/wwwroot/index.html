@@ -93,6 +93,7 @@
         <button class="tab-btn active" id="tabSessions" onclick="setFinTab('sessions')">📋 Сессии</button>
         <button class="tab-btn" id="tabServices" onclick="setFinTab('services')">🛎 Услуги</button>
         <button class="tab-btn" id="tabAll" onclick="setFinTab('all')">📊 Всё</button>
+        <button class="tab-btn" id="tabDebts" onclick="setFinTab('debts')">⚠ Долги</button>
       </div>
       <div class="filter-row">
         <label><input type="radio" name="finPeriod" value="all" checked onchange="renderFinance()"> Все</label>
@@ -429,7 +430,19 @@
     <div class="dlg-title">Итог сессии</div>
     <div id="dlgSummaryContent" style="margin:16px 0;line-height:1.8;color:#ccc"></div>
     <div class="dlg-btns">
+      <button id="btnSummaryPayDebts" class="btn" style="background:#854F0B;border-color:#854F0B;color:#fff;display:none" onclick="paySessionDebtsAdmin()">Оплатить долги</button>
       <button class="btn btn-primary" onclick="closeDlg('dlgSummary')">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Debts management dialog -->
+<div id="dlgDebts" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeDlg('dlgDebts')">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title">⚠ Задолженности по услугам</div>
+    <div id="dlgDebtsBody" style="max-height:60vh;overflow-y:auto;margin:16px 0"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-primary" onclick="closeDlg('dlgDebts')">Закрыть</button>
     </div>
   </div>
 </div>
