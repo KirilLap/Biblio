@@ -68,31 +68,7 @@
     <div class="dlg-title">Сессия завершена</div>
     <div id="dlgSummaryBody" class="summary-body"></div>
     <div class="dlg-actions">
-      <button id="btnRecordDebt" class="btn-cancel" style="display:none" onclick="openRecordDebtDlg()">💸 Записать долг</button>
       <button class="btn-primary" onclick="closeDlg('dlgSummary')">Закрыть</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Записать долг -->
-<div id="dlgDebt" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgDebt')">
-  <div class="dlg">
-    <div class="dlg-title">💸 Записать долг</div>
-    <div class="field-row">
-      <label>ID читателя</label>
-      <div id="dlgDebtReader" style="font-weight:600;padding:6px 0"></div>
-    </div>
-    <div class="field-row">
-      <label>Сумма долга (сум)</label>
-      <input id="dlgDebtAmount" type="number" min="1" value="0">
-    </div>
-    <div class="field-row">
-      <label>Примечание <span class="opt">(необязательно)</span></label>
-      <input id="dlgDebtNote" type="text" placeholder="Не хватило денег на услуги">
-    </div>
-    <div class="dlg-actions">
-      <button class="btn-cancel" onclick="closeDlg('dlgDebt')">Отмена</button>
-      <button class="btn-primary" onclick="confirmRecordDebt()">Записать</button>
     </div>
   </div>
 </div>
@@ -170,16 +146,9 @@
     <div class="field-row">
       <label>Оплата</label>
       <div class="radio-group">
-        <label class="radio-opt"><input type="radio" name="svcPay" value="now" checked onchange="onSvcPayChange()"> Сейчас</label>
-        <label class="radio-opt"><input type="radio" name="svcPay" value="later" onchange="onSvcPayChange()"> Позже (при расчёте)</label>
+        <label class="radio-opt"><input type="radio" name="svcPay" value="now" checked> Сейчас</label>
+        <label class="radio-opt"><input type="radio" name="svcPay" value="later"> Позже</label>
       </div>
-    </div>
-
-    <div id="rowSvcPc" class="field-row" style="display:none">
-      <label>Привязать к ПК <span style="color:#E24B4A">*</span></label>
-      <select id="dlgSvcPc" onchange="onSvcPcChange()">
-        <option value="">— выберите ПК —</option>
-      </select>
     </div>
 
     <div class="dlg-actions">

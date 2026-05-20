@@ -41,7 +41,6 @@ namespace BibAdminWeb
             AdminHub.LoadDeletedPcs();
             FinanceStore.LoadHistory();
             ServiceTransaction.LoadHistory();
-            ReaderDebtStore.Load();
 
             Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{port}");
 

@@ -343,12 +343,6 @@ main { padding: 20px 24px 100px; }
 .summary-row { display: flex; justify-content: space-between; }
 .summary-row .val { color: #fff; font-weight: 600; }
 .refund-highlight { color: #4DC79A; font-size: 14px; margin-top: 8px; }
-.summary-sep { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #888; border-top: 1px solid #2a2a2a; padding-top: 8px; }
-.summary-indent { padding-left: 12px; color: #ccc; }
-.summary-indent .val { font-weight: 500; }
-.summary-subtotal { border-top: 1px dashed #333; padding-top: 4px; margin-top: 2px; }
-.summary-subtotal .val { color: #e0c060; }
-.additional-payment { margin-top: 10px; padding: 8px 12px; background: #1a3a2a; border: 1px solid #2d6a4a; border-radius: 6px; color: #4DC79A; font-size: 15px; font-weight: 700; text-align: center; }
 
 /* ── Тосты ───────────────────────────────────────────────────── */
 #toasts {

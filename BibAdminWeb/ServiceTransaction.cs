@@ -18,7 +18,6 @@ namespace BibAdminWeb
         public int PaidAmount { get; set; }
         public string ReaderId { get; set; } = "";
         public string ReaderName { get; set; } = "";
-        public string PcNumber { get; set; } = "";   // Привязка к ПК (оплата "Позже")
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? PaidAt { get; set; }
 
@@ -81,27 +80,6 @@ namespace BibAdminWeb
         {
             if (string.IsNullOrEmpty(readerId)) return new();
             return All.Where(t => !t.IsPaid && t.ReaderId == readerId).ToList();
-        }
-
-        /// <summary>Возвращает неоплаченные услуги, привязанные к ПК (оплата "Позже").</summary>
-        public static List<ServiceTransaction> GetPendingForPc(string pcNumber)
-        {
-            if (string.IsNullOrEmpty(pcNumber)) return new();
-            return All.Where(t => !t.IsPaid && t.PcNumber == pcNumber).ToList();
-        }
-
-        /// <summary>Помечает все незакрытые услуги ПК как оплаченные (вызывается при завершении сессии).</summary>
-        public static void MarkAllPaidForPc(string pcNumber)
-        {
-            if (string.IsNullOrEmpty(pcNumber)) return;
-            bool changed = false;
-            foreach (var t in All.Where(t => !t.IsPaid && t.PcNumber == pcNumber))
-            {
-                t.PaidAmount = t.TotalAmount;
-                t.PaidAt = DateTime.UtcNow;
-                changed = true;
-            }
-            if (changed) SaveHistory();
         }
     }
 }
