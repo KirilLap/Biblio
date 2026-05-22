@@ -317,6 +317,16 @@ function renderActionBar() {
 }
 
 // ── Действия ──────────────────────────────────────────────────────────────────
+function onNoCardChanged() {
+  const noCard = document.getElementById('chkNoCard').checked;
+  const rowReader = document.getElementById('rowReaderId');
+  if (rowReader) rowReader.style.display = noCard ? 'none' : '';
+  if (noCard) {
+    document.getElementById('dlgReaderId').value = '';
+    document.getElementById('dlgReaderInfo').style.display = 'none';
+  }
+}
+
 function openSessionDlg() {
   if (!selectedPc) return;
   document.getElementById('dlgSessionPc').textContent = selectedPc;
@@ -328,6 +338,9 @@ function openSessionDlg() {
   const infoEl = document.getElementById('dlgReaderInfo');
   infoEl.style.display = 'none';
   infoEl.textContent = '';
+  // Reset "no card" checkbox
+  const chk = document.getElementById('chkNoCard');
+  if (chk) chk.checked = false;
   document.querySelectorAll('[name="stype"]')[0].checked = true;
   document.getElementById('limitFields').style.display = '';
 
@@ -371,9 +384,10 @@ async function confirmStartSession() {
   const limitMin = parseInt(document.getElementById('dlgLimitMin').value) || 0;
   const paidAmount = parseInt(document.getElementById('dlgAmount').value) || 0;
   const userName = document.getElementById('dlgUserName').value.trim();
-  const readerNums = document.getElementById('dlgReaderId').value.trim();
+  const noCard = document.getElementById('chkNoCard')?.checked;
+  const readerNums = noCard ? '' : document.getElementById('dlgReaderId').value.trim();
   const readerId = readerNums ? (readerCardPrefix + readerNums) : '';
-  if (sessionFields.requireReaderId !== false && !readerNums) { toast('Введите ID читателя', 'warn'); return; }
+  if (!noCard && sessionFields.requireReaderId !== false && !readerNums) { toast('Введите ID читателя', 'warn'); return; }
   if (!!sessionFields.requireUserName && !userName) { toast('Введите имя пользователя', 'warn'); return; }
   closeDlg('dlgSession');
   try {

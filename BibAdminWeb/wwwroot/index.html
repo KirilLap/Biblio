@@ -348,18 +348,42 @@
   <!-- ══════════════════════ READERS PAGE ══════════════════════ -->
   <div id="page-readers" class="page">
     <div class="page-header">
-      <div>
-        <h1>Читатели</h1>
-        <p id="readersCount" class="page-sub">Загрузка...</p>
+      <h1>Читатели</h1>
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabBtnList" onclick="switchReadersTab('list')">Список</button>
+        <button class="tab-btn" id="tabBtnReport" onclick="switchReadersTab('report')">Отчёт</button>
       </div>
-      <div class="header-actions">
+    </div>
+
+    <!-- Список -->
+    <div id="readersTabList">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <p id="readersCount" class="page-sub" style="margin:0;flex:1">Загрузка...</p>
         <input type="text" id="readersSearch" placeholder="Поиск по ФИО или ID…" style="padding:6px 10px;border:1px solid #3D3D6B;border-radius:6px;background:#1A1A2E;color:#ccc;font-size:13px;width:240px" oninput="searchReaders()">
         <button class="btn btn-primary" onclick="openImportDlg()">📥 Импорт Excel</button>
         <button class="btn btn-outline" onclick="exportReaderStats()">📊 Статистика Excel</button>
       </div>
+      <div id="readersTable" class="fin-table-wrap">
+        <div class="fin-empty">Выберите раздел «Читатели» для загрузки</div>
+      </div>
     </div>
-    <div id="readersTable" class="fin-table-wrap">
-      <div class="fin-empty">Выберите раздел «Читатели» для загрузки</div>
+
+    <!-- Отчёт -->
+    <div id="readersTabReport" style="display:none">
+      <div class="fin-toolbar" style="margin-bottom:16px">
+        <div class="tab-bar">
+          <button class="tab-btn active" id="rptBtnDay" onclick="setReportPeriod('day')">День</button>
+          <button class="tab-btn" id="rptBtnMonth" onclick="setReportPeriod('month')">Месяц</button>
+        </div>
+        <input type="date" id="rptDateDay" style="background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+        <input type="month" id="rptDateMonth" style="display:none;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+        <button class="btn btn-primary" style="padding:6px 16px;font-size:13px" onclick="loadReport()">Показать</button>
+        <button class="btn btn-outline" style="padding:6px 16px;font-size:13px" onclick="exportReport()">📊 Экспорт Excel</button>
+      </div>
+      <div id="reportSummary" style="display:none;gap:12px;margin-bottom:16px"></div>
+      <div id="reportTable" class="fin-table-wrap">
+        <div class="fin-empty">Выберите период и нажмите «Показать»</div>
+      </div>
     </div>
   </div>
 

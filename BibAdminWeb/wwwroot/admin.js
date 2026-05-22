@@ -117,7 +117,10 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`).classList.add('active');
-  if (name === 'readers') loadReaders();
+  if (name === 'readers') {
+    if (currentReadersTab === 'report') loadReport();
+    else loadReaders();
+  }
 }
 
 // ─── PC Grid ──────────────────────────────────────────────────────────────
@@ -1570,4 +1573,112 @@ async function doImport() {
 
 function exportReaderStats() {
   window.open('/api/admin/readers/stats/export', '_blank');
+}
+
+// ─── Readers Report ───────────────────────────────────────────────────────────
+let currentReadersTab = 'list';
+let reportPeriod = 'day';
+
+function switchReadersTab(tab) {
+  currentReadersTab = tab;
+  document.getElementById('readersTabList').style.display = tab === 'list' ? '' : 'none';
+  document.getElementById('readersTabReport').style.display = tab === 'report' ? '' : 'none';
+  document.getElementById('tabBtnList').classList.toggle('active', tab === 'list');
+  document.getElementById('tabBtnReport').classList.toggle('active', tab === 'report');
+  if (tab === 'report') {
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const monthStr = dateStr.substring(0, 7);
+    if (!document.getElementById('rptDateDay').value)
+      document.getElementById('rptDateDay').value = dateStr;
+    if (!document.getElementById('rptDateMonth').value)
+      document.getElementById('rptDateMonth').value = monthStr;
+    loadReport();
+  }
+}
+
+function setReportPeriod(period) {
+  reportPeriod = period;
+  document.getElementById('rptBtnDay').classList.toggle('active', period === 'day');
+  document.getElementById('rptBtnMonth').classList.toggle('active', period === 'month');
+  document.getElementById('rptDateDay').style.display = period === 'day' ? '' : 'none';
+  document.getElementById('rptDateMonth').style.display = period === 'month' ? '' : 'none';
+  loadReport();
+}
+
+async function loadReport() {
+  const dateVal = reportPeriod === 'day'
+    ? document.getElementById('rptDateDay').value
+    : document.getElementById('rptDateMonth').value;
+  if (!dateVal) return;
+
+  const el = document.getElementById('reportTable');
+  el.innerHTML = '<div class="fin-empty">Загрузка…</div>';
+  document.getElementById('reportSummary').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/admin/readers/report?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`);
+    const data = await r.json();
+    if (!r.ok) { el.innerHTML = `<div class="fin-empty">${esc(data.error || 'Ошибка')}</div>`; return; }
+    renderReport(data);
+  } catch {
+    el.innerHTML = '<div class="fin-empty">Ошибка загрузки</div>';
+  }
+}
+
+function renderReport(data) {
+  const { items, summary } = data;
+
+  const sumEl = document.getElementById('reportSummary');
+  sumEl.style.display = 'flex';
+  const hrs = (summary.totalDurationMin / 60).toFixed(1);
+  sumEl.innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Сессий</div><div class="stat-val">${summary.totalSessions}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Услуг</div><div class="stat-val">${summary.totalServiceOps}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Читателей</div><div class="stat-val">${summary.totalUniqueReaders}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Времени (ч)</div><div class="stat-val green">${hrs}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Оплачено (сум)</div><div class="stat-val blue">${summary.totalAmount.toLocaleString('ru-RU')}</div></div>`;
+
+  const el = document.getElementById('reportTable');
+  if (!items.length) {
+    el.innerHTML = '<div class="fin-empty">Нет данных за выбранный период</div>';
+    return;
+  }
+
+  const cols = '130px 1fr 100px 75px 85px 55px 1fr 90px';
+  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
+    <span>Дата/Время</span><span>Читатель</span><span>Категория</span><span>ПК</span><span>Тип</span><span>Мин</span><span>Детали</span><span>Оплачено</span>
+  </div>`;
+
+  items.forEach(row => {
+    const dt = new Date(row.timestamp);
+    const dtStr = dt.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }) + ' '
+                + dt.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+    const nameColor = row.readerStatus === 'registered' ? '#e0e0f0'
+                    : row.readerStatus === 'anonymous'   ? '#888' : '#f59e0b';
+    const typeBadge = row.operationType === 'session'
+      ? '<span class="fin-badge fin-badge-session">Сессия</span>'
+      : '<span class="fin-badge fin-badge-service">Услуга</span>';
+
+    html += `<div class="fin-row" style="grid-template-columns:${cols}">
+      <span style="color:#666;font-size:12px">${dtStr}</span>
+      <span style="color:${nameColor}">${esc(row.readerName)}</span>
+      <span style="color:#666;font-size:12px">${esc(row.readerCategory || '—')}</span>
+      <span style="font-family:monospace;font-size:12px">${esc(row.pcNumber || '—')}</span>
+      <span>${typeBadge}</span>
+      <span style="color:#888">${row.operationType === 'session' ? row.durationMin : '—'}</span>
+      <span style="color:#888;font-size:12px">${esc(row.detail || '—')}</span>
+      <span style="color:#1d9e75;font-weight:600">${row.amount.toLocaleString('ru-RU')}</span>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function exportReport() {
+  const dateVal = reportPeriod === 'day'
+    ? document.getElementById('rptDateDay').value
+    : document.getElementById('rptDateMonth').value;
+  if (!dateVal) { toast('Выберите дату', 'warn'); return; }
+  window.open(`/api/admin/readers/report/export?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`, '_blank');
 }
