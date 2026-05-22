@@ -33,6 +33,7 @@ namespace BibAdminWeb
 
         public int Tariff { get; set; } = 3000;
         public string AdminPassword { get; set; } = "1234";
+        public string ReaderCardPrefix { get; set; } = "FAA";
 
         public bool LockOnOffline { get; set; } = false;
 

@@ -134,6 +134,8 @@ namespace BibAdminWeb
 
                         // Admin REST API
                         app.Use(AdminApi.Handle);
+                        // Readers API (lookup for operators + admin management)
+                        app.Use(ReadersApi.Handle);
 
                         app.UseEndpoints(endpoints =>
                         {

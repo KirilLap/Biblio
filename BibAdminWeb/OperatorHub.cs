@@ -23,6 +23,7 @@ namespace BibAdminWeb
                 .Select(s => new { id = s.Id, name = s.Name, unit = s.Unit, price = s.Price }).ToList();
             await Clients.Caller.SendAsync("serviceTypes", services);
             await Clients.Caller.SendAsync("tariff", settings.Tariff);
+            await Clients.Caller.SendAsync("readerCardPrefix", settings.ReaderCardPrefix);
             await base.OnConnectedAsync();
         }
 
@@ -36,6 +37,7 @@ namespace BibAdminWeb
                 .Select(s => new { id = s.Id, name = s.Name, unit = s.Unit, price = s.Price }).ToList();
             await Clients.Caller.SendAsync("serviceTypes", services);
             await Clients.Caller.SendAsync("tariff", settings.Tariff);
+            await Clients.Caller.SendAsync("readerCardPrefix", settings.ReaderCardPrefix);
         }
 
         public async Task StartSession(string pcNumber, string sessionType,

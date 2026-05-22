@@ -85,6 +85,7 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`).classList.add('active');
+  if (name === 'readers') loadReaders();
 }
 
 // ─── PC Grid ──────────────────────────────────────────────────────────────
@@ -728,6 +729,7 @@ function fillSettingsForm() {
   if (!settings) return;
   document.getElementById('sTariff').value = settings.tariff ?? 3000;
   document.getElementById('sAdminPassword').value = settings.adminPassword ?? '';
+  document.getElementById('sReaderCardPrefix').value = (settings.readerCardPrefix ?? 'FAA').toUpperCase();
   document.getElementById('sUsbBlocked').checked = !!settings.usbBlocked;
   document.getElementById('sTaskMgr').checked = !!settings.taskMgrDisabled;
   document.getElementById('sBlockRegedit').checked = !!settings.blockRegedit;
@@ -793,6 +795,7 @@ function readSettingsForm() {
   return {
     tariff: parseInt(document.getElementById('sTariff').value) || 3000,
     adminPassword: document.getElementById('sAdminPassword').value,
+    readerCardPrefix: (document.getElementById('sReaderCardPrefix').value.trim().toUpperCase()) || 'FAA',
     usbBlocked: document.getElementById('sUsbBlocked').checked,
     taskMgrDisabled: document.getElementById('sTaskMgr').checked,
     blockRegedit: document.getElementById('sBlockRegedit').checked,
@@ -1026,4 +1029,116 @@ function periodFrom(p) {
   if (p === 'week')  { const w = new Date(t); w.setDate(t.getDate() - t.getDay() + 1); return w; }
   if (p === 'month') return new Date(t.getFullYear(), t.getMonth(), 1);
   return null;
+}
+
+// ─── Readers ──────────────────────────────────────────────────────────────────
+let readersData = [];
+
+async function loadReaders(search = '') {
+  const url = '/api/admin/readers' + (search ? `?search=${encodeURIComponent(search)}` : '');
+  readersData = await fetch(url).then(r => r.json()).catch(() => []);
+  renderReadersTable();
+  document.getElementById('readersCount').textContent =
+    `Читателей в базе: ${readersData.length}${search ? ` (по запросу «${search}»)` : ''}`;
+}
+
+function searchReaders() {
+  const q = document.getElementById('readersSearch').value.trim();
+  loadReaders(q);
+}
+
+function renderReadersTable() {
+  const el = document.getElementById('readersTable');
+  if (!readersData.length) {
+    el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel».</div>';
+    return;
+  }
+  const cols = '170px 1fr 110px 60px 180px 120px';
+  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
+    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span>
+  </div>`;
+  readersData.forEach(r => {
+    const age = calcReaderAge(r.birthDate);
+    html += `<div class="fin-row" style="grid-template-columns:${cols}">
+      <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
+      <b>${esc(r.fullName)}</b>
+      <span>${esc(r.birthDate)}${age !== null ? ` <span style="color:#555">(${age} л.)</span>` : ''}</span>
+      <span>${esc(r.gender)}</span>
+      <span>${esc(r.category)}</span>
+      <span style="color:#555">${esc(r.registeredAt)}</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function calcReaderAge(birthDate) {
+  if (!birthDate) return null;
+  const p = birthDate.split('-');
+  if (p.length !== 3) return null;
+  const bd = new Date(+p[2], +p[1] - 1, +p[0]);
+  if (isNaN(bd)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - bd.getFullYear();
+  if (today < new Date(today.getFullYear(), bd.getMonth(), bd.getDate())) age--;
+  return age;
+}
+
+function openImportDlg() {
+  document.getElementById('importFile').value = '';
+  document.getElementById('importResult').style.display = 'none';
+  document.getElementById('importResult').innerHTML = '';
+  const btn = document.getElementById('importBtn');
+  btn.disabled = false;
+  btn.textContent = 'Загрузить';
+  document.getElementById('dlgImportReaders').style.display = 'flex';
+}
+
+async function doImport() {
+  const input = document.getElementById('importFile');
+  if (!input.files || !input.files.length) { toast('Выберите файл', 'warn'); return; }
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true;
+  btn.textContent = 'Загрузка…';
+  try {
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    const r = await fetch('/api/admin/readers/import', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) { toast(data.error || 'Ошибка', 'warn'); btn.disabled = false; btn.textContent = 'Загрузить'; return; }
+
+    let html = `<div style="display:flex;gap:20px;margin-bottom:${data.conflicts.length ? 12 : 0}px">
+      <span style="color:#1d9e75">✓ Добавлено: <b>${data.added}</b></span>
+      <span style="color:#666">Пропущено: <b>${data.skipped}</b></span>
+      ${data.conflicts.length ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${data.conflicts.length}</b></span>` : ''}
+    </div>`;
+    if (data.conflicts.length) {
+      html += `<div style="font-size:12px;color:#888;margin-bottom:6px">Записи с изменёнными данными (не обновлялись автоматически):</div>
+      <div style="max-height:180px;overflow-y:auto">
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <tr style="color:#666"><th style="text-align:left;padding:2px 6px">ID</th><th style="text-align:left;padding:2px 6px">ФИО</th><th style="text-align:left;padding:2px 6px">Поле</th><th style="text-align:left;padding:2px 6px">Было</th><th style="text-align:left;padding:2px 6px">Стало</th></tr>
+          ${data.conflicts.map(c => `<tr>
+            <td style="padding:2px 6px;font-family:monospace">${esc(c.cardId)}</td>
+            <td style="padding:2px 6px">${esc(c.fullName)}</td>
+            <td style="padding:2px 6px;color:#f59e0b">${esc(c.field)}</td>
+            <td style="padding:2px 6px;color:#666">${esc(c.oldValue)}</td>
+            <td style="padding:2px 6px;color:#ccc">${esc(c.newValue)}</td>
+          </tr>`).join('')}
+        </table>
+      </div>`;
+    }
+    const resultEl = document.getElementById('importResult');
+    resultEl.innerHTML = html;
+    resultEl.style.display = 'block';
+    btn.textContent = 'Готово';
+    await loadReaders();
+    toast(`Импорт завершён: добавлено ${data.added}`, 'success');
+  } catch (e) {
+    toast('Ошибка импорта: ' + e.message, 'warn');
+    btn.disabled = false;
+    btn.textContent = 'Загрузить';
+  }
+}
+
+function exportReaderStats() {
+  window.open('/api/admin/readers/stats/export', '_blank');
 }

@@ -47,12 +47,19 @@
     </div>
 
     <div class="field-row">
-      <label>Имя читателя <span class="opt">(необязательно)</span></label>
-      <input id="dlgUserName" type="text" placeholder="Иванов Иван">
+      <label>Номер читательского билета <span class="opt">(необязательно)</span></label>
+      <div style="display:flex;gap:0;border:1px solid #3D3D6B;border-radius:8px;overflow:hidden;background:#1A1A2E">
+        <span id="dlgReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B;white-space:nowrap;line-height:1.5">FAA</span>
+        <input id="dlgReaderId" type="text" inputmode="numeric" placeholder="260500456"
+               style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               onblur="lookupReader()" onkeydown="if(event.key==='Enter'){lookupReader();}">
+      </div>
+      <div id="dlgReaderInfo" style="display:none;margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px;gap:8px;flex-wrap:wrap"></div>
     </div>
     <div class="field-row">
-      <label>ID читателя <span class="opt">(необязательно)</span></label>
-      <input id="dlgReaderId" type="text" placeholder="12345">
+      <label>Имя читателя <span class="opt">(заполняется автоматически)</span></label>
+      <input id="dlgUserName" type="text" placeholder="Или введите вручную">
     </div>
 
     <div class="dlg-actions">

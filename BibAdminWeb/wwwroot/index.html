@@ -26,6 +26,9 @@
     <button class="nav-btn" data-page="operators" onclick="showPage('operators')">
       <span>👥</span><span>Операторы</span>
     </button>
+    <button class="nav-btn" data-page="readers" onclick="showPage('readers')">
+      <span>📖</span><span>Читатели</span>
+    </button>
   </div>
   <div class="sidebar-footer">
     <div class="conn-status" id="connStatus">⚫ Подключение...</div>
@@ -128,6 +131,11 @@
           <label>Пароль администратора</label>
           <input type="text" id="sAdminPassword">
         </div>
+        <div class="form-row" style="margin-top:16px;border-top:1px solid #2A2A4A;padding-top:14px">
+          <label>Префикс читательского билета</label>
+          <input type="text" id="sReaderCardPrefix" placeholder="FAA" style="width:100px;text-transform:uppercase">
+        </div>
+        <p style="color:#555;font-size:12px;margin-top:4px">Оператор вводит только цифры — буквы подставляются автоматически.</p>
       </div>
 
       <div class="settings-card">
@@ -245,6 +253,24 @@
     </div>
   </div>
 
+  <!-- ══════════════════════ READERS PAGE ══════════════════════ -->
+  <div id="page-readers" class="page">
+    <div class="page-header">
+      <div>
+        <h1>Читатели</h1>
+        <p id="readersCount" class="page-sub">Загрузка...</p>
+      </div>
+      <div class="header-actions">
+        <input type="text" id="readersSearch" placeholder="Поиск по ФИО или ID…" style="padding:6px 10px;border:1px solid #3D3D6B;border-radius:6px;background:#1A1A2E;color:#ccc;font-size:13px;width:240px" oninput="searchReaders()">
+        <button class="btn btn-primary" onclick="openImportDlg()">📥 Импорт Excel</button>
+        <button class="btn btn-outline" onclick="exportReaderStats()">📊 Статистика Excel</button>
+      </div>
+    </div>
+    <div id="readersTable" class="fin-table-wrap">
+      <div class="fin-empty">Выберите раздел «Читатели» для загрузки</div>
+    </div>
+  </div>
+
   <!-- ══════════════════════ OPERATORS PAGE ══════════════════════ -->
   <div id="page-operators" class="page">
     <div class="page-header">
@@ -271,6 +297,23 @@
 </main>
 
 <!-- ══════════════════════ DIALOGS ══════════════════════ -->
+
+<!-- Import readers dialog -->
+<div id="dlgImportReaders" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">📥 Импорт читателей из Excel</div>
+    <p style="color:#888;font-size:13px;margin-bottom:16px">Файл должен содержать столбцы: <b>ID пользователя</b>, <b>Имя пользователя</b>, <b>Дата рождения</b>, <b>Категория пользователей</b>, <b>Дата регистрации</b>, <b>Пол</b>.</p>
+    <div class="form-row">
+      <label>Файл Excel</label>
+      <input type="file" id="importFile" accept=".xlsx,.xls" style="color:#ccc;font-size:13px">
+    </div>
+    <div id="importResult" style="display:none;margin-top:16px;padding:12px;border-radius:6px;background:#1A1A2E;border:1px solid #3D3D6B"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgImportReaders')">Закрыть</button>
+      <button class="btn btn-primary" id="importBtn" onclick="doImport()">Загрузить</button>
+    </div>
+  </div>
+</div>
 
 <!-- Start session dialog -->
 <div id="dlgStartSession" class="dlg-overlay" style="display:none">
