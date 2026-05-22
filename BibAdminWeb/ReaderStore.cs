@@ -31,6 +31,8 @@ namespace BibAdminWeb
         public int Added { get; set; }
         public int Skipped { get; set; }
         public List<ImportConflict> Conflicts { get; set; } = new();
+        // New values from Excel for each conflicting reader (cardId → Reader)
+        public Dictionary<string, Reader> ConflictNewData { get; set; } = new();
     }
 
     public static class ReaderStore
@@ -130,7 +132,7 @@ namespace BibAdminWeb
                     AddDiff(r.CardId, r.FullName, "Пол",           existGender!, r.Gender,     diffs);
 
                     if (diffs.Count == 0) result.Skipped++;
-                    else result.Conflicts.AddRange(diffs);
+                    else { result.Conflicts.AddRange(diffs); result.ConflictNewData[r.CardId] = r; }
                 }
                 else
                 {
@@ -205,6 +207,20 @@ namespace BibAdminWeb
             var age = today.Year - bd.Year;
             if (bd > today.AddYears(-age)) age--;
             return age;
+        }
+
+        public static void Update(Reader reader)
+        {
+            using var conn = Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE readers SET full_name=@n, birth_date=@b, category=@cat, gender=@g WHERE card_id=@c";
+            cmd.Parameters.AddWithValue("@n",   reader.FullName);
+            cmd.Parameters.AddWithValue("@b",   reader.BirthDate);
+            cmd.Parameters.AddWithValue("@cat", reader.Category);
+            cmd.Parameters.AddWithValue("@g",   reader.Gender);
+            cmd.Parameters.AddWithValue("@c",   reader.CardId);
+            cmd.ExecuteNonQuery();
+            Logger.Info($"✏️ Читатель обновлён: {reader.CardId}");
         }
 
         private static void AddDiff(string cardId, string fullName, string field, string oldVal, string newVal, List<ImportConflict> diffs)

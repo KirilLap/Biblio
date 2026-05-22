@@ -55,6 +55,30 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Admin: update reader ──────────────────────────────────────────
+            if (path == "/api/admin/readers" && method == "PUT")
+            {
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    var reader = await JsonSerializer.DeserializeAsync<Reader>(ctx.Request.Body, _json);
+                    if (reader == null || string.IsNullOrWhiteSpace(reader.CardId))
+                    {
+                        ctx.Response.StatusCode = 400;
+                        await ctx.Response.WriteAsync("{\"error\":\"Неверные данные\"}");
+                        return;
+                    }
+                    ReaderStore.Update(reader);
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
             // ─── Admin: import Excel ────────────────────────────────────────
             if (path == "/api/admin/readers/import" && method == "POST")
             {
@@ -110,7 +134,267 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Admin: period report ──────────────────────────────────────────
+            if (path == "/api/admin/readers/report" && method == "GET")
+            {
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    var result = BuildReport(period, dateStr);
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result, _json));
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
+            // ─── Admin: period report export ────────────────────────────────
+            if (path == "/api/admin/readers/report/export" && method == "GET")
+            {
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var result = BuildReport(period, dateStr);
+                    var bytes  = BuildReportExcel(result, period, dateStr);
+                    ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    ctx.Response.Headers["Content-Disposition"] =
+                        $"attachment; filename=report_{dateStr.Replace("-", "")}.xlsx";
+                    await ctx.Response.Body.WriteAsync(bytes);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Ошибка экспорта отчёта: {ex.Message}");
+                    ctx.Response.StatusCode = 400;
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
             await next(ctx);
+        }
+
+        // ── Report DTOs ──────────────────────────────────────────────────────
+        private sealed class ReportRowDto
+        {
+            public DateTime Timestamp      { get; set; }
+            public string   ReaderId       { get; set; } = "";
+            public string   ReaderName     { get; set; } = "";
+            public string   ReaderCategory { get; set; } = "";
+            public string   ReaderStatus   { get; set; } = "";   // registered | unregistered | anonymous
+            public string   PcNumber       { get; set; } = "";
+            public string   OperationType  { get; set; } = "";   // session | service
+            public int      DurationMin    { get; set; }
+            public string   Detail         { get; set; } = "";
+            public int      Amount         { get; set; }
+        }
+
+        private static (string name, string category, string status) ResolveReader(
+            string readerId, string fallbackName, Dictionary<string, Reader> map)
+        {
+            if (string.IsNullOrEmpty(readerId))
+                return ("—", "", "anonymous");
+            if (map.TryGetValue(readerId, out var r))
+                return (r.FullName, r.Category, "registered");
+            // Purely numeric ID → temporary card (no name in DB by design)
+            if (readerId.All(char.IsDigit))
+                return ($"Временный №{readerId}", "Временный", "temp");
+            var name = !string.IsNullOrEmpty(fallbackName) && fallbackName != "—"
+                ? fallbackName : $"Незарег. {readerId}";
+            return (name, "", "unregistered");
+        }
+
+        private static object BuildReport(string period, string dateStr)
+        {
+            DateTime from, to;
+            if (period == "day")
+            {
+                from = DateTime.ParseExact(dateStr, "yyyy-MM-dd", null).Date;
+                to   = from.AddDays(1);
+            }
+            else if (period == "month")
+            {
+                var p = dateStr.Split('-');
+                from = new DateTime(int.Parse(p[0]), int.Parse(p[1]), 1);
+                to   = from.AddMonths(1);
+            }
+            else throw new ArgumentException($"Неверный период: {period}");
+
+            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in ReaderStore.GetAll())
+                readerMap[r.CardId] = r;
+
+            var rows = new List<ReportRowDto>();
+
+            // Sessions — EndTime is DateTime.Now (local), StartTime may be UTC
+            foreach (var s in FinanceStore.Sessions)
+            {
+                var ts = s.EndTime; // local
+                if (ts < from || ts >= to) continue;
+                var (name, cat, status) = ResolveReader(s.ReaderId, s.UserName, readerMap);
+                rows.Add(new ReportRowDto
+                {
+                    Timestamp      = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime,
+                    ReaderId       = s.ReaderId,
+                    ReaderName     = name,
+                    ReaderCategory = cat,
+                    ReaderStatus   = status,
+                    PcNumber       = s.PcNumber,
+                    OperationType  = "session",
+                    DurationMin    = s.DurationSeconds / 60,
+                    Detail         = "",
+                    Amount         = s.EarnedAmount,
+                });
+            }
+
+            // Service transactions — CreatedAt is UTC
+            foreach (var t in ServiceTransaction.All)
+            {
+                var ts = t.CreatedAt.ToLocalTime();
+                if (ts < from || ts >= to) continue;
+                var (name, cat, status) = ResolveReader(t.ReaderId, t.ReaderName, readerMap);
+                rows.Add(new ReportRowDto
+                {
+                    Timestamp      = ts,
+                    ReaderId       = t.ReaderId,
+                    ReaderName     = name,
+                    ReaderCategory = cat,
+                    ReaderStatus   = status,
+                    PcNumber       = t.PcNumber ?? "",
+                    OperationType  = "service",
+                    DurationMin    = 0,
+                    Detail         = $"{t.ServiceName} ×{t.Quantity}",
+                    Amount         = t.TotalAmount,
+                });
+            }
+
+            rows.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
+
+            var uniqueIds = new HashSet<string>(
+                rows.Where(r => !string.IsNullOrEmpty(r.ReaderId)).Select(r => r.ReaderId),
+                StringComparer.OrdinalIgnoreCase);
+            int anonCount = rows.Any(r => string.IsNullOrEmpty(r.ReaderId)) ? 1 : 0;
+
+            return new
+            {
+                items   = rows,
+                summary = new
+                {
+                    totalSessions      = rows.Count(r => r.OperationType == "session"),
+                    totalServiceOps    = rows.Count(r => r.OperationType == "service"),
+                    totalUniqueReaders = uniqueIds.Count + anonCount,
+                    totalDurationMin   = rows.Where(r => r.OperationType == "session").Sum(r => r.DurationMin),
+                    totalAmount        = rows.Sum(r => r.Amount),
+                }
+            };
+        }
+
+        private static byte[] BuildReportExcel(object reportObj, string period, string dateStr)
+        {
+            // Unbox using reflection-friendly cast via JSON round-trip is complex;
+            // rebuild directly from sources instead of re-parsing the anonymous object.
+            DateTime from, to;
+            if (period == "day")
+            {
+                from = DateTime.ParseExact(dateStr, "yyyy-MM-dd", null).Date;
+                to   = from.AddDays(1);
+            }
+            else
+            {
+                var p = dateStr.Split('-');
+                from = new DateTime(int.Parse(p[0]), int.Parse(p[1]), 1);
+                to   = from.AddMonths(1);
+            }
+
+            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in ReaderStore.GetAll())
+                readerMap[r.CardId] = r;
+
+            var rows = new List<ReportRowDto>();
+            foreach (var s in FinanceStore.Sessions)
+            {
+                if (s.EndTime < from || s.EndTime >= to) continue;
+                var (name, cat, status) = ResolveReader(s.ReaderId, s.UserName, readerMap);
+                rows.Add(new ReportRowDto
+                {
+                    Timestamp = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime,
+                    ReaderId = s.ReaderId, ReaderName = name, ReaderCategory = cat, ReaderStatus = status,
+                    PcNumber = s.PcNumber, OperationType = "session", DurationMin = s.DurationSeconds / 60,
+                    Detail = "", Amount = s.EarnedAmount,
+                });
+            }
+            foreach (var t in ServiceTransaction.All)
+            {
+                var ts = t.CreatedAt.ToLocalTime();
+                if (ts < from || ts >= to) continue;
+                var (name, cat, status) = ResolveReader(t.ReaderId, t.ReaderName, readerMap);
+                rows.Add(new ReportRowDto
+                {
+                    Timestamp = ts, ReaderId = t.ReaderId, ReaderName = name, ReaderCategory = cat,
+                    ReaderStatus = status, PcNumber = t.PcNumber ?? "", OperationType = "service",
+                    DurationMin = 0, Detail = $"{t.ServiceName} ×{t.Quantity}", Amount = t.TotalAmount,
+                });
+            }
+            rows.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+
+            var periodLabel = period == "day"
+                ? from.ToString("dd.MM.yyyy")
+                : from.ToString("MMMM yyyy", new System.Globalization.CultureInfo("ru-RU"));
+
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Отчёт");
+            ws.Column(1).Width = 16;
+            ws.Column(2).Width = 32;
+            ws.Column(3).Width = 18;
+            ws.Column(4).Width = 10;
+            ws.Column(5).Width = 10;
+            ws.Column(6).Width = 8;
+            ws.Column(7).Width = 26;
+            ws.Column(8).Width = 12;
+
+            WriteHeader(ws, 1, $"Отчёт за {periodLabel}");
+            var hdrRow = ws.Row(2);
+            hdrRow.Cell(1).Value = "Дата/Время";
+            hdrRow.Cell(2).Value = "Читатель";
+            hdrRow.Cell(3).Value = "Категория";
+            hdrRow.Cell(4).Value = "ПК";
+            hdrRow.Cell(5).Value = "Тип";
+            hdrRow.Cell(6).Value = "Мин";
+            hdrRow.Cell(7).Value = "Детали";
+            hdrRow.Cell(8).Value = "Оплачено";
+            StyleHeader(ws.Row(2), 8);
+
+            int row = 3;
+            foreach (var r in rows)
+            {
+                ws.Cell(row, 1).Value = r.Timestamp.ToString("dd.MM.yyyy HH:mm");
+                ws.Cell(row, 2).Value = r.ReaderName;
+                ws.Cell(row, 3).Value = r.ReaderCategory;
+                ws.Cell(row, 4).Value = r.PcNumber;
+                ws.Cell(row, 5).Value = r.OperationType == "session" ? "Сессия" : "Услуга";
+                ws.Cell(row, 6).Value = r.OperationType == "session" ? (int?)r.DurationMin : null;
+                ws.Cell(row, 7).Value = r.Detail;
+                ws.Cell(row, 8).Value = r.Amount;
+                row++;
+            }
+
+            // Summary
+            row++;
+            ws.Cell(row, 1).Value = "Итого:";
+            ws.Cell(row, 1).Style.Font.Bold = true;
+            ws.Cell(row, 6).Value = rows.Where(r => r.OperationType == "session").Sum(r => r.DurationMin);
+            ws.Cell(row, 8).Value = rows.Sum(r => r.Amount);
+            ws.Cell(row, 8).Style.Font.Bold = true;
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
         }
 
         // ── Excel parsing ────────────────────────────────────────────────────
@@ -292,9 +576,9 @@ namespace BibAdminWeb
             cell.Style.Fill.BackgroundColor = XLColor.LightGray;
         }
 
-        private static void StyleHeader(IXLRow row)
+        private static void StyleHeader(IXLRow row, int cols = 6)
         {
-            foreach (var cell in row.Cells(1, 6))
+            foreach (var cell in row.Cells(1, cols))
             {
                 cell.Style.Font.Bold = true;
                 cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#4472C4");
