@@ -10,11 +10,11 @@ namespace BibAdmin
         // =====================
         // Экран блокировки
         // =====================
-        public double BackgroundOpacity { get; set; } = 0.3;
+        public double BackgroundOpacity { get; set; } = 0.5;
         public bool ShowPcName { get; set; } = true;      // Показывать кастомное имя (например, "ПК" или "Комп")
         public bool ShowPcNumber { get; set; } = true;    // Показывать цифровой номер (например, "1")
         public string PcNumberPosition { get; set; } = "MiddleCenter";  // Общая позиция для имени и номера
-        public double PcNumberFontSize { get; set; } = 52;
+        public double PcNumberFontSize { get; set; } = 120;
         public bool ShowLockedText { get; set; } = true;
         public string LockedTextPosition { get; set; } = "MiddleCenter";
         public double LockedTextFontSize { get; set; } = 16;
@@ -47,7 +47,18 @@ namespace BibAdmin
         // Тариф и пароль
         // =====================
         public int Tariff { get; set; } = 3000;
-        public string AdminPassword { get; set; } = "1234";
+        public string AdminPasswordHash { get; set; } = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 от "1234"
+        public bool IsFirstRun { get; set; } = true;
+        public int ServerPort { get; set; } = 8080;
+
+        public void SetPassword(string plainText)
+            => AdminPasswordHash = HashPassword(plainText);
+
+        public static string HashPassword(string password)
+        {
+            var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(password));
+            return Convert.ToHexString(bytes).ToLowerInvariant();
+        }
 
         // =====================
         // Поведение при потере сети
@@ -131,8 +142,7 @@ namespace BibAdmin
                 new("SET_TIME_FONT_SIZE", TimeFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new("USB_BLOCK", UsbBlocked.ToString().ToLower()),
                 new("TASKMGR_DISABLE", TaskMgrDisabled.ToString().ToLower()),
-                // 🔐 Пароль отправляется в открытом виде, клиент сам захеширует
-                new("ADMIN_PASSWORD", AdminPassword),
+                new("ADMIN_PASSWORD", AdminPasswordHash),
                 new("SET_TARIFF", Tariff.ToString()),
                 // 🔒 Блокировки
                 new("BLOCK_REGEDIT", BlockRegedit.ToString().ToLower()),
@@ -156,6 +166,15 @@ namespace BibAdmin
         // Операторы
         // =====================
         public List<OperatorAccount> Operators { get; set; } = new();
+
+        // Путь к папке обновлений (пусто = ../BibAdminWeb/updates/ рядом с BibAdmin.exe)
+        public string UpdatesPath { get; set; } = "";
+
+        // =====================
+        // Настройки полей сессии
+        // =====================
+        public bool RequireReaderId { get; set; } = true;
+        public bool RequireUserName { get; set; } = false;
     }
 
     // Модель услуги

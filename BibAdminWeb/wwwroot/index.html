@@ -55,6 +55,17 @@
         <button class="btn btn-outline" onclick="unlockAll()">🔓 Разблокировать всех</button>
       </div>
     </div>
+    <!-- Панель прогресса обновлений — скрыта когда нет активных обновлений -->
+    <div id="updateProgressPanel" class="update-progress-panel" style="display:none">
+      <div class="update-progress-header">
+        <span id="updateProgressTitle">⬆️ Обновление клиентов</span>
+        <button class="update-progress-close" onclick="closeUpdatePanel()">✕</button>
+      </div>
+      <div class="update-progress-bar-wrap">
+        <div id="updateProgressBar" class="update-progress-bar"></div>
+      </div>
+      <div id="updateProgressList" class="update-progress-list"></div>
+    </div>
     <div id="pcGrid" class="pc-grid"></div>
   </div>
 
@@ -85,6 +96,7 @@
         <button class="tab-btn active" id="tabSessions" onclick="setFinTab('sessions')">📋 Сессии</button>
         <button class="tab-btn" id="tabServices" onclick="setFinTab('services')">🛎 Услуги</button>
         <button class="tab-btn" id="tabAll" onclick="setFinTab('all')">📊 Всё</button>
+        <button class="tab-btn" id="tabDebts" onclick="setFinTab('debts')">⚠ Долги</button>
       </div>
       <div class="filter-row">
         <label><input type="radio" name="finPeriod" value="all" checked onchange="renderFinance()"> Все</label>
@@ -120,16 +132,62 @@
       </div>
     </div>
 
-    <div class="settings-grid">
-      <div class="settings-card">
-        <h3>Тарификация</h3>
-        <div class="form-row">
-          <label>Тариф (сум/час)</label>
-          <input type="number" id="sTariff" min="0">
+    <!-- Вкладки -->
+    <div class="settings-tabs">
+      <button class="stab active" onclick="showSettingsTab('main')">⚙️ Основные</button>
+      <button class="stab" onclick="showSettingsTab('screen')">🖥️ Экран ПК</button>
+      <button class="stab" onclick="showSettingsTab('services')">📋 Услуги</button>
+      <button class="stab" onclick="showSettingsTab('system')">🔧 Система</button>
+    </div>
+
+    <!-- ── Вкладка: Основные ── -->
+    <div class="stab-panel active" id="stab-main">
+      <div class="settings-2col">
+        <div class="settings-col">
+
+          <div class="settings-card">
+            <h3>Тарификация</h3>
+            <div class="form-row">
+              <label>Тариф (сум/час)</label>
+              <input type="number" id="sTariff" min="0">
+            </div>
+            <div class="form-row">
+              <label>Пароль администратора</label>
+              <input type="text" id="sAdminPassword" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Поля при старте сессии</h3>
+            <p class="settings-hint">Если поле обязательно — отображается и включается в отчёт. Если нет — скрывается.</p>
+            <div class="form-check"><label><input type="checkbox" id="sRequireReaderId"> Обязательно: ID читателя</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sRequireUserName"> Обязательно: Имя пользователя</label></div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Защита и автозапуск</h3>
+            <div class="form-check"><label><input type="checkbox" id="sPreventClose"> Защита от закрытия клиента</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sAutoStart"> Автозапуск с Windows</label></div>
+          </div>
+
         </div>
-        <div class="form-row">
-          <label>Пароль администратора</label>
-          <input type="text" id="sAdminPassword">
+        <div class="settings-col">
+
+          <div class="settings-card">
+            <h3>Ограничения для клиентских ПК</h3>
+            <div class="form-check"><label><input type="checkbox" id="sUsbBlocked"> Блокировка USB накопителей</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sTaskMgr"> Отключить диспетчер задач</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sBlockRegedit"> Блокировать реестр (regedit)</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sBlockCmd"> Блокировать командную строку (cmd)</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sBlockPs"> Блокировать PowerShell</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sHideDrive"> Скрыть диск C:</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sBlockInstall"> Запретить установку программ</label></div>
+            <div class="form-check" style="margin-top:12px;padding-top:12px;border-top:1px solid #222240">
+              <label><input type="checkbox" id="sLockOnOffline"> Блокировать ПК при потере связи</label>
+            </div>
+            <p class="settings-hint" style="margin-top:6px;margin-left:20px">Если выкл — сессия продолжается при обрыве сети</p>
+          </div>
+
         </div>
         <div class="form-row" style="margin-top:16px;border-top:1px solid #2A2A4A;padding-top:14px">
           <label>Префикс читательского билета</label>
@@ -137,120 +195,154 @@
         </div>
         <p style="color:#555;font-size:12px;margin-top:4px">Оператор вводит только цифры — буквы подставляются автоматически.</p>
       </div>
+    </div>
 
-      <div class="settings-card">
-        <h3>Ограничения</h3>
-        <div class="form-check"><label><input type="checkbox" id="sUsbBlocked"> Блокировка USB</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sTaskMgr"> Отключить диспетчер задач</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sBlockRegedit"> Блокировать реестр</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sBlockCmd"> Блокировать CMD</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sBlockPs"> Блокировать PowerShell</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sHideDrive"> Скрыть диск C:</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sBlockInstall"> Блокировать установку</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sLockOnOffline"> Блокировать при потере связи</label></div>
+    <!-- ── Вкладка: Экран ПК ── -->
+    <div class="stab-panel" id="stab-screen">
+      <div class="settings-2col">
+        <div class="settings-col">
+
+          <div class="settings-card">
+            <h3>Отображение на экране блокировки</h3>
+            <div class="form-check"><label><input type="checkbox" id="sShowPcName"> Показывать название ПК</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sShowPcNumber"> Показывать номер ПК</label></div>
+            <div class="form-check" style="margin-bottom:16px"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись «Заблокировано»</label></div>
+
+            <div class="form-row">
+              <label>Затемнение поверх фона (<span id="sBgOpacityVal">50</span>%)</label>
+              <input type="range" id="sBgOpacity" min="0" max="100" step="5">
+            </div>
+
+            <div class="lock-section-sep"></div>
+            <div class="lock-section-title">Номер ПК</div>
+            <div class="form-row">
+              <label>Позиция</label>
+              <select id="sPcNumberPosition">
+                <option value="TopLeft">Сверху слева</option>
+                <option value="TopCenter">Сверху по центру</option>
+                <option value="TopRight">Сверху справа</option>
+                <option value="MiddleLeft">По центру слева</option>
+                <option value="MiddleCenter" selected>По центру</option>
+                <option value="MiddleRight">По центру справа</option>
+                <option value="BottomLeft">Снизу слева</option>
+                <option value="BottomCenter">Снизу по центру</option>
+                <option value="BottomRight">Снизу справа</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Размер шрифта (<span id="sPcFontSizeVal">120</span>)</label>
+              <input type="range" id="sPcNumberFontSize" min="50" max="1500" step="10">
+            </div>
+
+            <div class="lock-section-sep"></div>
+            <div class="lock-section-title">Надпись «Компьютер заблокирован»</div>
+            <div class="form-row">
+              <label>Позиция</label>
+              <select id="sLockedTextPosition">
+                <option value="TopLeft">Сверху слева</option>
+                <option value="TopCenter">Сверху по центру</option>
+                <option value="TopRight">Сверху справа</option>
+                <option value="MiddleLeft">По центру слева</option>
+                <option value="MiddleCenter" selected>По центру</option>
+                <option value="MiddleRight">По центру справа</option>
+                <option value="BottomLeft">Снизу слева</option>
+                <option value="BottomCenter">Снизу по центру</option>
+                <option value="BottomRight">Снизу справа</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Размер шрифта (<span id="sLockedFontSizeVal">16</span>)</label>
+              <input type="range" id="sLockedTextFontSize" min="10" max="40" step="1">
+            </div>
+
+            <div class="lock-section-sep"></div>
+            <div class="lock-section-title">Время и дата</div>
+            <div class="form-row">
+              <label>Позиция</label>
+              <select id="sTimePosition">
+                <option value="TopLeft">Сверху слева</option>
+                <option value="TopCenter">Сверху по центру</option>
+                <option value="TopRight">Сверху справа</option>
+                <option value="MiddleLeft">По центру слева</option>
+                <option value="MiddleCenter">По центру</option>
+                <option value="MiddleRight">По центру справа</option>
+                <option value="BottomLeft">Снизу слева</option>
+                <option value="BottomCenter" selected>Снизу по центру</option>
+                <option value="BottomRight">Снизу справа</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Размер шрифта (<span id="sTimeFontSizeVal">36</span>)</label>
+              <input type="range" id="sTimeFontSize" min="12" max="80" step="2">
+            </div>
+          </div>
+
+        </div>
+        <div class="settings-col">
+
+          <div class="settings-card">
+            <h3>Фоновое изображение</h3>
+            <p class="settings-hint">Применить одно изображение ко всем клиентским ПК</p>
+            <div class="form-row">
+              <label>Текущий файл</label>
+              <input type="text" id="sBgFileName" readonly placeholder="(не задан)">
+            </div>
+            <div class="form-row">
+              <label>Загрузить новый файл</label>
+              <input type="file" id="sBgFileInput" accept="image/*" style="color:#ccc;font-size:13px">
+            </div>
+            <button class="btn btn-outline" style="margin-top:8px" onclick="uploadBgFile()">📤 Загрузить и отправить всем</button>
+            <span id="bgUploadStatus" style="display:none;color:#1d9e75;font-size:12px;margin-left:10px">✓ Отправлено</span>
+          </div>
+
+        </div>
       </div>
+    </div>
 
+    <!-- ── Вкладка: Услуги ── -->
+    <div class="stab-panel" id="stab-services">
       <div class="settings-card">
-        <h3>Защита и автозапуск</h3>
-        <div class="form-check"><label><input type="checkbox" id="sPreventClose"> Защита от закрытия</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sAutoStart"> Автозапуск с Windows</label></div>
-      </div>
-
-      <div class="settings-card">
-        <h3>Экран блокировки</h3>
-        <div class="form-check"><label><input type="checkbox" id="sShowPcName"> Показывать название ПК</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sShowPcNumber"> Показывать номер ПК</label></div>
-        <div class="form-check"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись «Заблокировано»</label></div>
-
-        <div class="form-row" style="margin-top:10px">
-          <label>Прозрачность фона (<span id="sBgOpacityVal">30</span>%)</label>
-          <input type="range" id="sBgOpacity" min="0" max="100" step="5">
-        </div>
-
-        <div class="lock-section-sep"></div>
-        <div class="lock-section-title">Номер ПК</div>
-        <div class="form-row">
-          <label>Позиция</label>
-          <select id="sPcNumberPosition">
-            <option value="TopLeft">Сверху слева</option>
-            <option value="TopCenter">Сверху по центру</option>
-            <option value="TopRight">Сверху справа</option>
-            <option value="MiddleLeft">По центру слева</option>
-            <option value="MiddleCenter" selected>По центру</option>
-            <option value="MiddleRight">По центру справа</option>
-            <option value="BottomLeft">Снизу слева</option>
-            <option value="BottomCenter">Снизу по центру</option>
-            <option value="BottomRight">Снизу справа</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Размер шрифта (<span id="sPcFontSizeVal">52</span>)</label>
-          <input type="range" id="sPcNumberFontSize" min="16" max="120" step="4">
-        </div>
-
-        <div class="lock-section-sep"></div>
-        <div class="lock-section-title">Надпись «Компьютер заблокирован»</div>
-        <div class="form-row">
-          <label>Позиция</label>
-          <select id="sLockedTextPosition">
-            <option value="TopLeft">Сверху слева</option>
-            <option value="TopCenter">Сверху по центру</option>
-            <option value="TopRight">Сверху справа</option>
-            <option value="MiddleLeft">По центру слева</option>
-            <option value="MiddleCenter" selected>По центру</option>
-            <option value="MiddleRight">По центру справа</option>
-            <option value="BottomLeft">Снизу слева</option>
-            <option value="BottomCenter">Снизу по центру</option>
-            <option value="BottomRight">Снизу справа</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Размер шрифта (<span id="sLockedFontSizeVal">16</span>)</label>
-          <input type="range" id="sLockedTextFontSize" min="10" max="40" step="1">
-        </div>
-
-        <div class="lock-section-sep"></div>
-        <div class="lock-section-title">Время и дата</div>
-        <div class="form-row">
-          <label>Позиция</label>
-          <select id="sTimePosition">
-            <option value="TopLeft">Сверху слева</option>
-            <option value="TopCenter">Сверху по центру</option>
-            <option value="TopRight">Сверху справа</option>
-            <option value="MiddleLeft">По центру слева</option>
-            <option value="MiddleCenter">По центру</option>
-            <option value="MiddleRight">По центру справа</option>
-            <option value="BottomLeft">Снизу слева</option>
-            <option value="BottomCenter" selected>Снизу по центру</option>
-            <option value="BottomRight">Снизу справа</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Размер шрифта (<span id="sTimeFontSizeVal">36</span>)</label>
-          <input type="range" id="sTimeFontSize" min="12" max="80" step="2">
-        </div>
-      </div>
-
-      <div class="settings-card">
-        <h3>Фоновое изображение</h3>
-        <p style="color:#666;font-size:12px;margin-bottom:12px">Загрузите изображение для экрана блокировки</p>
-        <div class="form-row">
-          <label>Текущий файл</label>
-          <input type="text" id="sBgFileName" readonly placeholder="(не задан)">
-        </div>
-        <div class="form-row">
-          <label>Загрузить новый файл</label>
-          <input type="file" id="sBgFileInput" accept="image/*" style="color:#ccc;font-size:13px">
-        </div>
-        <button class="btn btn-outline" style="margin-top:4px" onclick="uploadBgFile()">📤 Загрузить и отправить всем</button>
-        <span id="bgUploadStatus" style="display:none;color:#1d9e75;font-size:12px;margin-left:10px">✓ Отправлено</span>
-      </div>
-
-      <div class="settings-card full-width">
         <h3>Услуги <button class="btn-sm" onclick="addService()">+ Добавить</button></h3>
         <div id="servicesList"></div>
       </div>
     </div>
+
+    <!-- ── Вкладка: Система ── -->
+    <div class="stab-panel" id="stab-system">
+      <div class="settings-2col">
+        <div class="settings-col">
+
+          <div class="settings-card">
+            <h3>Обновления</h3>
+            <p id="updateCurrentVer" class="settings-hint">Нажмите кнопку для проверки</p>
+            <div class="form-row">
+              <label>Папка обновлений</label>
+              <input type="text" id="sUpdatesPath" placeholder="Пусто = updates\ рядом с сервером">
+            </div>
+            <p class="settings-hint">Локальный или сетевой путь, например \\server\updates</p>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+              <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">🔄 Проверить обновления</button>
+              <button class="btn btn-outline" id="btnUpdateClients" onclick="updateAllClients()" style="border-color:#1d9e75;color:#1d9e75">⬆️ Обновить все клиенты</button>
+              <span id="updateStatus" style="display:none;font-size:12px"></span>
+            </div>
+          </div>
+
+        </div>
+        <div class="settings-col">
+
+          <div class="settings-card">
+            <h3>Управление ПК</h3>
+            <p class="settings-hint">Команды рассылаются всем подключённым ПК</p>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+              <button class="btn btn-outline" onclick="restartAll()" style="text-align:left">🔄 Перезагрузить все ПК</button>
+              <button class="btn btn-outline" onclick="shutdownAll()" style="border-color:#E24B4A;color:#E24B4A;text-align:left">⏻ Выключить все ПК</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ══════════════════════ READERS PAGE ══════════════════════ -->
@@ -280,6 +372,13 @@
       <h3>Веб-интерфейс оператора</h3>
       <p id="opWebUrl" class="op-url"></p>
     </div>
+    
+    <div class="settings-card" style="max-width:560px;margin-bottom:20px">
+      <h3>Управление сервером</h3>
+      <p style="color:#666;margin-bottom:15px">Остановите сервер перед удалением программы или изменением настроек.</p>
+      <a href="/uninstall.html" target="_blank" class="btn btn-danger">🗑️ Остановить и удалить</a>
+    </div>
+    
     <div class="settings-card" style="max-width:560px;margin-bottom:20px">
       <h3>Добавить оператора</h3>
       <div class="form-row"><label>Отображаемое имя</label><input type="text" id="newOpName" placeholder="Иван Иванов"></div>
@@ -350,14 +449,15 @@
       Безлимитный доступ без ограничений по времени
     </div>
 
-    <!-- ID читателя (обязательно) -->
-    <div class="form-row">
-      <label>ID читателя *</label>
+    <!-- ID читателя -->
+    <div id="rowSsReader" class="form-row">
+      <label id="lblSsReader">ID читателя *</label>
       <input type="text" id="dlgSsReader" placeholder="Обязательно">
     </div>
-    <div class="form-row">
-      <label>Имя</label>
-      <input type="text" id="dlgSsName" placeholder="Необязательно">
+    <!-- Имя пользователя -->
+    <div id="rowSsName" class="form-row">
+      <label id="lblSsName">Имя *</label>
+      <input type="text" id="dlgSsName" placeholder="Иванов Иван">
     </div>
 
     <div class="dlg-btns">
@@ -373,7 +473,19 @@
     <div class="dlg-title">Итог сессии</div>
     <div id="dlgSummaryContent" style="margin:16px 0;line-height:1.8;color:#ccc"></div>
     <div class="dlg-btns">
+      <button id="btnSummaryPayDebts" class="btn" style="background:#854F0B;border-color:#854F0B;color:#fff;display:none" onclick="paySessionDebtsAdmin()">Оплатить долги</button>
       <button class="btn btn-primary" onclick="closeDlg('dlgSummary')">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Debts management dialog -->
+<div id="dlgDebts" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeDlg('dlgDebts')">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title">⚠ Задолженности по услугам</div>
+    <div id="dlgDebtsBody" style="max-height:60vh;overflow-y:auto;margin:16px 0"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-primary" onclick="closeDlg('dlgDebts')">Закрыть</button>
     </div>
   </div>
 </div>
@@ -416,6 +528,18 @@
   </div>
 </div>
 
+<!-- Number conflict dialog -->
+<div id="dlgNumberConflict" class="dlg-overlay" style="display:none">
+  <div class="dlg dlg-warn">
+    <div class="dlg-title">⚠️ Конфликт номера ПК</div>
+    <div id="dlgNumberConflictText" style="margin:16px 0;color:#ccc;line-height:1.7"></div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="resolveNumberConflict(false)">Отклонить</button>
+      <button class="btn btn-primary" onclick="resolveNumberConflict(true)">Разрешить со следующим свободным номером</button>
+    </div>
+  </div>
+</div>
+
 <!-- Rename PC dialog -->
 <div id="dlgRename" class="dlg-overlay" style="display:none">
   <div class="dlg">
@@ -435,6 +559,25 @@
 <!-- Context menu -->
 <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
 
+<!-- Extend session dialog -->
+<div id="dlgExtend" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">⏱ Добавить время — <span id="dlgExtPc"></span></div>
+    <div class="form-row">
+      <label>Добавить минут</label>
+      <input type="number" id="dlgExtMin" min="1" max="999" value="30" oninput="calcExtAmount()">
+    </div>
+    <div class="form-row">
+      <label>Добавить сумму (сум)</label>
+      <input type="number" id="dlgExtAmount" min="0" value="0" oninput="calcExtTime()">
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgExtend')">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmExtend()">Добавить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Individual PC background dialog -->
 <div id="dlgIndBg" class="dlg-overlay" style="display:none">
   <div class="dlg">
@@ -447,6 +590,37 @@
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgIndBg')">Отмена</button>
       <button class="btn btn-primary" onclick="confirmIndBg()">Загрузить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Screen viewer dialog -->
+<div id="dlgScreenView" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeScreenView()">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title" id="dlgScreenViewTitle">Экран ПК</div>
+    <div style="text-align:center;background:#000;border-radius:6px;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center">
+      <img id="screenViewImg" style="max-width:100%;max-height:65vh;display:block" src="" alt="Загрузка...">
+    </div>
+    <div style="font-size:12px;color:#777;margin-top:8px;text-align:center" id="screenViewStatus">Подключение...</div>
+    <div class="dlg-btns">
+      <button class="btn btn-primary" onclick="closeScreenView()">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Client log viewer dialog -->
+<div id="dlgClientLogs" class="dlg-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title">📋 Логи клиента</div>
+    <div class="dlg-pc-name" id="dlgClientLogsPcName"></div>
+    <pre id="dlgClientLogsBody" style="
+      background:#0d0d1a; color:#c8d3f5; font-size:11px; font-family:monospace;
+      border-radius:8px; padding:12px; height:65vh; overflow-y:auto;
+      white-space:pre-wrap; word-break:break-all; margin-top:8px;
+    ">⏳ Запрашиваем...</pre>
+    <div class="dlg-btns" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="copyClientLogs()">📋 Копировать</button>
+      <button class="btn btn-primary" onclick="document.getElementById('dlgClientLogs').style.display='none'">Закрыть</button>
     </div>
   </div>
 </div>

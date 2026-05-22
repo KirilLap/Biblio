@@ -1,5 +1,9 @@
 #define AppName    "Biblio"
-#define AppVersion "1.0.0"
+; AppVersion передаётся из build.cmd через /DAppVersion=X.Y.Z
+; При ручной компиляции через ISCC без параметра используется "0.0.0"
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
 #define AppPublisher "Biblio"
 
 ; Папки с результатами publish (относительно этого .iss файла)
@@ -82,15 +86,20 @@ Filename: "sc.exe"; \
 Filename: "sc.exe"; Parameters: "start BibClientWatchdog"; \
     Flags: runhidden waituntilterminated; Components: client
 
-; Открыть порт 8080 для BibAdminWeb
-Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""BibAdminWeb"" dir=in action=allow protocol=TCP localport=8080"; \
-    Flags: runhidden waituntilterminated; Components: adminweb
+; Запуск BibClient после установки / обновления
+Filename: "{app}\BibClient\BibClient.exe"; \
+    Flags: nowait; Components: client
 
-; Открыть порт 8080 для BibAdmin
-Filename: "netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""BibAdmin"" dir=in action=allow protocol=TCP localport=8080"; \
-    Flags: runhidden waituntilterminated; Components: admin
+; Автозапуск BibAdmin от имени администратора
+Filename: "{app}\BibAdmin\BibAdmin.exe"; \
+    Flags: postinstall nowait runascurrentuser; Components: admin
+
+; Автозапуск BibAdminWeb от имени администратора
+Filename: "{app}\BibAdminWeb\BibAdminWeb.exe"; \
+    Flags: postinstall nowait runascurrentuser; Components: adminweb
+
+; Правила брандмауэра открываются в [Code] → CurStepChanged(ssPostInstall)
+; с использованием порта, введённого пользователем на странице настройки.
 
 ; -------------------------------------------------------
 ; При удалении
@@ -106,19 +115,204 @@ Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""BibA
 ; Обновление: перед установкой остановить службу и процессы
 ; -------------------------------------------------------
 [Code]
+var
+  PortPage: TInputQueryWizardPage;
+
 procedure StopRunningProcesses();
 var
   ResultCode: Integer;
 begin
   Exec('sc.exe', 'stop BibClientWatchdog', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(2000);
-  Exec('taskkill.exe', '/f /im BibClient.exe',    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('taskkill.exe', '/f /im BibAdmin.exe',     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('taskkill.exe', '/f /im BibAdminWeb.exe',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibClientGuardian.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibClient.exe',         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibAdmin.exe',          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibAdminWeb.exe',       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   StopRunningProcesses();
   Result := '';
+end;
+
+// Читает значение поля ServerPort из существующего JSON-файла настроек.
+// Возвращает пустую строку если файл не найден или поле отсутствует.
+function ReadPortFromSettings(SettingsFile: String): String;
+var
+  Content: AnsiString;
+  Pos1, Pos2: Integer;
+  Token: String;
+begin
+  Result := '';
+  if not FileExists(SettingsFile) then Exit;
+  if not LoadStringFromFile(SettingsFile, Content) then Exit;
+  Token := '"ServerPort":';
+  Pos1 := Pos(Token, Content);
+  if Pos1 = 0 then Exit;
+  Pos1 := Pos1 + Length(Token);
+  // Пропускаем пробелы
+  while (Pos1 <= Length(Content)) and (Content[Pos1] = ' ') do
+    Pos1 := Pos1 + 1;
+  Pos2 := Pos1;
+  while (Pos2 <= Length(Content)) and
+        (Content[Pos2] >= '0') and (Content[Pos2] <= '9') do
+    Pos2 := Pos2 + 1;
+  if Pos2 > Pos1 then
+    Result := Copy(Content, Pos1, Pos2 - Pos1);
+end;
+
+procedure InitializeWizard();
+var
+  ExistingPort: String;
+begin
+  PortPage := CreateInputQueryPage(wpSelectComponents,
+    'Настройка порта сервера',
+    'Укажите порт, на котором будут работать BibAdmin и BibAdminWeb.',
+    'Порт должен быть в диапазоне 1024–65535. По умолчанию: 8080.');
+  PortPage.Add('Порт сервера:', False);
+  // Пробуем прочитать порт из уже установленных настроек.
+  // {app} недоступен в InitializeWizard, используем путь по умолчанию.
+  ExistingPort := ReadPortFromSettings(ExpandConstant('{autopf}\Biblio\BibAdminWeb\global_settings.json'));
+  if ExistingPort = '' then
+    ExistingPort := ReadPortFromSettings(ExpandConstant('{autopf}\Biblio\BibAdmin\global_settings.json'));
+  if ExistingPort = '' then
+    ExistingPort := '8080';
+  PortPage.Values[0] := ExistingPort;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  PortStr: String;
+  PortNum: Integer;
+  IsValid: Boolean;
+begin
+  Result := True;
+  if CurPageID = PortPage.ID then
+  begin
+    PortStr := Trim(PortPage.Values[0]);
+    IsValid := False;
+    try
+      PortNum := StrToInt(PortStr);
+      if (PortNum >= 1024) and (PortNum <= 65535) then
+        IsValid := True;
+    except
+      // Порт не является числом, оставляем IsValid = False
+    end;
+    
+    if not IsValid then
+    begin
+      MsgBox('Введите корректный порт (1024–65535).', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function GetServerPort(): String;
+begin
+  Result := Trim(PortPage.Values[0]);
+  if Result = '' then Result := '8080';
+end;
+
+procedure OpenFirewallPort(RuleName: String; Port: String);
+var
+  ResultCode: Integer;
+begin
+  Exec('netsh.exe',
+    'advfirewall firewall add rule name="' + RuleName + '" dir=in action=allow protocol=TCP localport=' + Port,
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Port: String;
+  SettingsFile: String;
+  ResultCode: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    Port := GetServerPort();
+
+    // Открываем порт в брандмауэре для выбранных компонентов
+    if IsComponentSelected('adminweb') then
+      OpenFirewallPort('BibAdminWeb', Port);
+    if IsComponentSelected('admin') then
+      OpenFirewallPort('BibAdmin', Port);
+
+    // BibAdminWeb: создаём global_settings.json только при первой установке.
+    // При обновлении файл уже существует — не трогаем, настройки сохраняются.
+    if IsComponentSelected('adminweb') then
+    begin
+      SettingsFile := ExpandConstant('{app}\BibAdminWeb\global_settings.json');
+      if not FileExists(SettingsFile) then
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "IsFirstRun": false,' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "Tariff": 3000,' + #13#10 +
+          '  "Operators": []' + #13#10 +
+          '}',
+          False);
+    end;
+
+    // BibAdmin: создаём global_settings.json только при первой установке.
+    if IsComponentSelected('admin') then
+    begin
+      SettingsFile := ExpandConstant('{app}\BibAdmin\global_settings.json');
+      if not FileExists(SettingsFile) then
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "IsFirstRun": false,' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "Tariff": 3000,' + #13#10 +
+          '  "PreventClose": true,' + #13#10 +
+          '  "AutoStartWithUser": true' + #13#10 +
+          '}',
+          False);
+    end;
+
+    // BibClient: создаём settings.json только при первой установке.
+    if IsComponentSelected('client') then
+    begin
+      SettingsFile := ExpandConstant('{app}\BibClient\settings.json');
+      if not FileExists(SettingsFile) then
+        SaveStringToFile(SettingsFile,
+          '{' + #13#10 +
+          '  "PcNumberValue": 1,' + #13#10 +
+          '  "CustomName": "",' + #13#10 +
+          '  "ServerIp": "",' + #13#10 +
+          '  "ServerPort": ' + Port + ',' + #13#10 +
+          '  "AdminPasswordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",' + #13#10 +
+          '  "ShowPcName": true,' + #13#10 +
+          '  "ShowPcNumber": true,' + #13#10 +
+          '  "PreventClose": true,' + #13#10 +
+          '  "AutoStartWithUser": true' + #13#10 +
+          '}',
+          False);
+    end;
+
+    // Запускаем BibClient после установки / обновления
+    // [Run] с Flags:nowait не работает при /VERYSILENT, поэтому запускаем здесь явно.
+    if IsComponentSelected('client') then
+    begin
+      Exec(ExpandConstant('{app}\BibClient\BibClient.exe'), '', '', SW_SHOW, ewNoWait, ResultCode);
+    end;
+  end;
+end;
+
+[UninstallCode]
+procedure DeinitializeUninstall();
+var
+  AppPath: String;
+begin
+  AppPath := ExpandConstant('{app}');
+  
+  // Полное удаление папки установки при деинсталляции
+  if not DelTree(AppPath, True, True, True) then
+  begin
+    MsgBox('Не удалось автоматически удалить некоторые файлы в папке:' + #13#10 + AppPath + #13#10 + 
+           'Пожалуйста, удалите эту папку вручную после перезагрузки компьютера.', mbWarning, MB_OK);
+  end;
 end;

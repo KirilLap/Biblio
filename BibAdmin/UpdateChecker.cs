@@ -11,9 +11,19 @@ namespace BibAdmin
         public static string CurrentVersion =>
             System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
+        private static string GetUpdatesPath()
+        {
+            var s = GlobalSettings.Load();
+            if (!string.IsNullOrWhiteSpace(s.UpdatesPath))
+                return s.UpdatesPath.TrimEnd('\\', '/');
+            // По умолчанию — папка updates/ рядом с BibAdminWeb (на той же машине)
+            return Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "BibAdminWeb", "updates"));
+        }
+
         public static async Task CheckAsync()
         {
-            var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "version.json");
+            var versionFile = Path.Combine(GetUpdatesPath(), "version.json");
             if (!File.Exists(versionFile)) return;
 
             VersionInfo? info = null;
@@ -39,7 +49,7 @@ namespace BibAdmin
                 MessageBoxButton.YesNo, MessageBoxImage.Information, MessageBoxResult.Yes);
             if (result != MessageBoxResult.Yes) return;
 
-            var installerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", info.InstallerFile);
+            var installerPath = Path.Combine(GetUpdatesPath(), info.InstallerFile);
             if (!File.Exists(installerPath))
             {
                 MessageBox.Show($"Файл установщика не найден:\n{installerPath}",

@@ -199,6 +199,44 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Поля при старте сессии -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Поля при старте сессии"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Если поле обязательно — оно отображается и включается в отчёт. Если нет — скрывается."
+                                       Foreground="#888" FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,12"/>
+
+                            <CheckBox x:Name="ChkRequireReaderId"
+                                      Content="Обязательно: ID читателя"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,10"/>
+
+                            <CheckBox x:Name="ChkRequireUserName"
+                                      Content="Обязательно: Имя пользователя"
+                                      FontSize="13" Foreground="#333"
+                                      Margin="0,0,0,16"/>
+
+                            <Button Content="Сохранить"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#EEF3FF"
+                                    BorderBrush="#378ADD"
+                                    Foreground="#185FA5"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,0,0,8"
+                                    Click="SaveSessionFields_Click"/>
+
+                            <TextBlock x:Name="TxtSessionFieldsSaved"
+                                       Text="✓ Настройки сохранены"
+                                       Foreground="#0F6E56" FontSize="12"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Поведение при потере сети -->
                     <Border Style="{StaticResource CardBorder}">
                         <StackPanel>
@@ -259,6 +297,54 @@
                                         Foreground="#854F0B"
                                         Click="RestartAll_Click"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Обновления -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Обновления"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="#1E1E2E"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock x:Name="TxtCurrentVersion"
+                                       Foreground="#888" FontSize="12"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Папка обновлений"
+                                       Foreground="#555" FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="Пусто = ..\BibAdminWeb\updates\ (по умолчанию)"
+                                       Foreground="#aaa" FontSize="11"
+                                       Margin="0,0,0,4"/>
+                            <TextBox x:Name="TxtUpdatesPath"
+                                     FontSize="12" Margin="0,0,0,8"
+                                     Padding="6,4"
+                                     ToolTip="Локальный путь или сетевой путь, например \\server\updates"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Content="💾 Сохранить путь"
+                                        Style="{StaticResource SettingsBtn}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,8,0"
+                                        Click="SaveUpdatesPath_Click"/>
+                                <Button Content="🔄 Проверить обновления"
+                                        Style="{StaticResource SettingsBtn}"
+                                        Background="#EEF3FF"
+                                        BorderBrush="#378ADD"
+                                        Foreground="#185FA5"
+                                        HorizontalAlignment="Left"
+                                        Click="CheckUpdates_Click"/>
+                            </StackPanel>
+                            <Button x:Name="BtnUpdateClients"
+                                    Content="⬆️ Обновить все клиенты"
+                                    Style="{StaticResource SettingsBtn}"
+                                    Background="#E8F8F2"
+                                    BorderBrush="#1D9E75"
+                                    Foreground="#1D9E75"
+                                    HorizontalAlignment="Left"
+                                    Click="UpdateAllClients_Click"/>
+                            <TextBlock x:Name="TxtUpdateClientsStatus"
+                                       FontSize="11" Foreground="#1D9E75"
+                                       Margin="0,4,0,0" Visibility="Collapsed"/>
                         </StackPanel>
                     </Border>
 
@@ -336,8 +422,8 @@
                                       IsChecked="True"
                                       Margin="0,0,0,12"/>
 
-                            <!-- Прозрачность фона -->
-                            <TextBlock Text="Прозрачность фона"
+                            <!-- Затемнение поверх фона -->
+                            <TextBlock Text="Затемнение поверх фона"
                                        Foreground="#888" FontSize="12"
                                        Margin="0,0,0,4"/>
                             <Grid Margin="0,0,0,16">
@@ -347,13 +433,13 @@
                                 </Grid.ColumnDefinitions>
                                 <Slider x:Name="SliderOpacity"
                                         Minimum="0" Maximum="100"
-                                        Value="30" TickFrequency="5"
+                                        Value="50" TickFrequency="5"
                                         IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center"
                                         ValueChanged="SliderOpacity_Changed"/>
                                 <TextBlock x:Name="TxtOpacityValue"
                                            Grid.Column="1"
-                                           Text="30%"
+                                           Text="50%"
                                            Foreground="#1D9E75"
                                            FontSize="12" FontWeight="Bold"
                                            VerticalAlignment="Center"
@@ -396,14 +482,14 @@
                                     <ColumnDefinition Width="44"/>
                                 </Grid.ColumnDefinitions>
                                 <Slider x:Name="SliderPcFontSize"
-                                        Minimum="16" Maximum="120"
-                                        Value="52" TickFrequency="4"
+                                        Minimum="50" Maximum="1500"
+                                        Value="120" TickFrequency="10"
                                         IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center"
                                         ValueChanged="SliderFont_Changed"/>
                                 <TextBlock x:Name="TxtPcFontValue"
                                            Grid.Column="1"
-                                           Text="52"
+                                           Text="120"
                                            Foreground="#1D9E75"
                                            FontSize="12" FontWeight="Bold"
                                            VerticalAlignment="Center"

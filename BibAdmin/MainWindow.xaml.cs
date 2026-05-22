@@ -80,7 +80,8 @@ namespace BibAdmin
             _server = new ServerHost();
             try
             {
-                await _server.StartAsync(8080);
+                var port = GlobalSettings.Load().ServerPort;
+                await _server.StartAsync(port);
 
                 AdminHub.LoadRegistry();
                 Logger.Info("✅ Реестр клиентов загружен");
@@ -102,7 +103,7 @@ namespace BibAdmin
 
                 Dispatcher.Invoke(() =>
                 {
-                    TxtServerStatus.Text = "Сервер запущен :8080";
+                    TxtServerStatus.Text = $"Сервер запущен :{port}";
                     DotServer.Fill = new SolidColorBrush(Color.FromRgb(29, 158, 117));
                 });
 

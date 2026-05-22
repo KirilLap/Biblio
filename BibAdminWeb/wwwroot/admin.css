@@ -192,6 +192,8 @@ body {
 
 .pc-meta { font-size: 11px; color: #555; margin-bottom: 12px; line-height: 1.6; }
 .pc-meta span { display: block; }
+.pc-ver        { font-size: 10px; color: #888; }
+.pc-ver.pc-ver-old { color: #f59e0b; font-weight: 600; }
 
 .pc-actions {
   display: flex;
@@ -317,6 +319,50 @@ body {
   border: 1px solid #222240;
 }
 .settings-card.full-width { grid-column: 1 / -1; }
+
+/* ── Settings tabs ────────────────────────────────────────── */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #222240;
+}
+.stab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 18px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: 0;
+}
+.stab:hover { color: #ccc; }
+.stab.active { color: #1d9e75; border-bottom-color: #1d9e75; }
+
+.stab-panel { display: none; }
+.stab-panel.active { display: block; }
+
+.settings-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-hint {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
 .settings-card h3 {
   font-size: 14px;
   font-weight: 600;
@@ -399,6 +445,7 @@ body {
   box-shadow: 0 20px 60px rgba(0,0,0,.6);
 }
 .dlg-warn { border-color: #5a3010; }
+.dlg-wide { width: min(900px, 92vw); }
 .dlg-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; color: #e0e0f0; }
 .dlg .form-row input, .dlg .form-row select {
   background: #111128; border: 1px solid #333355; border-radius: 7px;

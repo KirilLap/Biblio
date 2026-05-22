@@ -1,0 +1,157 @@
+<Window x:Class="BibAdmin.SessionSummaryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Итог сессии"
+        Width="440" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="#F5F5F5">
+
+    <Window.Resources>
+        <Style x:Key="DlgBtn" TargetType="Button">
+            <Setter Property="Padding" Value="20,9"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SummaryRow" TargetType="Grid">
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+    </Window.Resources>
+
+    <StackPanel>
+        <!-- Заголовок -->
+        <Border Background="#1E1E2E" Padding="20,16">
+            <StackPanel>
+                <TextBlock x:Name="TxtTitle"
+                           Text="Итог сессии"
+                           Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock x:Name="TxtSubtitle"
+                           Foreground="#666688" FontSize="11" Margin="0,3,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Margin="20,16">
+
+            <!-- Информация о сессии -->
+            <Border Background="White" CornerRadius="8"
+                    Padding="16,12" Margin="0,0,0,12"
+                    BorderBrush="#E8E8E8" BorderThickness="1">
+                <StackPanel>
+                    <Grid Style="{StaticResource SummaryRow}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Тип сессии" Foreground="#888" FontSize="13"/>
+                        <TextBlock x:Name="TxtType" Grid.Column="1"
+                                   FontSize="13" FontWeight="Medium" Foreground="#1E1E2E"/>
+                    </Grid>
+                    <Grid Style="{StaticResource SummaryRow}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Время" Foreground="#888" FontSize="13"/>
+                        <TextBlock x:Name="TxtDuration" Grid.Column="1"
+                                   FontSize="13" FontWeight="Medium" Foreground="#1E1E2E"/>
+                    </Grid>
+                    <Grid Style="{StaticResource SummaryRow}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Оплачено" Foreground="#888" FontSize="13"/>
+                        <TextBlock x:Name="TxtPaid" Grid.Column="1"
+                                   FontSize="13" FontWeight="Medium" Foreground="#1E1E2E"/>
+                    </Grid>
+                    <Grid Style="{StaticResource SummaryRow}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Использовано (по тарифу)" Foreground="#888" FontSize="13"/>
+                        <TextBlock x:Name="TxtEarned" Grid.Column="1"
+                                   FontSize="13" FontWeight="Medium" Foreground="#0F6E56"/>
+                    </Grid>
+                    <Border x:Name="RefundPanel" Visibility="Collapsed"
+                            Background="#F0FFF8" CornerRadius="6"
+                            Padding="12,8" Margin="0,6,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="💵 Возврат пользователю" FontSize="13" Foreground="#0F6E56"/>
+                            <TextBlock x:Name="TxtRefund" Grid.Column="1"
+                                       FontSize="14" FontWeight="Bold" Foreground="#0F6E56"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- Неоплаченные услуги -->
+            <StackPanel x:Name="PnlDebts" Visibility="Collapsed">
+                <Border Background="#FFF8F0" CornerRadius="8"
+                        Padding="16,12" Margin="0,0,0,12"
+                        BorderBrush="#F5DEB3" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="Неоплаченные услуги"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#854F0B" Margin="0,0,0,10"/>
+                        <StackPanel x:Name="DebtsList"/>
+                        <Border BorderBrush="#F0C070" BorderThickness="0,1,0,0"
+                                Margin="0,10,0,0" Padding="0,8,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Итого долгов по услугам"
+                                           FontSize="13" FontWeight="Medium" Foreground="#854F0B"/>
+                                <TextBlock x:Name="TxtDebtTotal" Grid.Column="1"
+                                           FontSize="15" FontWeight="Bold" Foreground="#854F0B"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+        </StackPanel>
+
+        <!-- Кнопки -->
+        <Border Background="White" Padding="20,14"
+                BorderBrush="#EEEEEE" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="BtnPayDebts"
+                        Content="Оплатить долги"
+                        Style="{StaticResource DlgBtn}"
+                        Background="#854F0B"
+                        BorderBrush="#854F0B"
+                        Foreground="White"
+                        Visibility="Collapsed"
+                        Margin="0,0,8,0"
+                        Click="PayDebts_Click"/>
+                <Button Content="Принято"
+                        Style="{StaticResource DlgBtn}"
+                        Background="#1D9E75"
+                        BorderBrush="#1D9E75"
+                        Foreground="White"
+                        Click="Close_Click"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</Window>

@@ -37,7 +37,10 @@ namespace BibAdminWeb
 
             var filesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Files");
             var wwwrootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-            var updatesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+            var gs = GlobalSettings.Load();
+            var updatesPath = !string.IsNullOrWhiteSpace(gs.UpdatesPath)
+                ? gs.UpdatesPath.TrimEnd('\\', '/')
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
             Directory.CreateDirectory(filesPath);
             Directory.CreateDirectory(wwwrootPath);
             Directory.CreateDirectory(updatesPath);
@@ -64,12 +67,20 @@ namespace BibAdminWeb
                         app.UseCors("AllowAll");
                         app.UseRouting();
 
-                        // Redirect / → /admin-login.html
+                        // Redirect / → /setup.html (первый запуск) или /admin-login.html
                         app.Use(async (ctx, next) =>
                         {
-                            if (ctx.Request.Path == "/" || ctx.Request.Path == "")
+                            var path = ctx.Request.Path.Value ?? "";
+                            if (path == "/" || path == "")
                             {
-                                ctx.Response.Redirect("/admin-login.html");
+                                var s = GlobalSettings.Load();
+                                ctx.Response.Redirect(s.IsFirstRun ? "/setup.html" : "/admin-login.html");
+                                return;
+                            }
+                            // Блокируем доступ к защищённым страницам при первом запуске
+                            if ((path == "/admin-login.html" || path == "/index.html") && GlobalSettings.Load().IsFirstRun)
+                            {
+                                ctx.Response.Redirect("/setup.html");
                                 return;
                             }
                             await next(ctx);
@@ -115,6 +126,9 @@ namespace BibAdminWeb
                             var path = ctx.Request.Path.Value ?? "";
                             var method = ctx.Request.Method;
 
+                            if (method == "POST" && path == "/api/admin/setup")
+                            { await AdminAuth.HandleSetup(ctx); return; }
+
                             if (method == "POST" && path == "/api/admin/login")
                             { await AdminAuth.HandleLogin(ctx); return; }
                             if (method == "POST" && path == "/api/admin/logout")
@@ -129,8 +143,23 @@ namespace BibAdminWeb
                             if (method == "GET" && path == "/api/op/me")
                             { await OperatorApi.HandleMe(ctx); return; }
 
+                            // Публичный эндпоинт: настройки полей сессии (для панели оператора)
+                            if (method == "GET" && path == "/api/session-fields")
+                            {
+                                var sf = GlobalSettings.Load();
+                                ctx.Response.ContentType = "application/json";
+                                await ctx.Response.WriteAsync(
+                                    System.Text.Json.JsonSerializer.Serialize(
+                                        new { requireReaderId = sf.RequireReaderId, requireUserName = sf.RequireUserName },
+                                        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                                return;
+                            }
+
                             await next(ctx);
                         });
+
+                        // Screenshot API (upload = no auth, watch/get = admin or operator)
+                        app.Use(ScreenshotApi.Handle);
 
                         // Admin REST API
                         app.Use(AdminApi.Handle);

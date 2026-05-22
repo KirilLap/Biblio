@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Удаление BibAdminWeb</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #e74c3c; }
+        p { color: #666; margin-bottom: 20px; }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #e74c3c;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover { background: #c0392b; }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            color: #155724;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Удаление BibAdminWeb</h1>
+        <p>Нажмите кнопку ниже, чтобы остановить сервер и удалить программу.</p>
+        
+        <div class="warning">
+            ⚠️ <strong>Внимание!</strong> Это действие остановит сервер BibAdminWeb. 
+            Все активные сессии будут сохранены. Для полного удаления используйте 
+            "Удалить Biblio" в меню Пуск.
+        </div>
+        
+        <div class="success" id="successMsg">
+            ✅ Сервер остановлен. Теперь вы можете удалить папку программы вручную 
+            или использовать стандартное удаление Windows.
+        </div>
+        
+        <button class="btn" onclick="stopServer()">Остановить сервер</button>
+        
+        <p style="margin-top: 30px; font-size: 14px;">
+            Путь к программе: <code id="appPath"></code>
+        </p>
+    </div>
+
+    <script>
+        // Показываем путь к приложению
+        document.getElementById('appPath').textContent = window.location.origin;
+        
+        async function stopServer() {
+            try {
+                const response = await fetch('/api/admin/stop', { method: 'POST' });
+                if (response.ok) {
+                    document.getElementById('successMsg').style.display = 'block';
+                    document.querySelector('.btn').disabled = true;
+                    document.querySelector('.btn').textContent = 'Сервер остановлен';
+                    
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                } else {
+                    alert('Ошибка остановки сервера');
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

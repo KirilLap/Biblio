@@ -31,13 +31,15 @@ namespace BibAdmin
                     .Select(a => a.Address)
                     .FirstOrDefault(IsPrivateIp);
 
+                var port = GlobalSettings.Load().ServerPort;
                 TxtWebUrl.Text = ip != null
-                    ? $"Веб-интерфейс доступен по адресу: http://{ip}:8080/operator.html"
-                    : "Веб-интерфейс: http://localhost:8080/operator.html";
+                    ? $"Веб-интерфейс доступен по адресу: http://{ip}:{port}/operator.html"
+                    : $"Веб-интерфейс: http://localhost:{port}/operator.html";
             }
             catch
             {
-                TxtWebUrl.Text = "Веб-интерфейс: http://localhost:8080/operator.html";
+                var port = GlobalSettings.Load().ServerPort;
+                TxtWebUrl.Text = $"Веб-интерфейс: http://localhost:{port}/operator.html";
             }
         }
 

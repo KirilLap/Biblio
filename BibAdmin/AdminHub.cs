@@ -30,6 +30,11 @@ namespace BibAdmin
         private const double ClockDriftThreshold = 30.0;
         // registeredAs, requestedAs, mac, requestedPcNumberValue, requestedCustomName
         public static event Action<string, string, string, int, string>? ClientNameConflict;
+        // mac, takenPcName, requestedPcNumberValue, requestedCustomName
+        public static event Action<string, string, int, string>? ClientNumberConflict;
+
+        // Блокировка записи сессий — защита от race condition при одновременных вызовах
+        private static readonly object _sessionsLock = new();
 
         // ✅ ДЛЯ ЗАЩИТЫ ОТ ДУБЛЕЙ УВЕДОМЛЕНИЙ
         private static readonly ConcurrentDictionary<string, DateTime> _lastOfflineAlert = new();
@@ -37,8 +42,10 @@ namespace BibAdmin
         // MACs для которых конфликт уже показан в этой сессии (не показывать повторно)
         private static readonly HashSet<string> _shownConflicts = new();
 
-        // Ожидание решения администратора по конфликту имён
+        // Ожидание решения администратора по конфликту имён (переименование)
         private static readonly ConcurrentDictionary<string, TaskCompletionSource<(int PcNumberValue, string CustomName)?>> _conflictDecisions = new();
+        // Ожидание решения администратора по конфликту номера (новый ПК)
+        private static readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _numberConflictDecisions = new();
 
         // Лог удалённых ПК
         private static readonly string _deletedPcsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "deleted_pcs.json");
@@ -72,6 +79,13 @@ namespace BibAdmin
                 else
                     tcs.TrySetResult(null);
             }
+        }
+
+        // Вызывается из UI когда новый ПК претендует на занятый номер: accept=true → разрешить с автономером
+        public static void ResolveNumberConflict(string mac, bool accept)
+        {
+            if (_numberConflictDecisions.TryRemove(mac, out var tcs))
+                tcs.TrySetResult(accept);
         }
 
         public static bool DeleteClientStatic(string pcNumber)
@@ -167,39 +181,42 @@ namespace BibAdmin
 
         public static void SaveActiveSessions()
         {
-            try
+            lock (_sessionsLock)
             {
-                var active = KnownClients.Values
-                    .Where(c => !string.IsNullOrEmpty(c.SessionType) && c.SessionStart.HasValue)
-                    .Select(c => new
-                    {
-                        PcNumber = c.PcNumber,
-                        SessionType = c.SessionType,
-                        SessionStartUtc = c.SessionStart,
-                        LimitSeconds = c.LimitSeconds,
-                        ElapsedSeconds = c.ElapsedSeconds,
-                        IsPaused = c.IsPaused,
-                        AccumulatedSeconds = c.AccumulatedSeconds,
-                        PaidAmount = c.PaidAmount,
-                        SessionId = c.SessionId,
-                        DisconnectedAtUtc = c.DisconnectedAt?.ToString("o"),
-                        ElapsedAtDisconnect = c.ElapsedAtDisconnect,
-                        OfflineDecision = c.OfflineDecision.ToString(),
-                        SavedAtUtc = DateTime.UtcNow
-                    })
-                    .ToList();
+                try
+                {
+                    var active = KnownClients.Values
+                        .Where(c => !string.IsNullOrEmpty(c.SessionType) && c.SessionStart.HasValue)
+                        .Select(c => new
+                        {
+                            PcNumber = c.PcNumber,
+                            SessionType = c.SessionType,
+                            SessionStartUtc = c.SessionStart,
+                            LimitSeconds = c.LimitSeconds,
+                            ElapsedSeconds = c.ElapsedSeconds,
+                            IsPaused = c.IsPaused,
+                            AccumulatedSeconds = c.AccumulatedSeconds,
+                            PaidAmount = c.PaidAmount,
+                            SessionId = c.SessionId,
+                            DisconnectedAtUtc = c.DisconnectedAt?.ToString("o"),
+                            ElapsedAtDisconnect = c.ElapsedAtDisconnect,
+                            OfflineDecision = c.OfflineDecision.ToString(),
+                            SavedAtUtc = DateTime.UtcNow
+                        })
+                        .ToList();
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var json = JsonSerializer.Serialize(active, options);
+                    var options = new JsonSerializerOptions { WriteIndented = true };
+                    var json = JsonSerializer.Serialize(active, options);
 
-                var tempPath = SessionsFilePath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                if (File.Exists(SessionsFilePath))
-                    File.Replace(tempPath, SessionsFilePath, null);
-                else
-                    File.Move(tempPath, SessionsFilePath);
+                    var tempPath = SessionsFilePath + ".tmp";
+                    File.WriteAllText(tempPath, json);
+                    if (File.Exists(SessionsFilePath))
+                        File.Replace(tempPath, SessionsFilePath, null);
+                    else
+                        File.Move(tempPath, SessionsFilePath);
+                }
+                catch (Exception ex) { Logger.Error($"❌ SaveActiveSessions: {ex.Message}"); }
             }
-            catch (Exception ex) { Logger.Error($"❌ SaveActiveSessions: {ex.Message}"); }
         }
 
         /// <summary>
@@ -459,12 +476,46 @@ namespace BibAdmin
 
             if (existingByMac == null)
             {
-                // Новый клиент - проверяем нет ли конфликта по имени
+                // Новый клиент — если номер занят другим ПК, спрашиваем администратора
+                if (KnownClients.ContainsKey(finalName) && !_shownConflicts.Contains(macAddress))
+                {
+                    _shownConflicts.Add(macAddress);
+                    var takenName = finalName;
+                    Logger.Warn($"⚠️ Новый ПК (MAC {macAddress}) хочет номер уже занятый: '{takenName}'");
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    _numberConflictDecisions[macAddress] = tcs;
+                    ClientNumberConflict?.Invoke(macAddress, takenName, finalPcNumberValue, finalCustomName);
+
+                    bool accepted = false;
+                    try
+                    {
+                        accepted = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                    }
+                    catch (TimeoutException)
+                    {
+                        Logger.Warn($"⏰ Тайм-аут по конфликту номера {macAddress}, авторегистрация");
+                        _numberConflictDecisions.TryRemove(macAddress, out _);
+                        accepted = true;
+                    }
+
+                    if (!accepted)
+                    {
+                        _shownConflicts.Remove(macAddress);
+                        Logger.Info($"🚫 Администратор отклонил регистрацию нового ПК MAC {macAddress}");
+                        return "REJECTED";
+                    }
+                }
+
+                // Найти первый свободный номер, сохраняя CustomName
                 while (KnownClients.ContainsKey(finalName))
                 {
                     finalPcNumberValue++;
-                    finalName = $"ПК {finalPcNumberValue}";
+                    finalName = string.IsNullOrEmpty(finalCustomName)
+                        ? $"ПК {finalPcNumberValue}"
+                        : $"{finalCustomName} {finalPcNumberValue}";
                 }
+                _shownConflicts.Remove(macAddress);
             }
 
             if (existingByMac != null && existingByMac.PcNumber != finalName)
@@ -625,6 +676,9 @@ namespace BibAdmin
                 };
                 await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(restoreCmd));
 
+                client.PendingStartSessionSentAt = DateTime.UtcNow;
+                KnownClients[finalName] = client;
+
                 if (sendPause)
                 {
                     await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand",
@@ -764,8 +818,36 @@ namespace BibAdmin
             client.LastSeen = DateTime.UtcNow;
             client.IsOnline = true;
 
+            // Клиент явно сообщает что заблокирован — очищаем сессию немедленно.
+            // Guard 2 ниже некорректно глотает этот статус (elapsed==0), поэтому обрабатываем первым.
+            if (status == "Заблокирован")
+            {
+                if (client.PendingStartSessionSentAt.HasValue &&
+                    (DateTime.UtcNow - client.PendingStartSessionSentAt.Value).TotalSeconds < 15)
+                {
+                    Logger.Info($"⏭️ {pcNumber}: Заблокирован проигнорирован (grace period, ожидается старт восстановленной сессии)");
+                    client.LastSeen = DateTime.UtcNow;
+                    KnownClients[pcNumber] = client;
+                    return;
+                }
+                bool hadSession = !string.IsNullOrEmpty(client.SessionType) && client.SessionStart.HasValue;
+                client.Status = "Заблокирован";
+                client.SessionType = "";
+                client.SessionStart = null;
+                client.ElapsedSeconds = 0;
+                client.LimitSeconds = 0;
+                client.IsPaused = false;
+                client.AccumulatedSeconds = 0;
+                client.PendingStartSessionSentAt = null;
+                KnownClients[pcNumber] = client;
+                ClientUpdated?.Invoke(client);
+                if (hadSession) SaveActiveSessions();
+                Logger.Info($"🔒 {pcNumber}: клиент заблокирован{(hadSession ? " — сессия очищена" : "")}");
+                return;
+            }
+
             if (string.IsNullOrEmpty(client.SessionType) && !client.SessionStart.HasValue &&
-                status != "Заблокирован" && status != "Свободный")
+                status != "Свободный")
             {
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
@@ -776,7 +858,7 @@ namespace BibAdmin
             {
                 // Применяем IsPaused как приоритет — клиент ещё не прислал elapsed,
                 // но пауза уже стоит на сервере (например, решение администратора).
-                if (status != "Заблокирован" && status != "Свободный")
+                if (status != "Свободный")
                     client.Status = client.IsPaused ? "Пауза" : status;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
@@ -785,6 +867,7 @@ namespace BibAdmin
 
             if (elapsedSeconds > 0)
             {
+                client.PendingStartSessionSentAt = null;
                 client.ElapsedSeconds = elapsedSeconds;
                 client.SessionStart = DateTime.UtcNow.AddSeconds(-elapsedSeconds);
                 if (!client.IsPaused)

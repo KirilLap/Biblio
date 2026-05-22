@@ -38,8 +38,9 @@ namespace BibAdmin
                     double cost = (mins / 60.0) * Tariff;
                     TxtMoney.Text = cost.ToString("F0",
                         CultureInfo.InvariantCulture);
-                    TxtHint.Text =
-                        $"{mins:F0} мин = {cost:F0} сум";
+                    TxtHint.Text = mins > 1440
+                        ? $"⚠️ Максимум 1440 мин (24ч)"
+                        : $"{mins:F0} мин = {cost:F0} сум";
                 }
                 else
                 {
@@ -106,13 +107,26 @@ namespace BibAdmin
 
             if (hasMinutes)
             {
+                if (mins > 1440)
+                {
+                    MessageBox.Show("Максимальное продление — 1440 минут (24 часа)", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 AddSeconds = (int)Math.Round(mins * 60);
                 AddAmount = (int)Math.Round((mins / 60.0) * Tariff);
             }
             else
             {
+                double calcMins = (money / Tariff) * 60.0;
+                if (calcMins > 1440)
+                {
+                    MessageBox.Show("Сумма превышает 24 часа. Введите сумму не более чем на 1440 минут.", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 AddAmount = (int)money;
-                AddSeconds = (int)Math.Round((money / Tariff) * 60);
+                AddSeconds = (int)Math.Round(calcMins * 60);
             }
 
             DialogResult = true;

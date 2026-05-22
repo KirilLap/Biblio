@@ -29,6 +29,7 @@ namespace BibClient
 
         private SessionManager? _sessionManager = null;
         private TrayIcon? _trayIcon = null;
+        private bool _sessionExpiredHandled = false;
 
         // true — экран заблокирован из-за потери сети, сессия при этом жива
         private bool _isOfflineLocked = false;
@@ -132,7 +133,6 @@ namespace BibClient
                 Dispatcher.Invoke(() =>
                 {
                     NetDot.Fill = isConnected ? WpfBrushes.Green : WpfBrushes.Red;
-                    NetStatusText.Text = isConnected ? "Онлайн" : "Оффлайн";
 
                     if (!isConnected && _sessionManager != null && PolicyEngine.LockOnOffline && !_isOfflineLocked)
                     {
@@ -283,7 +283,8 @@ namespace BibClient
             TxtTime.FontSize = _settings.TimeFontSize;
 
             // ── Фон ──────────────────────────────────────────────────────────────
-            BgImage.Opacity = _settings.BackgroundOpacity;
+            // BackgroundOpacity управляет затемнением поверх фото, не самим фото
+            DimOverlay.Opacity = _settings.BackgroundOpacity;
 
             if (!string.IsNullOrEmpty(_settings.BackgroundImagePath) && File.Exists(_settings.BackgroundImagePath))
             {
@@ -297,6 +298,7 @@ namespace BibClient
 
             // ── Позиции ──────────────────────────────────────────────────────────
             ApplyPosition(PanelCenter, _settings.PcNumberPosition);
+            ApplyPosition(PanelLocked, _settings.LockedTextPosition);
             ApplyPosition(PanelTime, _settings.TimePosition);
         }
 
@@ -368,6 +370,7 @@ namespace BibClient
             this.Hide();
 
             // 3. Создаём SessionManager (с восстановленным временем если нужно)
+            _sessionExpiredHandled = false;
             _sessionManager = new SessionManager(
                 sessionType,
                 limitSeconds,
@@ -400,6 +403,8 @@ namespace BibClient
 
         private void OnSessionExpiredInternal()
         {
+            if (_sessionExpiredHandled) return;
+            _sessionExpiredHandled = true;
             Logger.Info("Сессия завершена — блокируем ПК");
 
             // 1. Очищаем менеджер сессии

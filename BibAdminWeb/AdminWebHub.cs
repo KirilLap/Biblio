@@ -56,6 +56,7 @@ namespace BibAdminWeb
 
             var cmd = new { Type = "START_SESSION", SessionType = sessionType, LimitSeconds = limitSeconds, PaidAmount = paidAmount, ElapsedSeconds = 0, ServerStartTime = serverStart.ToString("o") };
             await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+            AuditLogger.SessionStarted(pcNumber, sessionType, limitSeconds, paidAmount);
             AdminHub.RaiseClientUpdated(client);
         }
 
@@ -90,6 +91,7 @@ namespace BibAdminWeb
                     .SendAsync("ReceiveCommand", JsonSerializer.Serialize(new { Type = "REMOTE_LOCK", Value = "true" }));
             }
 
+            AuditLogger.SessionEnded(pcNumber, sessionType, duration);
             client.Status = "Заблокирован"; client.SessionType = ""; client.ElapsedSeconds = 0;
             client.LimitSeconds = 0; client.PaidAmount = 0; client.SessionStart = null;
             client.IsPaused = false; client.AccumulatedSeconds = 0; client.SessionId = "";
@@ -98,7 +100,56 @@ namespace BibAdminWeb
             AdminHub.AddPendingCommand(pcNumber, "REMOTE_LOCK", "true");
             AdminHub.RaiseClientUpdated(client);
 
-            await Clients.Caller.SendAsync("sessionSummary", new { pcNumber, sessionType, duration, earned, paidAmount, refund });
+            if (client.UpdateStatus == "deferred" && client.IsOnline)
+            {
+                client.UpdateStatus = "pending";
+                AdminHub.KnownClients[pcNumber] = client;
+                var updateJson = JsonSerializer.Serialize(new { Type = "UPDATE_NOW", Value = "" });
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", updateJson);
+                AdminHub.RaiseClientUpdated(client);
+            }
+
+            string sessionReaderId = client.ReaderId ?? "";
+            var debts = ServiceTransaction.GetUnpaidForSession(pcNumber, sessionReaderId);
+            int totalDebt = debts.Sum(d => d.DebtAmount);
+            var debtItems = debts.Select(d => new {
+                id = d.Id, name = d.ServiceName, qty = d.Quantity,
+                unit = d.Unit, debt = d.DebtAmount
+            }).ToList();
+
+            await Clients.Caller.SendAsync("sessionSummary", new {
+                pcNumber, sessionType, duration, earned, paidAmount, refund,
+                readerId = sessionReaderId, serviceDebts = debtItems, totalServiceDebt = totalDebt
+            });
+        }
+
+        public Task<object[]> GetAllDebts()
+        {
+            if (!IsAuthorized()) return Task.FromResult(Array.Empty<object>());
+            var debts = ServiceTransaction.GetAllUnpaid()
+                .Select(t => (object)new {
+                    id = t.Id, serviceName = t.ServiceName, unit = t.Unit,
+                    quantity = t.Quantity, pricePerUnit = t.PricePerUnit,
+                    debtAmount = t.DebtAmount, readerId = t.ReaderId,
+                    readerName = t.ReaderName, pcNumber = t.PcNumber,
+                    createdAt = t.CreatedAt.ToString("o")
+                }).ToArray();
+            return Task.FromResult(debts);
+        }
+
+        public Task PayDebt(string id)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            ServiceTransaction.MarkAsPaid(id);
+            return Task.CompletedTask;
+        }
+
+        public Task PaySessionDebts(string pcNumber, string readerId)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            if (!string.IsNullOrEmpty(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId);
+            if (!string.IsNullOrEmpty(pcNumber)) ServiceTransaction.MarkAllPaidForPc(pcNumber);
+            return Task.CompletedTask;
         }
 
         public async Task TogglePause(string pcNumber)
@@ -148,6 +199,7 @@ namespace BibAdminWeb
             if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return Task.CompletedTask;
             var client = AdminHub.SetOfflineDecision(pcNumber, d);
             if (client != null) AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+            if (client != null) AdminHub.RaiseClientUpdated(client);
             return Task.CompletedTask;
         }
 
@@ -155,6 +207,13 @@ namespace BibAdminWeb
         {
             if (!IsAuthorized()) return Task.CompletedTask;
             AdminHub.ResolveConflict(mac, accept ? pcNumberValue : null, accept ? customName : null);
+            return Task.CompletedTask;
+        }
+
+        public Task ResolveNumberConflict(string mac, bool accept)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            AdminHub.ResolveNumberConflict(mac, accept);
             return Task.CompletedTask;
         }
 
@@ -228,13 +287,75 @@ namespace BibAdminWeb
         {
             if (!IsAuthorized()) return;
             var json = JsonSerializer.Serialize(new { Type = type, Value = value });
-            foreach (var client in AdminHub.KnownClients.Values)
+
+            // Читаем актуальную версию из version.json один раз для всего цикла
+            string latestVersion = "";
+            if (type == "UPDATE_NOW")
             {
+                try
+                {
+                    var gs = GlobalSettings.Load();
+                    var updDir = !string.IsNullOrWhiteSpace(gs.UpdatesPath)
+                        ? gs.UpdatesPath.TrimEnd('\\', '/')
+                        : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+                    var vf = Path.Combine(updDir, "bibclient-version.json");
+                    if (File.Exists(vf))
+                    {
+                        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(vf));
+                        latestVersion = doc.RootElement.TryGetProperty("Version", out var vp) ? vp.GetString() ?? "" : "";
+                    }
+                }
+                catch { }
+            }
+
+            foreach (var pcNumber in AdminHub.KnownClients.Keys.ToList())
+            {
+                if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) continue;
+                if (type == "UPDATE_NOW" && client.IsOnline && string.IsNullOrEmpty(client.UpdateStatus))
+                {
+                    // Клиент уже на актуальной версии — не трогаем
+                    if (!string.IsNullOrEmpty(latestVersion) &&
+                        !string.IsNullOrEmpty(client.ClientVersion) &&
+                        Version.TryParse(latestVersion, out var lv) &&
+                        Version.TryParse(client.ClientVersion, out var cv) &&
+                        lv <= cv)
+                        continue;
+
+                    if (client.IsSession)
+                    {
+                        client.UpdateStatus = "deferred";
+                        client.PreUpdateVersion = client.ClientVersion;
+                        AdminHub.KnownClients[pcNumber] = client;
+                        AdminHub.RaiseClientUpdated(client);
+                        continue; // не отправляем команду, подождём конца сессии
+                    }
+                    client.UpdateStatus = "pending";
+                    client.PreUpdateVersion = client.ClientVersion;
+                    AdminHub.KnownClients[pcNumber] = client;
+                    AdminHub.RaiseClientUpdated(client);
+                }
                 if (client.IsOnline)
                     await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
                 else
                     AdminHub.AddPendingCommand(client.PcNumber, type, value);
             }
+        }
+
+        public async Task ExtendSession(string pcNumber, int addSeconds, int addAmount)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession) return;
+            client.LimitSeconds += addSeconds;
+            client.PaidAmount += addAmount;
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            var cmd = new { Type = "EXTEND_SESSION", Value = addSeconds.ToString(), LimitSeconds = addSeconds };
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+            else
+                AdminHub.AddPendingCommand(pcNumber, "EXTEND_SESSION", addSeconds.ToString());
+            AdminHub.RaiseClientUpdated(client);
         }
 
         public async Task RenameClient(int pcNumberValue, string customName)
@@ -249,6 +370,7 @@ namespace BibAdminWeb
             {
                 AdminHub.KnownClients.TryRemove(oldName, out _);
                 AdminHub.KnownClients[newName] = client;
+                AuditLogger.PcRenamed(oldName, newName);
             }
             if (!string.IsNullOrEmpty(client.ConnectionId))
             {
@@ -455,7 +577,10 @@ namespace BibAdminWeb
             offlineDecision = c.OfflineDecision.ToString(),
             hasIndividualSettings = c.HasIndividualSettings,
             startedByOperatorName = c.StartedByOperatorName,
-            backgroundFileName = c.BackgroundFileName
+            backgroundFileName = c.BackgroundFileName,
+            clientVersion = c.ClientVersion,
+            updateStatus = c.UpdateStatus,
+            preUpdateVersion = c.PreUpdateVersion
         };
 
         private bool IsAuthorized()

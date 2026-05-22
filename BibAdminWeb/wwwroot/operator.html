@@ -46,8 +46,8 @@
       </div>
     </div>
 
-    <div class="field-row">
-      <label>Номер читательского билета <span class="opt">(необязательно)</span></label>
+    <div id="rowReaderId" class="field-row">
+      <label id="lblReaderId">Номер читательского билета <span class="opt">(необязательно)</span></label>
       <div style="display:flex;gap:0;border:1px solid #3D3D6B;border-radius:8px;overflow:hidden;background:#1A1A2E">
         <span id="dlgReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B;white-space:nowrap;line-height:1.5">FAA</span>
         <input id="dlgReaderId" type="text" inputmode="numeric" placeholder="260500456"
@@ -57,8 +57,8 @@
       </div>
       <div id="dlgReaderInfo" style="display:none;margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px;gap:8px;flex-wrap:wrap"></div>
     </div>
-    <div class="field-row">
-      <label>Имя читателя <span class="opt">(заполняется автоматически)</span></label>
+    <div id="rowUserName" class="field-row">
+      <label id="lblUserName">Имя читателя <span class="opt">(заполняется автоматически)</span></label>
       <input id="dlgUserName" type="text" placeholder="Или введите вручную">
     </div>
 
@@ -109,6 +109,26 @@
   </div>
 </div>
 
+<!-- Диалог: Добавить время -->
+<div id="dlgExtend" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgExtend')">
+  <div class="dlg">
+    <div class="dlg-title">⏱ Добавить время</div>
+    <div class="dlg-pc-name" id="dlgExtPc"></div>
+    <div class="field-row">
+      <label>Добавить минут</label>
+      <input id="dlgExtMin" type="number" min="1" max="999" value="30" oninput="calcExtAmount()">
+    </div>
+    <div class="field-row">
+      <label>Добавить сумму (сум)</label>
+      <input id="dlgExtAmount" type="number" min="0" value="0" oninput="calcExtTime()">
+    </div>
+    <div class="dlg-actions">
+      <button class="btn-cancel" onclick="closeDlg('dlgExtend')">Отмена</button>
+      <button class="btn-primary" onclick="confirmExtend()">Добавить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Диалог: Услуга -->
 <div id="dlgService" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgService')">
   <div class="dlg">
@@ -127,15 +147,21 @@
       <div id="dlgSvcTotal" class="total-display">—</div>
     </div>
     <div class="field-row">
-      <label>Читатель <span class="opt">(необязательно)</span></label>
-      <input id="dlgSvcReader" type="text" placeholder="Имя или ID">
+      <label>Привязать к сессии</label>
+      <select id="dlgSvcPc" onchange="onSvcPcChanged()">
+        <option value="">— Без привязки —</option>
+      </select>
     </div>
+    <div id="dlgSvcSessionInfo" style="font-size:12px;color:#1D9E75;margin:-6px 0 8px;display:none"></div>
     <div class="field-row">
       <label>Оплата</label>
       <div class="radio-group">
-        <label class="radio-opt"><input type="radio" name="svcPay" value="now" checked> Сейчас</label>
-        <label class="radio-opt"><input type="radio" name="svcPay" value="later"> Позже</label>
+        <label class="radio-opt"><input type="radio" name="svcPay" value="now" checked onclick="onSvcPayChanged()"> Сейчас</label>
+        <label class="radio-opt"><input type="radio" name="svcPay" value="later" id="rbSvcLater" onclick="onSvcPayChanged()"> Позже</label>
       </div>
+    </div>
+    <div id="dlgSvcDeferNote" style="font-size:12px;color:#E09000;display:none;margin-top:-4px;margin-bottom:8px">
+      ⓘ Выберите активную сессию, чтобы отложить оплату
     </div>
 
     <div class="dlg-actions">
@@ -144,6 +170,41 @@
     </div>
   </div>
 </div>
+
+<!-- Диалог: Управление долгами -->
+<div id="dlgDebts" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgDebts')">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title">⚠ Задолженности по услугам</div>
+    <div id="dlgDebtsBody" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="dlg-actions">
+      <button class="btn-primary" onclick="closeDlg('dlgDebts')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно: просмотр экрана ПК -->
+<div id="dlgScreenView" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgScreenView')">
+  <div class="dlg dlg-wide">
+    <div class="dlg-title" id="dlgScreenViewTitle">Экран ПК</div>
+    <div style="text-align:center;background:#000;border-radius:6px;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center">
+      <img id="screenViewImg" style="max-width:100%;max-height:65vh;display:block" src="" alt="Загрузка...">
+    </div>
+    <div style="font-size:12px;color:#777;margin-top:8px;text-align:center" id="screenViewStatus">Подключение...</div>
+    <div class="dlg-actions">
+      <button class="btn-primary" onclick="closeScreenView()">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Оверлей: перезапуск сервера -->
+<div id="overlayRestart" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+  <div style="font-size:48px">🔄</div>
+  <div style="color:#fff;font-size:22px;font-weight:700">Сервер перезапускается</div>
+  <div id="overlayRestartReason" style="color:#aaa;font-size:15px">Обновление системы</div>
+  <div style="color:#ccc;font-size:13px;margin-top:8px">Страница обновится автоматически после запуска сервера</div>
+  <div style="width:48px;height:48px;border:4px solid #444;border-top-color:#1d9e75;border-radius:50%;animation:spin 1s linear infinite;margin-top:8px"></div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
 <!-- Основная область -->
 <main>
@@ -154,6 +215,9 @@
     <div class="stat-item stat-green"><span id="stSessions">0</span><small>сессий</small></div>
     <div class="stat-item stat-amber"><span id="stLocked">0</span><small>заблок.</small></div>
     <button class="btn-service-top" onclick="openServiceDlg()">🛎 Услуга</button>
+    <button class="btn-service-top" onclick="openDebtsDlg()" style="background:#854F0B;margin-left:4px">⚠ Долги</button>
+    <button class="btn-service-top" onclick="restartAll()" style="background:#f5a623;margin-left:4px">🔄 Перезагрузить</button>
+    <button class="btn-service-top" onclick="shutdownAll()" style="background:#E24B4A;margin-left:4px">⏻ Выкл. все</button>
   </div>
 
   <!-- Грид ПК -->

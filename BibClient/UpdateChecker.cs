@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BibClient
@@ -9,16 +10,40 @@ namespace BibClient
     internal static class UpdateChecker
     {
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
+        private static readonly HttpClient _downloadHttp = new() { Timeout = TimeSpan.FromMinutes(5) };
+        private static int _downloading = 0;
 
         public static string CurrentVersion =>
             System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+
+        /// <summary>
+        /// Вызывается когда обновление не случилось: "no_update" — версия та же, "download_failed" — ошибка загрузки.
+        /// NetworkManager подписывается и сообщает серверу.
+        /// </summary>
+        public static event Action<string>? UpdateFailed;
+
+        /// <summary>
+        /// Запускает фоновую задачу с периодической проверкой раз в час.
+        /// Возвращается сразу — проверка идёт в фоне.
+        /// </summary>
+        public static Task StartPeriodicCheckAsync(string serverBaseUrl)
+        {
+            return Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(TimeSpan.FromHours(1));
+                    await CheckAsync(serverBaseUrl);
+                }
+            });
+        }
 
         public static async Task CheckAsync(string serverBaseUrl)
         {
             VersionInfo? info = null;
             try
             {
-                var url = serverBaseUrl.TrimEnd('/') + "/updates/version.json";
+                var url = serverBaseUrl.TrimEnd('/') + "/updates/bibclient-version.json";
                 var json = await _http.GetStringAsync(url);
                 info = JsonSerializer.Deserialize<VersionInfo>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -28,50 +53,58 @@ namespace BibClient
                 return;
             }
 
-            if (info == null || !IsNewer(info.Version, CurrentVersion)) return;
+            if (info == null || !IsNewer(info.Version, CurrentVersion))
+            {
+                Logger.Info($"ℹ️ Обновление не требуется: установлена {CurrentVersion}, на сервере {info?.Version ?? "?"}");
+                UpdateFailed?.Invoke("no_update");
+                return;
+            }
 
-            var msg = $"Доступна версия {info.Version}  (у вас {CurrentVersion})";
-            if (!string.IsNullOrWhiteSpace(info.ReleaseNotes))
-                msg += $"\n\n{info.ReleaseNotes}";
-            msg += "\n\nОбновить сейчас?";
-
-            var result = System.Windows.MessageBox.Show(msg, "Обновление BibClient",
-                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Information,
-                System.Windows.MessageBoxResult.Yes);
-            if (result != System.Windows.MessageBoxResult.Yes) return;
-
+            Logger.Info($"Доступна версия {info.Version}, текущая {CurrentVersion} — запуск тихого обновления");
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
         }
 
         private static async Task DownloadAndRunAsync(string serverBaseUrl, string installerFile)
         {
+            if (Interlocked.CompareExchange(ref _downloading, 1, 0) != 0)
+            {
+                Logger.Info("⏳ Загрузка обновления уже идёт, пропускаем дублирующий запрос");
+                return;
+            }
+
             var downloadUrl = serverBaseUrl.TrimEnd('/') + "/updates/" + installerFile;
             var tempPath = Path.Combine(Path.GetTempPath(), installerFile);
             try
             {
-                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
-                var bytes = await _http.GetByteArrayAsync(downloadUrl);
+                var bytes = await _downloadHttp.GetByteArrayAsync(downloadUrl);
                 await File.WriteAllBytesAsync(tempPath, bytes);
             }
             catch (Exception ex)
             {
-                System.Windows.Input.Mouse.OverrideCursor = null;
-                System.Windows.MessageBox.Show($"Ошибка загрузки обновления:\n{ex.Message}",
-                    "Ошибка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                Logger.Error($"Ошибка загрузки обновления: {ex.Message}");
+                UpdateFailed?.Invoke("download_failed");
+                Interlocked.Exchange(ref _downloading, 0);
                 return;
             }
-            finally
-            {
-                System.Windows.Input.Mouse.OverrideCursor = null;
-            }
 
+            // /VERYSILENT — без окон, /NORESTART — без перезагрузки ПК,
+            // /COMPONENTS=client — только BibClient, без серверных компонентов
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = tempPath,
+                Arguments = "/VERYSILENT /NORESTART /COMPONENTS=client",
                 UseShellExecute = true
             });
-            System.Windows.Application.Current.Dispatcher.Invoke(
-                () => System.Windows.Application.Current.Shutdown());
+
+            // Сигнализируем Guardian и Windows-службе что закрытие легальное —
+            // иначе они немедленно перезапустят BibClient и инсталлятор не сможет
+            // заменить заблокированный exe-файл.
+            Watchdog.StopGuardian();
+            ServiceManager.SignalLegalClose();
+
+            await Task.Delay(1000);
+            Logger.Info("⬆️ Завершаем BibClient для установки обновления...");
+            Environment.Exit(0);
         }
 
         private static bool IsNewer(string remote, string current) =>

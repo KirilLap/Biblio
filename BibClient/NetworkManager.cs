@@ -20,7 +20,21 @@ namespace BibClient
         // Срабатывает после успешной регистрации на сервере
         public event Action? OnRegistered;
 
-        public NetworkManager(string serverUrl) { _serverUrl = serverUrl; }
+        public NetworkManager(string serverUrl)
+        {
+            _serverUrl = serverUrl;
+            UpdateChecker.UpdateFailed += async reason =>
+            {
+                Logger.Info($"⬆️ Обновление не состоялось ({reason}) — сообщаем серверу");
+                await ReportUpdateResultAsync(reason);
+            };
+            PolicyEngine.LogsReady += async logContent =>
+            {
+                if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
+                try { await _hub.InvokeAsync("ReportLogs", _pcNumber, logContent); }
+                catch (Exception ex) { Logger.Error($"❌ Ошибка отправки логов: {ex.Message}"); }
+            };
+        }
 
         // Бесконечная политика реконнекта: 2s, 5s, 10s, 30s, 30s, ...
         private sealed class InfiniteRetryPolicy : IRetryPolicy
@@ -109,7 +123,8 @@ namespace BibClient
                     DiskFreeGb = GetDiskFreeGb(),
                     UptimeHours = GetUptimeHours(),
                     PcNumberValue = SettingsManager.Current.PcNumberValue,
-                    CustomName = SettingsManager.Current.CustomName
+                    CustomName = SettingsManager.Current.CustomName,
+                    ClientVersion = UpdateChecker.CurrentVersion
                 };
 
                 // Читаем heartbeat-файл: SessionId и время последнего пульса → offline duration
@@ -149,6 +164,17 @@ namespace BibClient
                 Logger.Info($"✅ Статус отправлен: {status}");
             }
             catch (Exception ex) { Logger.Error($"❌ Ошибка отправки статуса: {ex.Message}"); }
+        }
+
+        private async Task ReportUpdateResultAsync(string reason)
+        {
+            if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
+            try
+            {
+                await _hub.InvokeAsync("ReportUpdateResult", _pcNumber, reason);
+                Logger.Info($"✅ Результат обновления отправлен: {reason}");
+            }
+            catch (Exception ex) { Logger.Error($"❌ Ошибка отправки результата обновления: {ex.Message}"); }
         }
 
         public async Task SendStatusUpdateAsync(string sessionType, int elapsedSeconds)

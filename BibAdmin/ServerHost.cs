@@ -131,6 +131,25 @@ namespace BibAdmin
                             RequestPath = "/updates"
                         });
 
+                        // Screenshot upload (no auth — from BibClient)
+                        app.Use(async (ctx, next) =>
+                        {
+                            if (ctx.Request.Method == "POST" && ctx.Request.Path == "/api/screenshot/upload")
+                            {
+                                var pc = ctx.Request.Query["pc"].ToString();
+                                if (!string.IsNullOrEmpty(pc))
+                                {
+                                    using var ms = new System.IO.MemoryStream();
+                                    await ctx.Request.Body.CopyToAsync(ms);
+                                    var bytes = ms.ToArray();
+                                    if (bytes.Length > 0) ScreenshotStore.StoreFrame(pc, bytes);
+                                }
+                                ctx.Response.StatusCode = 204;
+                                return;
+                            }
+                            await next();
+                        });
+
                         // REST API для авторизации операторов
                         app.Use(async (ctx, next) =>
                         {

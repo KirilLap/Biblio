@@ -64,6 +64,8 @@ namespace BibAdmin
         private void TabSessions_Click(object sender, RoutedEventArgs e) => SetTab("Sessions");
         private void TabServices_Click(object sender, RoutedEventArgs e) => SetTab("Services");
         private void TabAll_Click(object sender, RoutedEventArgs e) => SetTab("All");
+        private void TabDebts_Click(object sender, RoutedEventArgs e) => SetTab("Debts");
+        private void RefreshDebts_Click(object sender, RoutedEventArgs e) => RenderDebts();
 
         private void SetTab(string tab)
         {
@@ -72,21 +74,25 @@ namespace BibAdmin
             BtnTabSessions.Tag = tab == "Sessions" ? "active" : null;
             BtnTabServices.Tag = tab == "Services" ? "active" : null;
             BtnTabAll.Tag = tab == "All" ? "active" : null;
+            BtnTabDebts.Tag = tab == "Debts" ? "active" : null;
 
             // Заголовки таблицы
             HeaderSessions.Visibility = tab == "Sessions" ? Visibility.Visible : Visibility.Collapsed;
             HeaderServices.Visibility = tab == "Services" ? Visibility.Visible : Visibility.Collapsed;
             HeaderAll.Visibility = tab == "All" ? Visibility.Visible : Visibility.Collapsed;
+            HeaderDebts.Visibility = tab == "Debts" ? Visibility.Visible : Visibility.Collapsed;
 
             // Фильтры
             PnlSessionTypeFilter.Visibility = tab == "Sessions" ? Visibility.Visible : Visibility.Collapsed;
             PnlServiceStatusFilter.Visibility = tab == "Services" ? Visibility.Visible : Visibility.Collapsed;
+            BtnRefreshDebts.Visibility = tab == "Debts" ? Visibility.Visible : Visibility.Collapsed;
 
             // Контент
             SessionsList.Visibility = tab == "Sessions" ? Visibility.Visible : Visibility.Collapsed;
             DeletedPcsList.Visibility = tab == "Sessions" ? Visibility.Visible : Visibility.Collapsed;
             ServicesList.Visibility = tab == "Services" ? Visibility.Visible : Visibility.Collapsed;
             AllList.Visibility = tab == "All" ? Visibility.Visible : Visibility.Collapsed;
+            DebtsList.Visibility = tab == "Debts" ? Visibility.Visible : Visibility.Collapsed;
 
             // Метки статистики
             switch (tab)
@@ -109,10 +115,16 @@ namespace BibAdmin
                     TblMonthLabel.Text = "За месяц";
                     TblCountLabel.Text = "Операций";
                     break;
+                case "Debts":
+                    TblTodayLabel.Text = "Долгов всего";
+                    TblWeekLabel.Text = "Сумма долгов";
+                    TblMonthLabel.Text = "Должников";
+                    TblCountLabel.Text = "Транзакций";
+                    break;
             }
 
             UpdateStats();
-            ApplyFilter();
+            if (tab == "Debts") RenderDebts(); else ApplyFilter();
         }
 
         // =====================
@@ -153,6 +165,18 @@ namespace BibAdmin
                     TxtWeek.Text   = $"{weekS + weekSv:N0} сум";
                     TxtMonth.Text  = $"{monS + monSv:N0} сум";
                     TxtTotalSessions.Text = (Sessions.Count + ServiceTransaction.All.Count).ToString();
+                    break;
+
+                case "Debts":
+                    var debts = ServiceTransaction.GetAllUnpaid();
+                    TxtToday.Text  = debts.Count.ToString();
+                    TxtWeek.Text   = $"{debts.Sum(t => t.DebtAmount):N0} сум";
+                    TxtMonth.Text  = debts.Select(t => t.ReaderId).Where(r => !string.IsNullOrEmpty(r)).Distinct().Count().ToString();
+                    TxtTotalSessions.Text = debts.Count.ToString();
+                    TblTodayLabel.Text = "Долгов всего";
+                    TblWeekLabel.Text  = "Сумма долгов";
+                    TblMonthLabel.Text = "Должников (читат.)";
+                    TblCountLabel.Text = "Транзакций";
                     break;
             }
         }
@@ -452,6 +476,178 @@ namespace BibAdmin
             }
 
             TxtFilterResult.Text = $"Показано: {items.Count}";
+        }
+
+        // =====================
+        // Рендер: Долги
+        // =====================
+
+        private void RenderDebts()
+        {
+            DebtsList.Children.Clear();
+            var all = ServiceTransaction.GetAllUnpaid()
+                .OrderBy(t => t.PcNumber)
+                .ThenBy(t => t.ReaderId)
+                .ThenByDescending(t => t.CreatedAt)
+                .ToList();
+
+            if (!all.Any())
+            {
+                DebtsList.Children.Add(EmptyLabel("Нет непогашенных долгов"));
+                TxtFilterResult.Text = "Показано: 0";
+                UpdateStats();
+                return;
+            }
+
+            bool alt = false;
+            foreach (var t in all)
+            {
+                var row = new Border
+                {
+                    Background = alt
+                        ? new SolidColorBrush(Color.FromRgb(255, 252, 245))
+                        : Brushes.White,
+                    Padding = new Thickness(16, 10, 16, 10)
+                };
+                alt = !alt;
+
+                var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+
+                // ПК
+                string pcLabel = !string.IsNullOrEmpty(t.PcNumber) ? t.PcNumber : "—";
+                AddCell(grid, 0, pcLabel, Color.FromRgb(30, 30, 46), bold: true);
+
+                // Услуга
+                var svcPanel = new StackPanel();
+                svcPanel.Children.Add(new TextBlock
+                {
+                    Text = $"{t.ServiceName}",
+                    FontSize = 13,
+                    FontWeight = FontWeights.Medium,
+                    Foreground = new SolidColorBrush(Color.FromRgb(30, 30, 46)),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                svcPanel.Children.Add(new TextBlock
+                {
+                    Text = $"{t.Quantity} {t.Unit} × {t.PricePerUnit:N0} сум",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136))
+                });
+                Grid.SetColumn(svcPanel, 1);
+                grid.Children.Add(svcPanel);
+
+                // Читатель
+                string reader = !string.IsNullOrEmpty(t.ReaderName) ? t.ReaderName
+                    : !string.IsNullOrEmpty(t.ReaderId) ? t.ReaderId : "—";
+                AddCell(grid, 2, reader, Color.FromRgb(80, 80, 80));
+
+                // Долг
+                var debtBadge = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(30, 133, 79, 11)),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(8, 3, 8, 3),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock
+                    {
+                        Text = $"{t.DebtAmount:N0} сум",
+                        FontSize = 12,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(133, 79, 11))
+                    }
+                };
+                Grid.SetColumn(debtBadge, 3);
+                grid.Children.Add(debtBadge);
+
+                // Дата
+                AddCell(grid, 4, t.CreatedAt.ToString("dd.MM HH:mm"), Color.FromRgb(150, 150, 150));
+
+                // Кнопка «Оплатить»
+                var capturedId = t.Id;
+                var payBtn = new Button
+                {
+                    Content = "Оплатить",
+                    Padding = new Thickness(10, 4, 10, 4),
+                    FontSize = 11,
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Background = new SolidColorBrush(Color.FromRgb(29, 158, 117)),
+                    Foreground = Brushes.White,
+                    BorderThickness = new Thickness(0),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                payBtn.Template = CreateBtnTemplate();
+                payBtn.Click += (_, _) =>
+                {
+                    ServiceTransaction.MarkAsPaid(capturedId);
+                    RenderDebts();
+                    UpdateStats();
+                };
+                Grid.SetColumn(payBtn, 5);
+                grid.Children.Add(payBtn);
+
+                row.Child = grid;
+                DebtsList.Children.Add(row);
+            }
+
+            // Итоговая строка
+            int totalDebt = all.Sum(t => t.DebtAmount);
+            var footer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(255, 248, 235)),
+                Padding = new Thickness(16, 10, 16, 10),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(245, 222, 179)),
+                BorderThickness = new Thickness(0, 1, 0, 0)
+            };
+            var footerGrid = new Grid();
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            footerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            footerGrid.Children.Add(new TextBlock
+            {
+                Text = $"Итого непогашенных долгов: {all.Count}",
+                FontSize = 13,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(Color.FromRgb(133, 79, 11)),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var totalTb = new TextBlock
+            {
+                Text = $"{totalDebt:N0} сум",
+                FontSize = 15,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(133, 79, 11))
+            };
+            Grid.SetColumn(totalTb, 1);
+            footerGrid.Children.Add(totalTb);
+
+            footer.Child = footerGrid;
+            DebtsList.Children.Add(footer);
+
+            TxtFilterResult.Text = $"Показано: {all.Count}";
+            UpdateStats();
+        }
+
+        private static ControlTemplate CreateBtnTemplate()
+        {
+            var template = new ControlTemplate(typeof(Button));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Background") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            factory.SetBinding(Border.PaddingProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+            var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+            presenter.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            factory.AppendChild(presenter);
+            template.VisualTree = factory;
+            return template;
         }
 
         // =====================

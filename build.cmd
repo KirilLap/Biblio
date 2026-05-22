@@ -1,9 +1,14 @@
 @echo off
+chcp 65001 > nul
 setlocal
 set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
+:: Читаем версию из файла VERSION
+set /p VERSION=<"%~dp0VERSION"
+if "%VERSION%"=="" ( echo ОШИБКА: файл VERSION пустой! & pause & exit /b 1 )
+
 echo ============================================
-echo   Biblio - сборка всех компонентов
+echo   Biblio %VERSION% - сборка всех компонентов
 echo ============================================
 echo.
 
@@ -20,7 +25,7 @@ dotnet publish BibAdminWeb\BibAdminWeb.csproj -p:PublishProfile=win-x64
 if %errorlevel% neq 0 ( echo ОШИБКА сборки BibAdminWeb! & pause & exit /b 1 )
 
 echo.
-echo [4/4] Сборка установщика (Inno Setup)...
+echo [4/4] Сборка установщиков (Inno Setup)...
 if not exist %ISCC% (
     echo ВНИМАНИЕ: Inno Setup не найден по пути %ISCC%
     echo Скачайте с https://jrsoftware.org/isdl.php и установите.
@@ -29,11 +34,20 @@ if not exist %ISCC% (
     exit /b 0
 )
 
-%ISCC% installer\biblio-setup.iss
-if %errorlevel% neq 0 ( echo ОШИБКА сборки установщика! & pause & exit /b 1 )
+%ISCC% /DAppVersion=%VERSION% installer\biblio-setup.iss
+if %errorlevel% neq 0 ( echo ОШИБКА сборки biblio-setup! & pause & exit /b 1 )
+
+%ISCC% /DAppVersion=%VERSION% installer\bibclient-setup.iss
+if %errorlevel% neq 0 ( echo ОШИБКА сборки bibclient-setup! & pause & exit /b 1 )
+
+%ISCC% /DAppVersion=%VERSION% installer\bibadminweb-setup.iss
+if %errorlevel% neq 0 ( echo ОШИБКА сборки bibadminweb-setup! & pause & exit /b 1 )
 
 echo.
 echo ============================================
-echo   Готово! Установщик: installer\Output\biblio-setup.exe
+echo   Готово!
+echo   installer\Output\biblio-setup-%VERSION%.exe
+echo   installer\Output\bibclient-setup-%VERSION%.exe
+echo   installer\Output\bibadminweb-setup-%VERSION%.exe
 echo ============================================
-pause
+if not defined DEPLOY_MODE pause

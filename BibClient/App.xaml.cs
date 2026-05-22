@@ -62,8 +62,14 @@ namespace BibClient
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string settingsPath = Path.Combine(baseDir, "settings.json");
 
-            // 🔹 Если настроек нет — показываем окно первоначальной настройки
-            if (!File.Exists(settingsPath))
+            // 🔹 Если настроек нет ИЛИ ServerIp не задан — показываем окно первоначальной настройки
+            bool settingsExist = File.Exists(settingsPath);
+            if (settingsExist)
+            {
+                SettingsManager.Load();
+                settingsExist = !string.IsNullOrWhiteSpace(SettingsManager.Current.ServerIp);
+            }
+            if (!settingsExist)
             {
                 Logger.Info("⚙️ Настроек нет, запускаем окно настройки...");
                 var setup = new SetupWindow();
@@ -103,12 +109,13 @@ namespace BibClient
                             }),
                             System.Windows.Threading.DispatcherPriority.Background);
 
-                        // Проверяем обновления через 5 секунд после старта
+                        // Проверяем обновления через 5 секунд после старта, затем раз в час
                         mainWindow.Dispatcher.BeginInvoke(async () =>
                         {
                             await Task.Delay(5000);
                             var url = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
                             await UpdateChecker.CheckAsync(url);
+                            _ = UpdateChecker.StartPeriodicCheckAsync(url);
                         });
                     }
                     else
@@ -160,12 +167,13 @@ namespace BibClient
                 mainWindow.Show();
                 mainWindow.Activate();
 
-                // Проверяем обновления через 5 секунд после старта
+                // Проверяем обновления через 5 секунд после старта, затем раз в час
                 mainWindow.Dispatcher.BeginInvoke(async () =>
                 {
                     await Task.Delay(5000);
                     var url = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
                     await UpdateChecker.CheckAsync(url);
+                    _ = UpdateChecker.StartPeriodicCheckAsync(url);
                 });
 
                 // Вызываем блокировку через Dispatcher с повторной попыткой если _isReady ещё false

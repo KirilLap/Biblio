@@ -52,6 +52,12 @@ namespace BibAdminWeb
         public DateTime LastSeen { get; set; }
         public string Status { get; set; } = "Оффлайн";
 
+        // Transient: время отправки START_SESSION клиенту при реконнекте.
+        // Используется для игнорирования «Заблокирован» в grace period (клиент шлёт его
+        // сразу после RegisterClient, до обработки START_SESSION).
+        [System.Text.Json.Serialization.JsonIgnore]
+        public DateTime? PendingStartSessionSentAt { get; set; }
+
         public string SessionType { get; set; } = "";
         public DateTime? SessionStart { get; set; }
         public int LimitSeconds { get; set; } = 0;
@@ -75,6 +81,14 @@ namespace BibAdminWeb
         public bool ShowPcNumber { get; set; } = true;
         public bool PreventClose { get; set; } = true;
         public bool AutoStartWithUser { get; set; } = true;
+
+        public string ClientVersion { get; set; } = "";
+
+        // Транзитный статус обновления — не сохраняется в clients.json
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string UpdateStatus { get; set; } = ""; // "pending" | "updating" | "done" | "failed"
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string PreUpdateVersion { get; set; } = "";
 
         public bool HasIndividualSettings { get; set; } = false;
         public List<string> IndividualSettingKeys { get; set; } = new();
