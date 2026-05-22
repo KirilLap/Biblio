@@ -84,6 +84,44 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Finance: debts ───────────────────────────────────────────────
+            if (path == "/api/admin/finance/debts" && method == "GET")
+            {
+                var debts = ServiceTransaction.GetAllUnpaid()
+                    .Select(t => new {
+                        t.Id, t.ServiceName, t.Unit, t.Quantity, t.PricePerUnit,
+                        t.TotalAmount, t.DebtAmount, t.ReaderId, t.ReaderName,
+                        t.PcNumber, createdAt = t.CreatedAt.ToString("o")
+                    });
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(debts, _json));
+                return;
+            }
+            if (path.StartsWith("/api/admin/finance/debts/") && path.EndsWith("/pay") && method == "POST")
+            {
+                var id = path.Replace("/api/admin/finance/debts/", "").Replace("/pay", "");
+                ServiceTransaction.MarkAsPaid(id);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+            if (path == "/api/admin/finance/debts/pay-reader" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var data = JsonSerializer.Deserialize<JsonElement>(body, _json);
+                var readerIdVal = data.TryGetProperty("readerId", out var rp) ? rp.GetString() ?? "" : "";
+                if (!string.IsNullOrEmpty(readerIdVal)) ServiceTransaction.MarkAllPaidForReader(readerIdVal);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+            if (path == "/api/admin/finance/debts/pay-pc" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var data = JsonSerializer.Deserialize<JsonElement>(body, _json);
+                var pcVal = data.TryGetProperty("pcNumber", out var pp) ? pp.GetString() ?? "" : "";
+                if (!string.IsNullOrEmpty(pcVal)) ServiceTransaction.MarkAllPaidForPc(pcVal);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Finance: export CSV ─────────────────────────────────────────
             if (path == "/api/admin/finance/export" && method == "GET")
             {
@@ -190,7 +228,159 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Check update ─────────────────────────────────────────────────
+            if (path == "/api/admin/check-update" && method == "GET")
+            {
+                var updatesDir = GetUpdatesPath();
+                var versionFile = Path.Combine(updatesDir, "bibadminweb-version.json");
+                if (!File.Exists(versionFile))
+                {
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                        hasUpdate = false,
+                        currentVersion = UpdateChecker.CurrentVersion,
+                        newVersion = (string?)null,
+                        releaseNotes = (string?)null
+                    }, _json));
+                    return;
+                }
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(versionFile));
+                    var root = doc.RootElement;
+                    var newVer = root.TryGetProperty("Version", out var vp) ? vp.GetString() ?? "" : "";
+                    var notes = root.TryGetProperty("ReleaseNotes", out var np) ? np.GetString() ?? "" : "";
+                    var hasUpdate = Version.TryParse(newVer, out var r) &&
+                                    Version.TryParse(UpdateChecker.CurrentVersion, out var c) && r > c;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                        hasUpdate,
+                        currentVersion = UpdateChecker.CurrentVersion,
+                        newVersion = newVer,
+                        releaseNotes = notes
+                    }, _json));
+                }
+                catch
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync("{\"error\":\"Ошибка чтения version.json\"}");
+                }
+                return;
+            }
+
+            // ─── Apply update ─────────────────────────────────────────────────
+            if (path == "/api/admin/apply-update" && method == "POST")
+            {
+                var vfPath = Path.Combine(GetUpdatesPath(), "bibadminweb-version.json");
+                string installerName = "bibadminweb-setup.exe";
+                if (File.Exists(vfPath))
+                {
+                    try
+                    {
+                        using var vDoc = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(vfPath));
+                        if (vDoc.RootElement.TryGetProperty("InstallerFile", out var ip) && !string.IsNullOrWhiteSpace(ip.GetString()))
+                            installerName = ip.GetString()!;
+                    }
+                    catch { }
+                }
+                var installerPath = Path.Combine(GetUpdatesPath(), installerName);
+                if (!File.Exists(installerPath))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Файл установщика не найден\"}");
+                    return;
+                }
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                _ = Task.Run(async () =>
+                {
+                    // Уведомляем операторов, даём им 2 секунды увидеть сообщение
+                    if (OperatorBroadcaster.Instance != null)
+                        await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление системы");
+                    await Task.Delay(2000);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = installerPath,
+                        Arguments = "/VERYSILENT /NORESTART /COMPONENTS=adminweb",
+                        UseShellExecute = true
+                    });
+                    await Task.Delay(500);
+                    Environment.Exit(0);
+                });
+                return;
+            }
+
+            // ─── Apply folder update (no installer) ──────────────────────────
+            if (path == "/api/admin/apply-folder-update" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                string body2 = await ReadBody(ctx);
+                string sourcePath = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(body2);
+                    sourcePath = doc.RootElement.GetProperty("sourcePath").GetString()?.Trim() ?? "";
+                }
+                catch { }
+
+                if (string.IsNullOrWhiteSpace(sourcePath) || !Directory.Exists(sourcePath))
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Папка не найдена\"}");
+                    return;
+                }
+
+                var appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+                var exePath = Path.Combine(appDir, "BibAdminWeb.exe");
+
+                // Create a temp batch script that waits, copies files, then restarts
+                var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate.bat");
+                var script = string.Join("\r\n",
+                    "@echo off",
+                    "timeout /t 5 /nobreak >nul",
+                    $"xcopy /s /y /e /h \"{sourcePath}\\\" \"{appDir}\\\"",
+                    $"start \"\" \"{exePath}\"",
+                    "del \"%~f0\""
+                );
+                File.WriteAllText(scriptPath, script, Encoding.Default);
+
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                _ = Task.Run(async () =>
+                {
+                    if (OperatorBroadcaster.Instance != null)
+                        await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление из папки");
+                    await Task.Delay(1500);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c start \"\" \"{scriptPath}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+                    await Task.Delay(300);
+                    Environment.Exit(0);
+                });
+                return;
+            }
+
+            // ─── Stop Server ──────────────────────────────────────────────────
+            if (path == "/api/admin/stop" && method == "POST")
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(500);
+                    Environment.Exit(0);
+                });
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             await next(ctx);
+        }
+
+        private static string GetUpdatesPath()
+        {
+            var s = GlobalSettings.Load();
+            if (!string.IsNullOrWhiteSpace(s.UpdatesPath))
+                return s.UpdatesPath.TrimEnd('\\', '/');
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
         }
 
         private static async Task<string> ReadBody(HttpContext ctx)

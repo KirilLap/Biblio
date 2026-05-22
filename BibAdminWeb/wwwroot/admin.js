@@ -10,6 +10,10 @@ let activePc = null;    // selected pc for dialogs
 let pendingOfflinePc = null;
 let pendingConflict = null;
 let renamePcVal = null;
+let _screenPc = null;
+let _screenInterval = null;
+let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/bibclient-version.json)
+let updatePanelDismissed = false;
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
@@ -25,6 +29,11 @@ let renamePcVal = null;
   loadSettings();
   loadOperators();
   setInterval(tickTimers, 1000);
+
+  // Загружаем последнюю доступную версию BibClient для сравнения на карточках
+  fetch('/updates/bibclient-version.json').then(r => r.ok ? r.json() : null).then(v => {
+    if (v?.Version) { latestClientVersion = v.Version; renderPcGrid(); }
+  }).catch(() => {});
 })();
 
 // ─── SignalR ─────────────────────────────────────────────────────────────────
@@ -62,15 +71,31 @@ function connectHub() {
   conn.on('timeMismatchAlert', d =>
     toast(`⚠️ ${d.pcNumber}: расхождение оффлайн-времени (клиент ${d.clientSecs}с, сервер ${d.serverSecs}с)`, 'warn'));
   conn.on('nameConflictAlert', d => showNameConflict(d));
+  conn.on('numberConflictAlert', d => showNumberConflict(d));
   conn.on('settingsUpdated', s => { settings = s; fillSettingsForm(); });
+  conn.on('clientLogs', d => showClientLogs(d.pcNumber, d.logContent));
 
   conn.onreconnected(() => {
     setConnStatus(true);
     conn.invoke('RequestSnapshot');
+    loadSettings();
+    loadOperators();
   });
-  conn.onclose(() => setConnStatus(false));
+  conn.onclose(() => {
+    setConnStatus(false);
+    waitForServerAndReload();
+  });
 
-  conn.start().then(() => setConnStatus(true)).catch(() => setConnStatus(false));
+  conn.start().then(() => setConnStatus(true)).catch(() => { setConnStatus(false); waitForServerAndReload(); });
+}
+
+function waitForServerAndReload() {
+  const interval = setInterval(async () => {
+    try {
+      const r = await fetch('/api/admin/check', { cache: 'no-store' });
+      if (r.ok) { clearInterval(interval); window.location.reload(); }
+    } catch (e) { /* сервер ещё не поднялся */ }
+  }, 3000);
 }
 
 function setConnStatus(ok) {
@@ -80,12 +105,22 @@ function setConnStatus(ok) {
 }
 
 // ─── Navigation ─────────────────────────────────────────────────────────────
+function showSettingsTab(name) {
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.stab[onclick*="'${name}'"]`).classList.add('active');
+  document.getElementById('stab-' + name).classList.add('active');
+}
+
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`).classList.add('active');
-  if (name === 'readers') loadReaders();
+  if (name === 'readers') {
+    if (currentReadersTab === 'report') loadReport();
+    else loadReaders();
+  }
 }
 
 // ─── PC Grid ──────────────────────────────────────────────────────────────
@@ -115,6 +150,46 @@ function renderPcGrid() {
 
   grid.innerHTML = '';
   list.forEach(c => grid.appendChild(buildPcCard(c)));
+
+  renderUpdatePanel(list);
+}
+
+function renderUpdatePanel(list) {
+  const panel = document.getElementById('updateProgressPanel');
+  if (!panel) return;
+  const updating = list.filter(c => c.updateStatus);
+  if (!updating.length) { panel.style.display = 'none'; updatePanelDismissed = false; return; }
+  if (updatePanelDismissed) return;
+
+  const done     = updating.filter(c => c.updateStatus === 'done').length;
+  const failed   = updating.filter(c => c.updateStatus === 'failed').length;
+  const deferred = updating.filter(c => c.updateStatus === 'deferred').length;
+  const active   = updating.length - deferred;
+  const finished = done + failed;
+  const pct = active ? Math.round(finished / active * 100) : 0;
+
+  document.getElementById('updateProgressBar').style.width = pct + '%';
+  document.getElementById('updateProgressTitle').textContent =
+    `Обновление клиентов: ${finished}/${active}` + (deferred ? ` (${deferred} после сессии)` : '');
+
+  const stLabel = { pending: 'Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился', deferred: '⏸ После сессии' };
+  document.getElementById('updateProgressList').innerHTML = updating.map(c => {
+    const verText = c.preUpdateVersion
+      ? `v${c.preUpdateVersion} → v${latestClientVersion || '?'}`
+      : (c.clientVersion ? `v${c.clientVersion}` : '');
+    return `<div class="update-progress-row">
+      <span class="upd-pc">${esc(c.pcNumber)}</span>
+      <span class="upd-ver">${verText}</span>
+      <span class="upd-st ${c.updateStatus}">${stLabel[c.updateStatus] || ''}</span>
+    </div>`;
+  }).join('');
+
+  panel.style.display = 'block';
+}
+
+function closeUpdatePanel() {
+  updatePanelDismissed = true;
+  document.getElementById('updateProgressPanel').style.display = 'none';
 }
 
 function buildPcCard(c) {
@@ -157,11 +232,16 @@ function buildPcCard(c) {
     }
   }
 
+  const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
+  const updBadgeMap = { pending: '⏳ Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился', deferred: '⏸ После сессии' };
+  const updBadge = c.updateStatus ? `<span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus] || ''}</span>` : '';
   const meta = `<div class="pc-meta">
     ${c.ip ? `<span>${c.ip}</span>` : ''}
     ${c.isSession && c.userName ? `<span>👤 ${esc(c.userName)}</span>` : ''}
     ${c.isSession && c.readerId ? `<span>🪪 ${esc(c.readerId)}</span>` : ''}
     ${c.isSession && c.paidAmount ? `<span>💵 ${c.paidAmount.toLocaleString()} сум</span>` : ''}
+    ${c.clientVersion ? `<span class="pc-ver${isOutdated ? ' pc-ver-old' : ''}" title="${isOutdated ? `Доступно обновление v${latestClientVersion}` : 'Версия BibClient'}">${isOutdated ? '⬆ ' : ''}v${c.clientVersion}</span>` : ''}
+    ${updBadge}
   </div>`;
 
   const actions = buildActions(c);
@@ -197,6 +277,7 @@ function buildActions(c) {
   if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑</button>`;
 
   const btns = [];
+  btns.push(`<button class="btn btn-outline" onclick="openScreenView('${esc(c.pcNumber)}')" title="Просмотр экрана">👁</button>`);
   if (!c.isSession && !c.isFree) {
     btns.push(`<button class="btn btn-primary" onclick="openStartSession('${esc(c.pcNumber)}')">▶ Старт</button>`);
     btns.push(`<button class="btn btn-outline" onclick="unlock('${esc(c.pcNumber)}')">🔓</button>`);
@@ -209,6 +290,8 @@ function buildActions(c) {
     btns.push(`<button class="btn btn-danger" onclick="endSession('${esc(c.pcNumber)}')">⏹ Стоп</button>`);
     btns.push(`<button class="btn btn-outline" onclick="togglePause('${esc(c.pcNumber)}')">${c.isPaused ? '▶' : '⏸'}</button>`);
     btns.push(`<button class="btn btn-outline" onclick="openTransfer('${esc(c.pcNumber)}')">↔</button>`);
+    if (c.sessionType === 'Лимит')
+      btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
   }
   return btns.join('');
 }
@@ -236,6 +319,20 @@ function openStartSession(pcNumber) {
   document.getElementById('dlgSsMinutes').value = '';
   document.getElementById('dlgSsMoney').value = '';
   document.getElementById('dlgSsHint').textContent = '';
+
+  // Показываем/скрываем поля согласно настройкам
+  const reqReader = settings.requireReaderId !== false;
+  const reqName   = !!settings.requireUserName;
+  const rowReader = document.getElementById('rowSsReader');
+  const rowName   = document.getElementById('rowSsName');
+  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
+  if (rowName)   rowName.style.display   = reqName   ? '' : 'none';
+  // Обновляем метки
+  const lblReader = document.getElementById('lblSsReader');
+  const lblName   = document.getElementById('lblSsName');
+  if (lblReader) lblReader.textContent = reqReader ? 'ID читателя *' : 'ID читателя';
+  if (lblName)   lblName.textContent   = reqName   ? 'Имя *' : 'Имя';
+
   ssSelectType('Лимит');
   document.getElementById('dlgStartSession').style.display = 'flex';
 }
@@ -292,9 +389,12 @@ function ssSyncMoney() {
 }
 
 async function confirmStartSession() {
+  const reqReader = settings.requireReaderId !== false;
+  const reqName   = !!settings.requireUserName;
   const reader = document.getElementById('dlgSsReader').value.trim();
-  if (!reader) { toast('Введите ID читателя', 'warn'); return; }
-  const name = document.getElementById('dlgSsName').value.trim();
+  const name   = document.getElementById('dlgSsName').value.trim();
+  if (reqReader && !reader) { toast('Введите ID читателя', 'warn'); return; }
+  if (reqName   && !name)   { toast('Введите имя пользователя', 'warn'); return; }
 
   let limitSeconds = 0, paidAmount = 0;
   if (_ssType === 'Лимит') {
@@ -329,7 +429,7 @@ async function lock(pcNumber) {
 }
 
 async function unlock(pcNumber) {
-  await conn.invoke('SendCommandToPc', pcNumber, 'REMOTE_LOCK', 'false');
+  await conn.invoke('SendCommandToPc', pcNumber, 'REMOTE_UNLOCK', '');
 }
 
 async function lockAll() {
@@ -337,21 +437,181 @@ async function lockAll() {
 }
 
 async function unlockAll() {
-  await conn.invoke('SendCommandToAll', 'REMOTE_LOCK', 'false');
+  await conn.invoke('SendCommandToAll', 'REMOTE_UNLOCK', '');
 }
+
+async function shutdownAll() {
+  if (!confirm('Выключить все ПК?')) return;
+  await conn.invoke('SendCommandToAll', 'SHUTDOWN', 'true');
+  toast('Команда выключения отправлена всем ПК');
+}
+
+async function restartAll() {
+  if (!confirm('Перезагрузить все ПК?')) return;
+  await conn.invoke('SendCommandToAll', 'RESTART', 'true');
+  toast('Команда перезагрузки отправлена всем ПК');
+}
+
+async function updateAllClients() {
+  if (!confirm('Отправить команду обновления всем клиентским ПК?\n\nОни автоматически скачают и тихо установят новую версию BibClient. Клиенты перезапустятся сами.')) return;
+  const btn = document.getElementById('btnUpdateClients');
+  btn.disabled = true;
+  btn.textContent = '⏳ Отправка...';
+  updatePanelDismissed = false;
+  // Перечитываем актуальную версию с сервера перед показом панели
+  try {
+    const vr = await fetch('/updates/bibclient-version.json', { cache: 'no-store' });
+    if (vr.ok) { const vj = await vr.json(); if (vj?.Version) latestClientVersion = vj.Version; }
+  } catch {}
+  try {
+    await conn.invoke('SendCommandToAll', 'UPDATE_NOW', '');
+    toast('Команда обновления отправлена всем ПК', 'good');
+    btn.textContent = '✓ Отправлено';
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⬆️ Обновить все клиенты'; }, 4000);
+  } catch (e) {
+    toast('Ошибка отправки команды', 'error');
+    btn.disabled = false;
+    btn.textContent = '⬆️ Обновить все клиенты';
+  }
+}
+
+// ─── Extend session ──────────────────────────────────────────────────────────
+let _extTariff = 0;
+let _extSyncing = false;
+
+function openExtend(pcNumber) {
+  activePc = pcNumber;
+  _extTariff = settings?.tariff || 0;
+  document.getElementById('dlgExtPc').textContent = pcNumber;
+  document.getElementById('dlgExtMin').value = 30;
+  document.getElementById('dlgExtAmount').value = _extTariff ? Math.round(_extTariff * 30 / 60) : 0;
+  document.getElementById('dlgExtend').style.display = 'flex';
+}
+
+function calcExtAmount() {
+  if (_extSyncing || !_extTariff) return;
+  _extSyncing = true;
+  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  document.getElementById('dlgExtAmount').value = Math.round(_extTariff * min / 60);
+  _extSyncing = false;
+}
+
+function calcExtTime() {
+  if (_extSyncing || !_extTariff) return;
+  _extSyncing = true;
+  const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
+  document.getElementById('dlgExtMin').value = Math.round(amount * 60 / _extTariff) || 0;
+  _extSyncing = false;
+}
+
+async function confirmExtend() {
+  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
+  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  closeDlg('dlgExtend');
+  await conn.invoke('ExtendSession', activePc, min * 60, amount);
+}
+
+let _adminSummaryReaderId = '';
+let _adminSummaryPcNumber = '';
 
 function showSummary(d) {
   const h = Math.floor(d.duration / 3600), m = Math.floor((d.duration % 3600) / 60), s = d.duration % 60;
-  document.getElementById('dlgSummaryContent').innerHTML = `
+  _adminSummaryReaderId = d.readerId || '';
+  _adminSummaryPcNumber = d.pcNumber || '';
+
+  let html = `
     <b>ПК:</b> ${esc(d.pcNumber)}<br>
-    <b>Тип:</b> ${d.sessionType}<br>
+    <b>Тип:</b> ${esc(d.sessionType)}<br>
     <b>Длительность:</b> ${h}ч ${m}м ${s}с<br>
     <b>Заработано:</b> ${d.earned.toLocaleString()} сум<br>
     <b>Оплачено:</b> ${d.paidAmount.toLocaleString()} сум<br>
     <b>Возврат:</b> ${d.refund.toLocaleString()} сум
   `;
+
+  const debts = d.serviceDebts || [];
+  const payBtn = document.getElementById('btnSummaryPayDebts');
+  if (debts.length > 0) {
+    html += `<hr style="border-color:#333;margin:12px 0">
+      <div style="color:#E09000;font-weight:600;margin-bottom:8px">Неоплаченные услуги:</div>`;
+    debts.forEach(dbt => {
+      html += `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${esc(dbt.name)} × ${dbt.qty} ${esc(dbt.unit)}</span>
+        <b style="color:#E09000">${dbt.debt.toLocaleString()} сум</b>
+      </div>`;
+    });
+    const total = d.totalServiceDebt || debts.reduce((a, b) => a + b.debt, 0);
+    html += `<div style="display:flex;justify-content:space-between;font-weight:700;color:#E09000;margin-top:8px;padding-top:8px;border-top:1px solid #444">
+      <span>Итого долгов</span><span>${total.toLocaleString()} сум</span>
+    </div>`;
+    if (payBtn) payBtn.style.display = '';
+  } else {
+    if (payBtn) payBtn.style.display = 'none';
+  }
+
+  document.getElementById('dlgSummaryContent').innerHTML = html;
   document.getElementById('dlgSummary').style.display = 'flex';
   loadFinance();
+}
+
+async function paySessionDebtsAdmin() {
+  try {
+    await conn.invoke('PaySessionDebts', _adminSummaryPcNumber, _adminSummaryReaderId);
+    const payBtn = document.getElementById('btnSummaryPayDebts');
+    if (payBtn) payBtn.style.display = 'none';
+    toast('Долги оплачены');
+    loadFinance();
+  } catch (e) { toast('Ошибка: ' + e); }
+}
+
+async function openDebtsDlgAdmin(inline) {
+  try {
+    const debts = await conn.invoke('GetAllDebts');
+    renderDebtsDlgAdmin(debts, inline);
+    if (!inline) document.getElementById('dlgDebts').style.display = 'flex';
+  } catch (e) { toast('Ошибка загрузки долгов: ' + e); }
+}
+
+function renderDebtsDlgAdmin(debts, inline) {
+  const target = inline
+    ? document.getElementById('finTable')
+    : document.getElementById('dlgDebtsBody');
+  if (!target) return;
+  if (!debts || !debts.length) {
+    target.innerHTML = '<p style="text-align:center;color:#888;padding:24px">Нет непогашенных долгов</p>';
+    return;
+  }
+  let html = '';
+  debts.forEach(d => {
+    const reader = d.readerName || d.readerId || '—';
+    const pc = d.pcNumber || '—';
+    html += `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #333">
+      <div style="flex:1;color:#ccc">
+        <b>${esc(d.serviceName)}</b>
+        <span style="color:#888;font-size:12px"> × ${d.quantity} ${esc(d.unit)}</span><br>
+        <span style="color:#666;font-size:12px">ПК: ${esc(pc)} · Читатель: ${esc(reader)}</span>
+      </div>
+      <b style="color:#E09000">${d.debtAmount.toLocaleString()} сум</b>
+      <button class="btn btn-primary" style="padding:4px 12px;font-size:12px"
+        onclick="payOneDebtAdmin('${esc(d.id)}', this, ${inline ? 'true' : 'false'})">Оплатить</button>
+    </div>`;
+  });
+  const total = debts.reduce((a, d) => a + d.debtAmount, 0);
+  html += `<div style="text-align:right;font-weight:700;color:#E09000;padding-top:10px">
+    Итого: ${total.toLocaleString()} сум
+  </div>`;
+  target.innerHTML = html;
+}
+
+async function payOneDebtAdmin(id, btn, inline) {
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    await conn.invoke('PayDebt', id);
+    const debts = await conn.invoke('GetAllDebts');
+    renderDebtsDlgAdmin(debts, inline);
+    toast('Долг оплачен');
+    loadFinance();
+  } catch (e) { toast('Ошибка: ' + e); btn.disabled = false; btn.textContent = 'Оплатить'; }
 }
 
 // ─── Transfer ────────────────────────────────────────────────────────────────
@@ -407,6 +667,27 @@ async function resolveConflict(accept) {
   await conn.invoke('ResolveNameConflict', d.mac, accept, d.pcNumberValue, d.customName);
   pendingConflict = null;
   closeDlg('dlgNameConflict');
+}
+
+// ─── Number conflict ─────────────────────────────────────────────────────────
+let pendingNumberConflict = null;
+
+function showNumberConflict(d) {
+  pendingNumberConflict = d;
+  const requestedName = d.customName ? `${d.customName} ${d.pcNumberValue}` : `ПК ${d.pcNumberValue}`;
+  document.getElementById('dlgNumberConflictText').innerHTML =
+    `Новый ПК (MAC: <code>${esc(d.mac)}</code>) хочет зарегистрироваться как <b>${esc(requestedName)}</b>,<br>
+     но этот номер уже занят: <b>${esc(d.takenPcName)}</b>.<br><br>
+     Разрешить регистрацию со следующим свободным номером?`;
+  document.getElementById('dlgNumberConflict').style.display = 'flex';
+}
+
+async function resolveNumberConflict(accept) {
+  if (!pendingNumberConflict) return;
+  const d = pendingNumberConflict;
+  await conn.invoke('ResolveNumberConflict', d.mac, accept);
+  pendingNumberConflict = null;
+  closeDlg('dlgNumberConflict');
 }
 
 // ─── Rename ──────────────────────────────────────────────────────────────────
@@ -516,6 +797,8 @@ function buildCtxHtml(c) {
   if (c.isOnline) {
     html += item('↺', 'Перезагрузить ПК', `restart:${c.pcNumber}`);
     html += item('⏻', 'Выключить ПК', `shutdown:${c.pcNumber}`, true);
+    html += sep;
+    html += item('📋', 'Показать логи клиента', `logs:${c.pcNumber}`);
   }
   if (!c.isOnline && !c.isSession) {
     html += sep;
@@ -548,8 +831,19 @@ document.addEventListener('click', async e => {
       if (confirm(`Выключить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'SHUTDOWN', 'true');
       break;
     case 'delete':  deletePc(args[0]); break;
+    case 'logs':    requestClientLogs(args[0]); break;
   }
 });
+
+// ─── Base64 helper (chunked, works for large files) ──────────────────────────
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk)
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
 
 // ─── Individual PC background ─────────────────────────────────────────────────
 let indBgPc = null;
@@ -566,7 +860,7 @@ async function confirmIndBg() {
   if (!input.files || !input.files.length) { toast('Выберите файл', 'warn'); return; }
   const file = input.files[0];
   const buf  = await file.arrayBuffer();
-  const b64  = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const b64  = arrayBufferToBase64(buf);
   closeDlg('dlgIndBg');
   try {
     await conn.invoke('UploadFile', file.name, b64, indBgPc, false);
@@ -589,12 +883,19 @@ async function loadFinance() {
 
 function setFinTab(tab) {
   finTab = tab;
-  ['sessions', 'services', 'all'].forEach(t => {
-    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+  ['sessions', 'services', 'all', 'debts'].forEach(t => {
+    const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.classList.toggle('active', t === tab);
   });
   document.getElementById('finTypeFilter').style.display = tab === 'sessions' ? '' : 'none';
   document.getElementById('finStatusFilter').style.display = tab === 'services' ? '' : 'none';
-  renderFinance();
+  const finTable = document.getElementById('finTable');
+  if (tab === 'debts') {
+    if (finTable) finTable.innerHTML = '';
+    openDebtsDlgAdmin(true);
+  } else {
+    renderFinance();
+  }
 }
 
 function renderFinance() {
@@ -768,6 +1069,13 @@ function fillSettingsForm() {
   // Имя файла фона
   document.getElementById('sBgFileName').value = settings.backgroundFileName ?? '';
 
+  // Путь к папке обновлений
+  document.getElementById('sUpdatesPath').value = settings.updatesPath ?? '';
+
+  // Поля сессии
+  document.getElementById('sRequireReaderId').checked = settings.requireReaderId !== false;
+  document.getElementById('sRequireUserName').checked = !!settings.requireUserName;
+
   // Sort mode selector
   const sortSel = document.getElementById('sortMode');
   if (sortSel) sortSel.value = settings.clientSortMode || 'ByNumber';
@@ -791,7 +1099,8 @@ function bindSliderLabel(sliderId, labelId, fmt) {
 
 function readSettingsForm() {
   // Прозрачность: слайдер 0..100 → сервер хранит 0..1
-  const opacityPct = parseFloat(document.getElementById('sBgOpacity').value) || 30;
+  const rawOpacity = parseFloat(document.getElementById('sBgOpacity').value);
+  const opacityPct = isNaN(rawOpacity) ? 30 : rawOpacity;
   return {
     tariff: parseInt(document.getElementById('sTariff').value) || 3000,
     adminPassword: document.getElementById('sAdminPassword').value,
@@ -823,6 +1132,9 @@ function readSettingsForm() {
     // Сохраняем поля которые не редактируются на этой странице
     clientSortMode: settings.clientSortMode,
     operators: settings.operators,
+    updatesPath: document.getElementById('sUpdatesPath').value.trim(),
+    requireReaderId: document.getElementById('sRequireReaderId').checked,
+    requireUserName: document.getElementById('sRequireUserName').checked,
   };
 }
 
@@ -849,8 +1161,7 @@ async function uploadBgFile() {
   const file = input.files[0];
   const fileName = file.name;
   const buf = await file.arrayBuffer();
-  // SignalR/System.Text.Json deserialization requires byte[] as base64 string
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const b64 = arrayBufferToBase64(buf);
   try {
     await conn.invoke('UploadFile', fileName, b64, '*', true);
     document.getElementById('sBgFileName').value = fileName;
@@ -976,14 +1287,65 @@ async function deleteOp(id) {
 }
 
 // ─── Local IP for operator URL ────────────────────────────────────────────────
-function detectLocalIp() {
-  fetch('/api/admin/check').then(() => {
+async function detectLocalIp() {
+  try {
+    const resp = await fetch('/api/admin/check');
+    const data = await resp.json();
+    const port = data.port || 8080;
+    // Сохраняем порт в localStorage для использования в случае ошибок
+    localStorage.setItem('bib_server_port', port);
     document.getElementById('opWebUrl').textContent =
-      `http://${location.hostname}:${location.port || 8080}/login.html`;
-  });
+      `http://${location.hostname}:${port}/login.html`;
+  } catch (e) {
+    // Fallback: используем сохранённый порт или порт по умолчанию
+    const savedPort = localStorage.getItem('bib_server_port') || 8080;
+    document.getElementById('opWebUrl').textContent =
+      `http://${location.hostname}:${savedPort}/login.html`;
+  }
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+async function checkUpdates() {
+  const btn = document.getElementById('btnCheckUpdate');
+  const status = document.getElementById('updateStatus');
+  const verLabel = document.getElementById('updateCurrentVer');
+  btn.disabled = true;
+  btn.textContent = '⏳ Проверка...';
+  status.style.display = 'none';
+  try {
+    const data = await fetch('/api/admin/check-update').then(r => r.json());
+    verLabel.textContent = `Текущая версия: ${data.currentVersion}`;
+    if (data.hasUpdate) {
+      let msg = `Доступна версия ${data.newVersion} (у вас ${data.currentVersion})`;
+      if (data.releaseNotes) msg += `\n\n${data.releaseNotes}`;
+      msg += '\n\nОбновить сейчас? Сервер перезапустится.';
+      if (confirm(msg)) {
+        status.style.display = 'inline';
+        status.style.color = '#888';
+        status.textContent = '⏳ Запуск установщика...';
+        await fetch('/api/admin/apply-update', { method: 'POST' });
+        status.style.color = '#1d9e75';
+        status.textContent = '✓ Установщик запущен. Соединение скоро прервётся.';
+      } else {
+        status.style.display = 'inline';
+        status.style.color = '#888';
+        status.textContent = `Обновление отложено`;
+      }
+    } else {
+      status.style.display = 'inline';
+      status.style.color = '#1d9e75';
+      status.textContent = '✓ Установлена последняя версия';
+    }
+  } catch {
+    status.style.display = 'inline';
+    status.style.color = '#c0392b';
+    status.textContent = 'Ошибка проверки обновлений';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Проверить обновления';
+  }
+}
+
 async function logout() {
   await fetch('/api/admin/logout', { method: 'POST' });
   window.location.href = '/admin-login.html';
@@ -1023,6 +1385,74 @@ function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// ─── Screen viewer ────────────────────────────────────────────────────────────
+async function openScreenView(pcNumber) {
+  if (_screenPc) await closeScreenView();
+  _screenPc = pcNumber;
+  document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
+  document.getElementById('screenViewImg').src = '';
+  document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  document.getElementById('dlgScreenView').style.display = 'flex';
+  try { await fetch(`/api/screenshot/${encodeURIComponent(pcNumber)}/watch`, { method: 'POST' }); }
+  catch (e) { /* ignore */ }
+  _screenInterval = setInterval(pollScreen, 500);
+}
+
+async function closeScreenView() {
+  const pc = _screenPc;
+  _screenPc = null;
+  clearInterval(_screenInterval);
+  _screenInterval = null;
+  document.getElementById('dlgScreenView').style.display = 'none';
+  if (pc) {
+    try { await fetch(`/api/screenshot/${encodeURIComponent(pc)}/unwatch`, { method: 'POST' }); }
+    catch (e) { /* ignore */ }
+  }
+}
+
+async function pollScreen() {
+  if (!_screenPc) return;
+  try {
+    const r = await fetch(`/api/screenshot/${encodeURIComponent(_screenPc)}`, { cache: 'no-store' });
+    if (r.status === 204) { document.getElementById('screenViewStatus').textContent = 'Ожидание кадра...'; return; }
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById('screenViewImg');
+    const old = img.src;
+    img.src = url;
+    if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+    document.getElementById('screenViewStatus').textContent = `Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`;
+  } catch (e) { /* ignore */ }
+}
+
+// ─── Client log viewer ───────────────────────────────────────────────────────
+async function requestClientLogs(pcNumber) {
+  const dlg = document.getElementById('dlgClientLogs');
+  document.getElementById('dlgClientLogsPcName').textContent = pcNumber;
+  document.getElementById('dlgClientLogsBody').textContent = '⏳ Запрашиваем логи...';
+  dlg.style.display = 'flex';
+  try {
+    await conn.invoke('SendCommandToPc', pcNumber, 'GET_LOGS', '');
+  } catch (e) {
+    document.getElementById('dlgClientLogsBody').textContent = 'Ошибка отправки команды: ' + e;
+  }
+}
+
+function showClientLogs(pcNumber, logContent) {
+  document.getElementById('dlgClientLogsPcName').textContent = pcNumber;
+  document.getElementById('dlgClientLogsBody').textContent = logContent || '(лог пуст)';
+  const body = document.getElementById('dlgClientLogsBody');
+  // Прокручиваем вниз чтобы видеть последние строки
+  body.scrollTop = body.scrollHeight;
+  document.getElementById('dlgClientLogs').style.display = 'flex';
+}
+
+function copyClientLogs() {
+  const text = document.getElementById('dlgClientLogsBody').textContent;
+  navigator.clipboard.writeText(text).then(() => toast('Логи скопированы', 'good'));
+}
+
 function periodFrom(p) {
   const t = new Date(); t.setHours(0,0,0,0);
   if (p === 'today') return t;
@@ -1106,30 +1536,49 @@ async function doImport() {
     const data = await r.json();
     if (!r.ok) { toast(data.error || 'Ошибка', 'warn'); btn.disabled = false; btn.textContent = 'Загрузить'; return; }
 
-    let html = `<div style="display:flex;gap:20px;margin-bottom:${data.conflicts.length ? 12 : 0}px">
+    _importConflictNewData = data.conflictNewData || {};
+    const byReader = {};
+    (data.conflicts || []).forEach(c => {
+      if (!byReader[c.cardId]) byReader[c.cardId] = { name: c.fullName, fields: [] };
+      byReader[c.cardId].fields.push(c);
+    });
+    const readerConflictCount = Object.keys(byReader).length;
+    let html = `<div style="display:flex;gap:20px;margin-bottom:${readerConflictCount ? 12 : 0}px">
       <span style="color:#1d9e75">✓ Добавлено: <b>${data.added}</b></span>
       <span style="color:#666">Пропущено: <b>${data.skipped}</b></span>
-      ${data.conflicts.length ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${data.conflicts.length}</b></span>` : ''}
+      ${readerConflictCount ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${readerConflictCount}</b></span>` : ''}
     </div>`;
-    if (data.conflicts.length) {
-      html += `<div style="font-size:12px;color:#888;margin-bottom:6px">Записи с изменёнными данными (не обновлялись автоматически):</div>
-      <div style="max-height:180px;overflow-y:auto">
-        <table style="width:100%;font-size:11px;border-collapse:collapse">
-          <tr style="color:#666"><th style="text-align:left;padding:2px 6px">ID</th><th style="text-align:left;padding:2px 6px">ФИО</th><th style="text-align:left;padding:2px 6px">Поле</th><th style="text-align:left;padding:2px 6px">Было</th><th style="text-align:left;padding:2px 6px">Стало</th></tr>
-          ${data.conflicts.map(c => `<tr>
-            <td style="padding:2px 6px;font-family:monospace">${esc(c.cardId)}</td>
-            <td style="padding:2px 6px">${esc(c.fullName)}</td>
-            <td style="padding:2px 6px;color:#f59e0b">${esc(c.field)}</td>
-            <td style="padding:2px 6px;color:#666">${esc(c.oldValue)}</td>
-            <td style="padding:2px 6px;color:#ccc">${esc(c.newValue)}</td>
-          </tr>`).join('')}
-        </table>
-      </div>`;
+    if (readerConflictCount) {
+      html += `<div style="font-size:12px;color:#888;margin-bottom:8px">Записи с изменёнными данными. Нажмите «Обновить» чтобы применить новые значения:</div>
+      <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">`;
+      for (const [cardId, info] of Object.entries(byReader)) {
+        html += `<div style="background:#111128;border:1px solid #222240;border-radius:6px;padding:8px 10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+            <span style="font-family:monospace;font-size:11px;color:#888">${esc(cardId)}</span>
+            <span style="font-size:12px;color:#ccc;flex:1">${esc(info.name)}</span>
+            <button id="updBtn_${esc(cardId)}" onclick="updateImportedReader(${JSON.stringify(cardId)})"
+              style="padding:2px 12px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75">
+              Обновить
+            </button>
+          </div>`;
+        info.fields.forEach(f => {
+          html += `<div style="font-size:11px;display:flex;gap:6px;color:#666">
+            <span style="color:#f59e0b;width:110px;flex-shrink:0">${esc(f.field)}</span>
+            <span>${esc(f.oldValue || '—')}</span>
+            <span style="color:#444">→</span>
+            <span style="color:#ccc">${esc(f.newValue || '—')}</span>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      html += `</div>`;
     }
     const resultEl = document.getElementById('importResult');
     resultEl.innerHTML = html;
     resultEl.style.display = 'block';
-    btn.textContent = 'Готово';
+    btn.textContent = 'Закрыть';
+    btn.disabled = false;
+    btn.onclick = () => { closeDlg('dlgImportReaders'); btn.onclick = doImport; };
     await loadReaders();
     toast(`Импорт завершён: добавлено ${data.added}`, 'success');
   } catch (e) {
@@ -1142,3 +1591,184 @@ async function doImport() {
 function exportReaderStats() {
   window.open('/api/admin/readers/stats/export', '_blank');
 }
+
+let _importConflictNewData = {};  // cardId → Reader (новые данные из Excel)
+
+async function updateImportedReader(cardId) {
+  const reader = _importConflictNewData[cardId];
+  if (!reader) return;
+  const btnId = 'updBtn_' + cardId;
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch('/api/admin/readers', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reader)
+    });
+    if (r.ok) {
+      if (btn) { btn.textContent = '✓ Обновлено'; btn.style.background = '#0f3d2e'; btn.style.color = '#1d9e75'; }
+      await loadReaders();
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
+      toast('Ошибка обновления', 'warn');
+    }
+  } catch {
+    if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
+  }
+}
+
+// ─── Readers Report ───────────────────────────────────────────────────────────
+let currentReadersTab = 'list';
+let reportPeriod = 'day';
+
+function switchReadersTab(tab) {
+  currentReadersTab = tab;
+  document.getElementById('readersTabList').style.display = tab === 'list' ? '' : 'none';
+  document.getElementById('readersTabReport').style.display = tab === 'report' ? '' : 'none';
+  document.getElementById('tabBtnList').classList.toggle('active', tab === 'list');
+  document.getElementById('tabBtnReport').classList.toggle('active', tab === 'report');
+  if (tab === 'report') {
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const monthStr = dateStr.substring(0, 7);
+    if (!document.getElementById('rptDateDay').value)
+      document.getElementById('rptDateDay').value = dateStr;
+    if (!document.getElementById('rptDateMonth').value)
+      document.getElementById('rptDateMonth').value = monthStr;
+    loadReport();
+  }
+}
+
+function setReportPeriod(period) {
+  reportPeriod = period;
+  document.getElementById('rptBtnDay').classList.toggle('active', period === 'day');
+  document.getElementById('rptBtnMonth').classList.toggle('active', period === 'month');
+  document.getElementById('rptDateDay').style.display = period === 'day' ? '' : 'none';
+  document.getElementById('rptDateMonth').style.display = period === 'month' ? '' : 'none';
+  loadReport();
+}
+
+async function loadReport() {
+  const dateVal = reportPeriod === 'day'
+    ? document.getElementById('rptDateDay').value
+    : document.getElementById('rptDateMonth').value;
+  if (!dateVal) return;
+
+  const el = document.getElementById('reportTable');
+  el.innerHTML = '<div class="fin-empty">Загрузка…</div>';
+  document.getElementById('reportSummary').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/admin/readers/report?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`);
+    const data = await r.json();
+    if (!r.ok) { el.innerHTML = `<div class="fin-empty">${esc(data.error || 'Ошибка')}</div>`; return; }
+    renderReport(data);
+  } catch {
+    el.innerHTML = '<div class="fin-empty">Ошибка загрузки</div>';
+  }
+}
+
+function renderReport(data) {
+  const { items, summary } = data;
+
+  const sumEl = document.getElementById('reportSummary');
+  sumEl.style.display = 'flex';
+  const hrs = (summary.totalDurationMin / 60).toFixed(1);
+  sumEl.innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Сессий</div><div class="stat-val">${summary.totalSessions}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Услуг</div><div class="stat-val">${summary.totalServiceOps}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Читателей</div><div class="stat-val">${summary.totalUniqueReaders}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Времени (ч)</div><div class="stat-val green">${hrs}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Оплачено (сум)</div><div class="stat-val blue">${summary.totalAmount.toLocaleString('ru-RU')}</div></div>`;
+
+  const el = document.getElementById('reportTable');
+  if (!items.length) {
+    el.innerHTML = '<div class="fin-empty">Нет данных за выбранный период</div>';
+    return;
+  }
+
+  const cols = '130px 1fr 100px 75px 85px 55px 1fr 90px';
+  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
+    <span>Дата/Время</span><span>Читатель</span><span>Категория</span><span>ПК</span><span>Тип</span><span>Мин</span><span>Детали</span><span>Оплачено</span>
+  </div>`;
+
+  items.forEach(row => {
+    const dt = new Date(row.timestamp);
+    const dtStr = dt.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }) + ' '
+                + dt.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+    const nameColor = row.readerStatus === 'registered' ? '#e0e0f0'
+                    : row.readerStatus === 'temp'        ? '#AAAACC'
+                    : row.readerStatus === 'anonymous'   ? '#666' : '#f59e0b';
+    const typeBadge = row.operationType === 'session'
+      ? '<span class="fin-badge fin-badge-session">Сессия</span>'
+      : '<span class="fin-badge fin-badge-service">Услуга</span>';
+
+    html += `<div class="fin-row" style="grid-template-columns:${cols}">
+      <span style="color:#666;font-size:12px">${dtStr}</span>
+      <span style="color:${nameColor}">${esc(row.readerName)}</span>
+      <span style="color:#666;font-size:12px">${esc(row.readerCategory || '—')}</span>
+      <span style="font-family:monospace;font-size:12px">${esc(row.pcNumber || '—')}</span>
+      <span>${typeBadge}</span>
+      <span style="color:#888">${row.operationType === 'session' ? row.durationMin : '—'}</span>
+      <span style="color:#888;font-size:12px">${esc(row.detail || '—')}</span>
+      <span style="color:#1d9e75;font-weight:600">${row.amount.toLocaleString('ru-RU')}</span>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function exportReport() {
+  const dateVal = reportPeriod === 'day'
+    ? document.getElementById('rptDateDay').value
+    : document.getElementById('rptDateMonth').value;
+  if (!dateVal) { toast('Выберите дату', 'warn'); return; }
+  window.open(`/api/admin/readers/report/export?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`, '_blank');
+}
+
+// ─── Self-update from publish folder ─────────────────────────────────────────
+async function applyFolderUpdate() {
+  const pathVal = document.getElementById('updateFolderPath').value.trim();
+  if (!pathVal) { toast('Укажите путь к папке с обновлением', 'warn'); return; }
+
+  // Remember path in localStorage
+  localStorage.setItem('bib_update_folder', pathVal);
+
+  if (!confirm(`Сервер перезапустится для применения обновления.\n\nПапка: ${pathVal}\n\nПродолжить?`)) return;
+
+  const statusEl = document.getElementById('updateStatus');
+  statusEl.textContent = 'Применяется…';
+  statusEl.style.color = '#aaa';
+
+  try {
+    const r = await fetch('/api/admin/apply-folder-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourcePath: pathVal })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка', 'warn');
+      return;
+    }
+    statusEl.textContent = 'Сервер перезапускается…';
+    statusEl.style.color = '#1d9e75';
+    toast('Обновление применяется, страница обновится автоматически', 'good');
+    // Poll until server is back up
+    setTimeout(function poll() {
+      fetch('/api/ping').then(r => { if (r.ok) location.reload(); else setTimeout(poll, 2000); }).catch(() => setTimeout(poll, 2000));
+    }, 6000);
+  } catch {
+    statusEl.textContent = 'Нет связи с сервером';
+    statusEl.style.color = '#f87171';
+  }
+}
+
+// Restore saved update folder path on page load
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('bib_update_folder');
+  if (saved) { const el = document.getElementById('updateFolderPath'); if (el) el.value = saved; }
+});
