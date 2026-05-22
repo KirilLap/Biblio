@@ -486,14 +486,25 @@
       Безлимитный доступ без ограничений по времени
     </div>
 
-    <!-- ID читателя -->
+    <!-- Читательский билет -->
     <div id="rowSsReader" class="form-row">
-      <label id="lblSsReader">ID читателя *</label>
-      <input type="text" id="dlgSsReader" placeholder="Обязательно">
+      <label id="lblSsReader">Читательский билет</label>
+      <div class="radio-group" style="margin-bottom:6px">
+        <label class="radio-opt"><input type="radio" name="ssCardType" value="regular" checked onchange="ssOnCardTypeChanged()"> Постоянный (3 года)</label>
+        <label class="radio-opt"><input type="radio" name="ssCardType" value="temp" onchange="ssOnCardTypeChanged()"> Временный (1 день)</label>
+      </div>
+      <div style="display:flex;gap:0;border:1px solid #3D3D6B;border-radius:8px;overflow:hidden;background:#1A1A2E">
+        <span id="dlgSsReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B;white-space:nowrap;line-height:1.5">FAA</span>
+        <input type="text" id="dlgSsReader" inputmode="numeric" placeholder="260500456"
+               style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px"
+               oninput="this.value=this.value.replace(/\D/g,'');_ssLookupState=null;"
+               onblur="ssLookupReader()" onkeydown="if(event.key==='Enter'){ssLookupReader();}">
+      </div>
+      <div id="dlgSsReaderInfo" style="display:none;margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px"></div>
     </div>
     <!-- Имя пользователя -->
     <div id="rowSsName" class="form-row">
-      <label id="lblSsName">Имя *</label>
+      <label id="lblSsName">Имя читателя <span style="color:#666;font-size:11px">(заполняется автоматически)</span></label>
       <input type="text" id="dlgSsName" placeholder="Иванов Иван">
     </div>
 

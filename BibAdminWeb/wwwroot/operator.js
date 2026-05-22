@@ -333,7 +333,7 @@ function onCardTypeChanged() {
   if (prefix) prefix.textContent = isTemp ? '№' : readerCardPrefix;
   // Для временных билетов поле «Имя» скрываем — имён в базе нет
   const rowName = document.getElementById('rowUserName');
-  if (rowName) rowName.style.display = isTemp ? 'none' : '';
+  if (rowName) rowName.style.display = (isTemp || !sessionFields.requireUserName) ? 'none' : '';
   _readerLookupState = null;
   _readerLookedUpId = '';
   document.getElementById('dlgReaderId').value = '';

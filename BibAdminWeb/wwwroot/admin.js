@@ -308,30 +308,104 @@ function tickTimers() {
 }
 
 // ─── Session actions ─────────────────────────────────────────────────────────
-let _ssType = 'Лимит'; // текущий тип в диалоге
-let _ssSyncing = false; // защита от рекурсии при синхронизации полей
+let _ssType = 'Лимит';
+let _ssSyncing = false;
+let _ssLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
+let _ssLookedUpId  = '';
+
+function _ssParseRegDate(str) {
+  if (!str) return null;
+  const p = str.split('-');
+  if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
+  const d = new Date(str);
+  return isNaN(d) ? null : d;
+}
+
+function ssOnCardTypeChanged() {
+  const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  const prefix = document.getElementById('dlgSsReaderPrefix');
+  if (prefix) prefix.textContent = isTemp ? '№' : (settings.readerCardPrefix || 'FAA');
+  const rowName = document.getElementById('rowSsName');
+  if (rowName) rowName.style.display = (isTemp || !settings.requireUserName) ? 'none' : '';
+  _ssLookupState = null;
+  _ssLookedUpId  = '';
+  document.getElementById('dlgSsReader').value = '';
+  document.getElementById('dlgSsReaderInfo').style.display = 'none';
+  document.getElementById('dlgSsName').value = '';
+  document.getElementById('dlgSsReader').placeholder = isTemp ? '842' : '260500456';
+}
+
+async function ssLookupReader() {
+  const nums   = document.getElementById('dlgSsReader').value.trim();
+  const infoEl = document.getElementById('dlgSsReaderInfo');
+  if (!nums) { infoEl.style.display = 'none'; _ssLookupState = null; return; }
+
+  const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  if (isTemp) {
+    _ssLookupState = 'valid';
+    _ssLookedUpId  = nums;
+    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A1A2E;color:#AAAACC;border:1px solid #3D3D6B';
+    infoEl.textContent = `✓ Временный билет №${nums} — посещение будет зафиксировано`;
+    return;
+  }
+
+  const prefix = settings.readerCardPrefix || 'FAA';
+  const cardId = prefix + nums;
+  _ssLookedUpId = cardId;
+  try {
+    const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
+    if (!r.ok) {
+      _ssLookupState = 'not_found';
+      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+      infoEl.textContent = `✗ Читатель ${cardId} не найден в базе`;
+      return;
+    }
+    const data = await r.json();
+    const regDate = _ssParseRegDate(data.registeredAt);
+    if (regDate) {
+      const daysSince = (Date.now() - regDate) / 86400000;
+      if (daysSince > 3 * 365 + 1) {
+        const expDate = new Date(regDate);
+        expDate.setFullYear(expDate.getFullYear() + 3);
+        _ssLookupState = 'expired';
+        document.getElementById('dlgSsName').value = data.fullName || '';
+        infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+        infoEl.textContent = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
+        return;
+      }
+    }
+    _ssLookupState = 'valid';
+    document.getElementById('dlgSsName').value = data.fullName || '';
+    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
+    infoEl.textContent = `✓ ${data.fullName}${data.category ? ' · ' + data.category : ''}`;
+  } catch {
+    _ssLookupState = null;
+    infoEl.style.display = 'none';
+  }
+}
 
 function openStartSession(pcNumber) {
   activePc = pcNumber;
   document.getElementById('dlgSsPc').textContent = pcNumber;
   document.getElementById('dlgSsReader').value = '';
+  document.getElementById('dlgSsReader').placeholder = '260500456';
   document.getElementById('dlgSsName').value = '';
   document.getElementById('dlgSsMinutes').value = '';
   document.getElementById('dlgSsMoney').value = '';
   document.getElementById('dlgSsHint').textContent = '';
+  document.getElementById('dlgSsReaderInfo').style.display = 'none';
 
-  // Показываем/скрываем поля согласно настройкам
-  const reqReader = settings.requireReaderId !== false;
-  const reqName   = !!settings.requireUserName;
-  const rowReader = document.getElementById('rowSsReader');
-  const rowName   = document.getElementById('rowSsName');
-  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
-  if (rowName)   rowName.style.display   = reqName   ? '' : 'none';
-  // Обновляем метки
-  const lblReader = document.getElementById('lblSsReader');
-  const lblName   = document.getElementById('lblSsName');
-  if (lblReader) lblReader.textContent = reqReader ? 'ID читателя *' : 'ID читателя';
-  if (lblName)   lblName.textContent   = reqName   ? 'Имя *' : 'Имя';
+  // Reset card type to regular
+  const regularRadio = document.querySelector('[name="ssCardType"][value="regular"]');
+  if (regularRadio) regularRadio.checked = true;
+  const prefixEl = document.getElementById('dlgSsReaderPrefix');
+  if (prefixEl) prefixEl.textContent = settings.readerCardPrefix || 'FAA';
+  _ssLookupState = null;
+  _ssLookedUpId  = '';
+
+  // Show/hide name row
+  const rowName = document.getElementById('rowSsName');
+  if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
 
   ssSelectType('Лимит');
   document.getElementById('dlgStartSession').style.display = 'flex';
@@ -389,12 +463,21 @@ function ssSyncMoney() {
 }
 
 async function confirmStartSession() {
-  const reqReader = settings.requireReaderId !== false;
-  const reqName   = !!settings.requireUserName;
-  const reader = document.getElementById('dlgSsReader').value.trim();
-  const name   = document.getElementById('dlgSsName').value.trim();
-  if (reqReader && !reader) { toast('Введите ID читателя', 'warn'); return; }
-  if (reqName   && !name)   { toast('Введите имя пользователя', 'warn'); return; }
+  const isTemp  = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  const nums    = document.getElementById('dlgSsReader').value.trim();
+  const name    = document.getElementById('dlgSsName').value.trim();
+  if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
+
+  const prefix = settings.readerCardPrefix || 'FAA';
+  const reader = isTemp ? nums : (prefix + nums);
+
+  if (!isTemp) {
+    if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
+    if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+    if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+    if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+  }
+  if (settings.requireUserName && !name) { toast('Введите имя пользователя', 'warn'); return; }
 
   let limitSeconds = 0, paidAmount = 0;
   if (_ssType === 'Лимит') {
