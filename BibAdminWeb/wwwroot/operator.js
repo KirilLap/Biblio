@@ -7,6 +7,7 @@ let tariff = 3000;
 let serviceTypes = [];
 let offlinePcNumber = null;  // ПК, по которому ждём решения оффлайн
 let connection = null;
+let readerCardPrefix = 'FAA';
 
 // ── Инициализация ─────────────────────────────────────────────────────────────
 (async function init() {
@@ -51,6 +52,7 @@ function startSignalR() {
 
   connection.on('tariff', t => { tariff = t; });
   connection.on('serviceTypes', list => { serviceTypes = list; });
+  connection.on('readerCardPrefix', p => { readerCardPrefix = p || 'FAA'; });
 
   connection.on('offlineAlert', data => {
     offlinePcNumber = data.pcNumber;
@@ -221,6 +223,10 @@ function openSessionDlg() {
   document.getElementById('dlgAmount').value = tariff;
   document.getElementById('dlgUserName').value = '';
   document.getElementById('dlgReaderId').value = '';
+  document.getElementById('dlgReaderPrefix').textContent = readerCardPrefix;
+  const infoEl = document.getElementById('dlgReaderInfo');
+  infoEl.style.display = 'none';
+  infoEl.textContent = '';
   document.querySelectorAll('[name="stype"]')[0].checked = true;
   document.getElementById('limitFields').style.display = '';
   openDlg('dlgSession');
@@ -251,7 +257,8 @@ async function confirmStartSession() {
   const limitMin = parseInt(document.getElementById('dlgLimitMin').value) || 0;
   const paidAmount = parseInt(document.getElementById('dlgAmount').value) || 0;
   const userName = document.getElementById('dlgUserName').value.trim();
-  const readerId = document.getElementById('dlgReaderId').value.trim();
+  const readerNums = document.getElementById('dlgReaderId').value.trim();
+  const readerId = readerNums ? (readerCardPrefix + readerNums) : '';
   closeDlg('dlgSession');
   try {
     await connection.invoke('StartSession', selectedPc, sessionType,
@@ -259,6 +266,28 @@ async function confirmStartSession() {
       sessionType === 'Лимит' ? paidAmount : 0,
       userName, readerId);
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+async function lookupReader() {
+  const nums = document.getElementById('dlgReaderId').value.trim();
+  const infoEl = document.getElementById('dlgReaderInfo');
+  if (!nums) { infoEl.style.display = 'none'; return; }
+  const cardId = readerCardPrefix + nums;
+  try {
+    const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
+    if (!r.ok) {
+      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+      infoEl.textContent = `Читатель ${cardId} не найден в базе`;
+      return;
+    }
+    const data = await r.json();
+    document.getElementById('dlgUserName').value = data.fullName || '';
+    const parts = [data.fullName, data.category, data.gender, data.age ? `${data.age} лет` : ''].filter(Boolean);
+    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#1D9E75;border:1px solid #1D5D1D';
+    infoEl.textContent = '✓ ' + parts.join(' · ');
+  } catch {
+    infoEl.style.display = 'none';
+  }
 }
 
 async function doEndSession() {
