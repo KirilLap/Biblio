@@ -9,6 +9,8 @@ let offlinePcNumber = null;  // ПК, по которому ждём решен�
 let connection = null;
 let readerCardPrefix = 'FAA';
 let sessionFields = { requireReaderId: true, requireUserName: false };
+let _readerLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
+let _readerLookedUpId = '';
 let latestClientVersion = '';
 
 // ── Просмотр экрана ───────────────────────────────────────────────────────────
@@ -317,14 +319,24 @@ function renderActionBar() {
 }
 
 // ── Действия ──────────────────────────────────────────────────────────────────
-function onNoCardChanged() {
-  const noCard = document.getElementById('chkNoCard').checked;
-  const rowReader = document.getElementById('rowReaderId');
-  if (rowReader) rowReader.style.display = noCard ? 'none' : '';
-  if (noCard) {
-    document.getElementById('dlgReaderId').value = '';
-    document.getElementById('dlgReaderInfo').style.display = 'none';
-  }
+function parseRegDate(dateStr) {
+  if (!dateStr) return null;
+  const p = dateStr.split('-');
+  if (p.length !== 3) return null;
+  const d = new Date(+p[2], +p[1] - 1, +p[0]);
+  return isNaN(d) ? null : d;
+}
+
+function onCardTypeChanged() {
+  const isTemp = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
+  const prefix = document.getElementById('dlgReaderPrefix');
+  if (prefix) prefix.textContent = isTemp ? '№' : readerCardPrefix;
+  _readerLookupState = null;
+  _readerLookedUpId = '';
+  document.getElementById('dlgReaderId').value = '';
+  document.getElementById('dlgReaderInfo').style.display = 'none';
+  document.getElementById('dlgUserName').value = '';
+  document.getElementById('dlgReaderId').placeholder = isTemp ? '842' : '260500456';
 }
 
 function openSessionDlg() {
@@ -334,27 +346,25 @@ function openSessionDlg() {
   document.getElementById('dlgAmount').value = tariff;
   document.getElementById('dlgUserName').value = '';
   document.getElementById('dlgReaderId').value = '';
+  document.getElementById('dlgReaderId').placeholder = '260500456';
   document.getElementById('dlgReaderPrefix').textContent = readerCardPrefix;
   const infoEl = document.getElementById('dlgReaderInfo');
   infoEl.style.display = 'none';
   infoEl.textContent = '';
-  // Reset "no card" checkbox
-  const chk = document.getElementById('chkNoCard');
-  if (chk) chk.checked = false;
+  // Reset card type to regular
+  const regularRadio = document.querySelector('[name="cardType"][value="regular"]');
+  if (regularRadio) regularRadio.checked = true;
+  _readerLookupState = null;
+  _readerLookedUpId = '';
   document.querySelectorAll('[name="stype"]')[0].checked = true;
   document.getElementById('limitFields').style.display = '';
 
-  // Показываем/скрываем поля согласно настройкам
-  const reqReader = sessionFields.requireReaderId !== false;
-  const reqName   = !!sessionFields.requireUserName;
-  const rowReader = document.getElementById('rowReaderId');
-  const rowName   = document.getElementById('rowUserName');
-  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
-  if (rowName)   rowName.style.display   = reqName   ? '' : 'none';
-  const lblReader = document.getElementById('lblReaderId');
-  const lblName   = document.getElementById('lblUserName');
-  if (lblReader) lblReader.innerHTML = reqReader ? 'ID читателя *' : 'ID читателя <span class="opt">(необязательно)</span>';
-  if (lblName)   lblName.innerHTML   = reqName   ? 'Имя *' : 'Имя читателя <span class="opt">(необязательно)</span>';
+  // Показываем/скрываем имя согласно настройкам
+  const reqName = !!sessionFields.requireUserName;
+  const rowName = document.getElementById('rowUserName');
+  if (rowName) rowName.style.display = reqName ? '' : 'none';
+  const lblName = document.getElementById('lblUserName');
+  if (lblName) lblName.innerHTML = reqName ? 'Имя *' : 'Имя читателя <span class="opt">(заполняется автоматически)</span>';
 
   openDlg('dlgSession');
 
@@ -381,14 +391,27 @@ function calcTime() {
 
 async function confirmStartSession() {
   const sessionType = document.querySelector('[name="stype"]:checked')?.value || 'Лимит';
-  const limitMin = parseInt(document.getElementById('dlgLimitMin').value) || 0;
-  const paidAmount = parseInt(document.getElementById('dlgAmount').value) || 0;
-  const userName = document.getElementById('dlgUserName').value.trim();
-  const noCard = document.getElementById('chkNoCard')?.checked;
-  const readerNums = noCard ? '' : document.getElementById('dlgReaderId').value.trim();
-  const readerId = readerNums ? (readerCardPrefix + readerNums) : '';
-  if (!noCard && sessionFields.requireReaderId !== false && !readerNums) { toast('Введите ID читателя', 'warn'); return; }
+  const limitMin    = parseInt(document.getElementById('dlgLimitMin').value) || 0;
+  const paidAmount  = parseInt(document.getElementById('dlgAmount').value) || 0;
+  const userName    = document.getElementById('dlgUserName').value.trim();
+  const isTemp      = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
+  const readerNums  = document.getElementById('dlgReaderId').value.trim();
+
+  if (!readerNums) { toast('Введите номер читательского билета', 'warn'); return; }
+
+  const readerId = isTemp ? readerNums : (readerCardPrefix + readerNums);
+
+  // Trigger lookup if not yet done for this exact card ID
+  if (_readerLookupState === null || _readerLookedUpId !== readerId) {
+    await lookupReader();
+  }
+
+  if (_readerLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+  if (_readerLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+  if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+
   if (!!sessionFields.requireUserName && !userName) { toast('Введите имя пользователя', 'warn'); return; }
+
   closeDlg('dlgSession');
   try {
     await connection.invoke('StartSession', selectedPc, sessionType,
@@ -399,24 +422,61 @@ async function confirmStartSession() {
 }
 
 async function lookupReader() {
-  const nums = document.getElementById('dlgReaderId').value.trim();
+  const nums   = document.getElementById('dlgReaderId').value.trim();
   const infoEl = document.getElementById('dlgReaderInfo');
-  if (!nums) { infoEl.style.display = 'none'; return; }
-  const cardId = readerCardPrefix + nums;
+  if (!nums) { infoEl.style.display = 'none'; _readerLookupState = null; return; }
+
+  const isTemp = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
+  const cardId = isTemp ? nums : (readerCardPrefix + nums);
+  _readerLookedUpId = cardId;
+
   try {
     const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
     if (!r.ok) {
+      _readerLookupState = 'not_found';
       infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
-      infoEl.textContent = `Читатель ${cardId} не найден в базе`;
+      infoEl.textContent = `✗ Читатель ${cardId} не найден в базе`;
       return;
     }
     const data = await r.json();
+
+    // Check expiry
+    const regDate = parseRegDate(data.registeredAt);
+    if (regDate) {
+      const daysSince = (Date.now() - regDate) / 86400000;
+      const limitDays = isTemp ? 3 : 3 * 365 + 1;
+      if (daysSince > limitDays) {
+        _readerLookupState = 'expired';
+        const expDate = new Date(regDate);
+        if (isTemp) expDate.setDate(expDate.getDate() + 3);
+        else        expDate.setFullYear(expDate.getFullYear() + 3);
+        document.getElementById('dlgUserName').value = data.fullName || '';
+        infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+        infoEl.textContent = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
+        return;
+      }
+    }
+
+    _readerLookupState = 'valid';
     document.getElementById('dlgUserName').value = data.fullName || '';
-    const parts = [data.fullName, data.category, data.gender, data.age ? `${data.age} лет` : ''].filter(Boolean);
+
+    const expDate = regDate ? new Date(regDate) : null;
+    if (expDate) {
+      if (isTemp) expDate.setDate(expDate.getDate() + 3);
+      else        expDate.setFullYear(expDate.getFullYear() + 3);
+    }
+    const parts = [
+      data.fullName,
+      data.category,
+      data.gender,
+      data.age ? `${data.age} лет` : null,
+      expDate ? `до ${expDate.toLocaleDateString('ru-RU')}` : null
+    ].filter(Boolean);
     infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#1D9E75;border:1px solid #1D5D1D';
     infoEl.textContent = '✓ ' + parts.join(' · ');
   } catch {
     infoEl.style.display = 'none';
+    _readerLookupState = null;
   }
 }
 
