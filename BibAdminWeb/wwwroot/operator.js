@@ -443,16 +443,32 @@ async function lookupReader() {
     // Check expiry
     const regDate = parseRegDate(data.registeredAt);
     if (regDate) {
-      const daysSince = (Date.now() - regDate) / 86400000;
-      const limitDays = isTemp ? 1 : 3 * 365 + 1;
-      if (daysSince > limitDays) {
+      let expired = false;
+      let expiredMsg = '';
+      if (isTemp) {
+        // Временный билет действителен только в день выдачи
+        const today = new Date();
+        const isToday = regDate.getFullYear() === today.getFullYear()
+                     && regDate.getMonth()    === today.getMonth()
+                     && regDate.getDate()     === today.getDate();
+        if (!isToday) {
+          expired = true;
+          expiredMsg = `⚠ ${data.fullName} · Временный билет выдан ${regDate.toLocaleDateString('ru-RU')}, действителен только в день выдачи`;
+        }
+      } else {
+        const daysSince = (Date.now() - regDate) / 86400000;
+        if (daysSince > 3 * 365 + 1) {
+          const expDate = new Date(regDate);
+          expDate.setFullYear(expDate.getFullYear() + 3);
+          expired = true;
+          expiredMsg = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
+        }
+      }
+      if (expired) {
         _readerLookupState = 'expired';
-        const expDate = new Date(regDate);
-        if (isTemp) expDate.setDate(expDate.getDate() + 1);
-        else        expDate.setFullYear(expDate.getFullYear() + 3);
         document.getElementById('dlgUserName').value = data.fullName || '';
         infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
-        infoEl.textContent = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
+        infoEl.textContent = expiredMsg;
         return;
       }
     }
