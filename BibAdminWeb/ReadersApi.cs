@@ -199,9 +199,12 @@ namespace BibAdminWeb
             string readerId, string fallbackName, Dictionary<string, Reader> map)
         {
             if (string.IsNullOrEmpty(readerId))
-                return ("Аноним", "", "anonymous");
+                return ("—", "", "anonymous");
             if (map.TryGetValue(readerId, out var r))
                 return (r.FullName, r.Category, "registered");
+            // Purely numeric ID → temporary card (no name in DB by design)
+            if (readerId.All(char.IsDigit))
+                return ($"Временный №{readerId}", "Временный", "temp");
             var name = !string.IsNullOrEmpty(fallbackName) && fallbackName != "—"
                 ? fallbackName : $"Незарег. {readerId}";
             return (name, "", "unregistered");

@@ -331,6 +331,9 @@ function onCardTypeChanged() {
   const isTemp = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
   const prefix = document.getElementById('dlgReaderPrefix');
   if (prefix) prefix.textContent = isTemp ? '№' : readerCardPrefix;
+  // Для временных билетов поле «Имя» скрываем — имён в базе нет
+  const rowName = document.getElementById('rowUserName');
+  if (rowName) rowName.style.display = isTemp ? 'none' : '';
   _readerLookupState = null;
   _readerLookedUpId = '';
   document.getElementById('dlgReaderId').value = '';
@@ -394,21 +397,24 @@ async function confirmStartSession() {
   const limitMin    = parseInt(document.getElementById('dlgLimitMin').value) || 0;
   const paidAmount  = parseInt(document.getElementById('dlgAmount').value) || 0;
   const userName    = document.getElementById('dlgUserName').value.trim();
-  const isTemp      = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
-  const readerNums  = document.getElementById('dlgReaderId').value.trim();
+  const isTemp     = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
+  const readerNums = document.getElementById('dlgReaderId').value.trim();
 
   if (!readerNums) { toast('Введите номер читательского билета', 'warn'); return; }
 
   const readerId = isTemp ? readerNums : (readerCardPrefix + readerNums);
 
-  // Trigger lookup if not yet done for this exact card ID
-  if (_readerLookupState === null || _readerLookedUpId !== readerId) {
-    await lookupReader();
+  if (isTemp) {
+    // Временные билеты не ищутся в базе — просто фиксируем посещение
+  } else {
+    // Для постоянных — обязательна проверка в базе
+    if (_readerLookupState === null || _readerLookedUpId !== readerId) {
+      await lookupReader();
+    }
+    if (_readerLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+    if (_readerLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+    if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
   }
-
-  if (_readerLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
-  if (_readerLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
-  if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
 
   if (!!sessionFields.requireUserName && !userName) { toast('Введите имя пользователя', 'warn'); return; }
 
@@ -427,7 +433,17 @@ async function lookupReader() {
   if (!nums) { infoEl.style.display = 'none'; _readerLookupState = null; return; }
 
   const isTemp = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
-  const cardId = isTemp ? nums : (readerCardPrefix + nums);
+
+  if (isTemp) {
+    // Временный билет — без поиска в базе, просто подтверждаем номер
+    _readerLookupState = 'valid';
+    _readerLookedUpId = nums;
+    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A1A2E;color:#AAAACC;border:1px solid #3D3D6B';
+    infoEl.textContent = `✓ Временный билет №${nums} — посещение будет зафиксировано`;
+    return;
+  }
+
+  const cardId = readerCardPrefix + nums;
   _readerLookedUpId = cardId;
 
   try {

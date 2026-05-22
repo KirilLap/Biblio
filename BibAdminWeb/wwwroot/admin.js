@@ -1698,7 +1698,8 @@ function renderReport(data) {
     const dtStr = dt.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }) + ' '
                 + dt.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
     const nameColor = row.readerStatus === 'registered' ? '#e0e0f0'
-                    : row.readerStatus === 'anonymous'   ? '#888' : '#f59e0b';
+                    : row.readerStatus === 'temp'        ? '#AAAACC'
+                    : row.readerStatus === 'anonymous'   ? '#666' : '#f59e0b';
     const typeBadge = row.operationType === 'session'
       ? '<span class="fin-badge fin-badge-session">Сессия</span>'
       : '<span class="fin-badge fin-badge-service">Услуга</span>';
