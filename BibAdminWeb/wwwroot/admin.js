@@ -1536,25 +1536,42 @@ async function doImport() {
     const data = await r.json();
     if (!r.ok) { toast(data.error || 'Ошибка', 'warn'); btn.disabled = false; btn.textContent = 'Загрузить'; return; }
 
-    let html = `<div style="display:flex;gap:20px;margin-bottom:${data.conflicts.length ? 12 : 0}px">
+    _importConflictNewData = data.conflictNewData || {};
+    const byReader = {};
+    (data.conflicts || []).forEach(c => {
+      if (!byReader[c.cardId]) byReader[c.cardId] = { name: c.fullName, fields: [] };
+      byReader[c.cardId].fields.push(c);
+    });
+    const readerConflictCount = Object.keys(byReader).length;
+    let html = `<div style="display:flex;gap:20px;margin-bottom:${readerConflictCount ? 12 : 0}px">
       <span style="color:#1d9e75">✓ Добавлено: <b>${data.added}</b></span>
       <span style="color:#666">Пропущено: <b>${data.skipped}</b></span>
-      ${data.conflicts.length ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${data.conflicts.length}</b></span>` : ''}
+      ${readerConflictCount ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${readerConflictCount}</b></span>` : ''}
     </div>`;
-    if (data.conflicts.length) {
-      html += `<div style="font-size:12px;color:#888;margin-bottom:6px">Записи с изменёнными данными (не обновлялись автоматически):</div>
-      <div style="max-height:180px;overflow-y:auto">
-        <table style="width:100%;font-size:11px;border-collapse:collapse">
-          <tr style="color:#666"><th style="text-align:left;padding:2px 6px">ID</th><th style="text-align:left;padding:2px 6px">ФИО</th><th style="text-align:left;padding:2px 6px">Поле</th><th style="text-align:left;padding:2px 6px">Было</th><th style="text-align:left;padding:2px 6px">Стало</th></tr>
-          ${data.conflicts.map(c => `<tr>
-            <td style="padding:2px 6px;font-family:monospace">${esc(c.cardId)}</td>
-            <td style="padding:2px 6px">${esc(c.fullName)}</td>
-            <td style="padding:2px 6px;color:#f59e0b">${esc(c.field)}</td>
-            <td style="padding:2px 6px;color:#666">${esc(c.oldValue)}</td>
-            <td style="padding:2px 6px;color:#ccc">${esc(c.newValue)}</td>
-          </tr>`).join('')}
-        </table>
-      </div>`;
+    if (readerConflictCount) {
+      html += `<div style="font-size:12px;color:#888;margin-bottom:8px">Записи с изменёнными данными. Нажмите «Обновить» чтобы применить новые значения:</div>
+      <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">`;
+      for (const [cardId, info] of Object.entries(byReader)) {
+        html += `<div style="background:#111128;border:1px solid #222240;border-radius:6px;padding:8px 10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+            <span style="font-family:monospace;font-size:11px;color:#888">${esc(cardId)}</span>
+            <span style="font-size:12px;color:#ccc;flex:1">${esc(info.name)}</span>
+            <button id="updBtn_${esc(cardId)}" onclick="updateImportedReader(${JSON.stringify(cardId)})"
+              style="padding:2px 12px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75">
+              Обновить
+            </button>
+          </div>`;
+        info.fields.forEach(f => {
+          html += `<div style="font-size:11px;display:flex;gap:6px;color:#666">
+            <span style="color:#f59e0b;width:110px;flex-shrink:0">${esc(f.field)}</span>
+            <span>${esc(f.oldValue || '—')}</span>
+            <span style="color:#444">→</span>
+            <span style="color:#ccc">${esc(f.newValue || '—')}</span>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      html += `</div>`;
     }
     const resultEl = document.getElementById('importResult');
     resultEl.innerHTML = html;
@@ -1573,6 +1590,32 @@ async function doImport() {
 
 function exportReaderStats() {
   window.open('/api/admin/readers/stats/export', '_blank');
+}
+
+let _importConflictNewData = {};  // cardId → Reader (новые данные из Excel)
+
+async function updateImportedReader(cardId) {
+  const reader = _importConflictNewData[cardId];
+  if (!reader) return;
+  const btnId = 'updBtn_' + cardId;
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch('/api/admin/readers', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reader)
+    });
+    if (r.ok) {
+      if (btn) { btn.textContent = '✓ Обновлено'; btn.style.background = '#0f3d2e'; btn.style.color = '#1d9e75'; }
+      await loadReaders();
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
+      toast('Ошибка обновления', 'warn');
+    }
+  } catch {
+    if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
+  }
 }
 
 // ─── Readers Report ───────────────────────────────────────────────────────────

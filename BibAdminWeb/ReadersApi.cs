@@ -55,6 +55,30 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Admin: update reader ──────────────────────────────────────────
+            if (path == "/api/admin/readers" && method == "PUT")
+            {
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    var reader = await JsonSerializer.DeserializeAsync<Reader>(ctx.Request.Body, _json);
+                    if (reader == null || string.IsNullOrWhiteSpace(reader.CardId))
+                    {
+                        ctx.Response.StatusCode = 400;
+                        await ctx.Response.WriteAsync("{\"error\":\"Неверные данные\"}");
+                        return;
+                    }
+                    ReaderStore.Update(reader);
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
             // ─── Admin: import Excel ────────────────────────────────────────
             if (path == "/api/admin/readers/import" && method == "POST")
             {
