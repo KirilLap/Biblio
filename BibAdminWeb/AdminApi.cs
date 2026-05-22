@@ -307,6 +307,59 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Apply folder update (no installer) ──────────────────────────
+            if (path == "/api/admin/apply-folder-update" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                string body2 = await ReadBody(ctx);
+                string sourcePath = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(body2);
+                    sourcePath = doc.RootElement.GetProperty("sourcePath").GetString()?.Trim() ?? "";
+                }
+                catch { }
+
+                if (string.IsNullOrWhiteSpace(sourcePath) || !Directory.Exists(sourcePath))
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Папка не найдена\"}");
+                    return;
+                }
+
+                var appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+                var exePath = Path.Combine(appDir, "BibAdminWeb.exe");
+
+                // Create a temp batch script that waits, copies files, then restarts
+                var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate.bat");
+                var script = string.Join("\r\n",
+                    "@echo off",
+                    "timeout /t 5 /nobreak >nul",
+                    $"xcopy /s /y /e /h \"{sourcePath}\\\" \"{appDir}\\\"",
+                    $"start \"\" \"{exePath}\"",
+                    "del \"%~f0\""
+                );
+                File.WriteAllText(scriptPath, script, Encoding.Default);
+
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                _ = Task.Run(async () =>
+                {
+                    if (OperatorBroadcaster.Instance != null)
+                        await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление из папки");
+                    await Task.Delay(1500);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c start \"\" \"{scriptPath}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+                    await Task.Delay(300);
+                    Environment.Exit(0);
+                });
+                return;
+            }
+
             // ─── Stop Server ──────────────────────────────────────────────────
             if (path == "/api/admin/stop" && method == "POST")
             {

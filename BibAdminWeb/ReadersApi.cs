@@ -274,7 +274,7 @@ namespace BibAdminWeb
                 });
             }
 
-            rows.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+            rows.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
 
             var uniqueIds = new HashSet<string>(
                 rows.Where(r => !string.IsNullOrEmpty(r.ReaderId)).Select(r => r.ReaderId),

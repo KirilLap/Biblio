@@ -1726,3 +1726,49 @@ function exportReport() {
   if (!dateVal) { toast('Выберите дату', 'warn'); return; }
   window.open(`/api/admin/readers/report/export?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`, '_blank');
 }
+
+// ─── Self-update from publish folder ─────────────────────────────────────────
+async function applyFolderUpdate() {
+  const pathVal = document.getElementById('updateFolderPath').value.trim();
+  if (!pathVal) { toast('Укажите путь к папке с обновлением', 'warn'); return; }
+
+  // Remember path in localStorage
+  localStorage.setItem('bib_update_folder', pathVal);
+
+  if (!confirm(`Сервер перезапустится для применения обновления.\n\nПапка: ${pathVal}\n\nПродолжить?`)) return;
+
+  const statusEl = document.getElementById('updateStatus');
+  statusEl.textContent = 'Применяется…';
+  statusEl.style.color = '#aaa';
+
+  try {
+    const r = await fetch('/api/admin/apply-folder-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourcePath: pathVal })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка', 'warn');
+      return;
+    }
+    statusEl.textContent = 'Сервер перезапускается…';
+    statusEl.style.color = '#1d9e75';
+    toast('Обновление применяется, страница обновится автоматически', 'good');
+    // Poll until server is back up
+    setTimeout(function poll() {
+      fetch('/api/ping').then(r => { if (r.ok) location.reload(); else setTimeout(poll, 2000); }).catch(() => setTimeout(poll, 2000));
+    }, 6000);
+  } catch {
+    statusEl.textContent = 'Нет связи с сервером';
+    statusEl.style.color = '#f87171';
+  }
+}
+
+// Restore saved update folder path on page load
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('bib_update_folder');
+  if (saved) { const el = document.getElementById('updateFolderPath'); if (el) el.value = saved; }
+});
