@@ -327,6 +327,19 @@
             </div>
           </div>
 
+          <div class="settings-card">
+            <h3>🔄 Обновление из папки</h3>
+            <p class="settings-hint">Соберите проект командой <code style="background:#111128;padding:2px 6px;border-radius:4px;font-size:12px">publish.cmd</code>, укажите путь и нажмите «Применить». Сервер перезапустится автоматически.</p>
+            <div class="form-row">
+              <label>Папка с обновлением</label>
+              <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+              <button class="btn btn-primary" onclick="applyFolderUpdate()">🔄 Применить обновление</button>
+              <span id="folderUpdateStatus" style="font-size:13px;color:#666"></span>
+            </div>
+          </div>
+
         </div>
         <div class="settings-col">
 
@@ -337,6 +350,12 @@
               <button class="btn btn-outline" onclick="restartAll()" style="text-align:left">🔄 Перезагрузить все ПК</button>
               <button class="btn btn-outline" onclick="shutdownAll()" style="border-color:#E24B4A;color:#E24B4A;text-align:left">⏻ Выключить все ПК</button>
             </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Управление сервером</h3>
+            <p class="settings-hint">Остановите сервер перед удалением программы или изменением настроек.</p>
+            <a href="/uninstall.html" target="_blank" class="btn btn-danger">🗑️ Остановить и удалить</a>
           </div>
 
         </div>
@@ -395,25 +414,6 @@
     <div class="settings-card" style="max-width:560px;margin-bottom:20px">
       <h3>Веб-интерфейс оператора</h3>
       <p id="opWebUrl" class="op-url"></p>
-    </div>
-    
-    <div class="settings-card" style="max-width:560px;margin-bottom:20px">
-      <h3>🔄 Обновление из папки</h3>
-      <p style="color:#666;font-size:13px;margin-bottom:14px">Соберите проект командой <code style="background:#111128;padding:2px 6px;border-radius:4px;font-size:12px">publish.cmd</code>, затем укажите путь и нажмите «Применить». Сервер перезапустится автоматически.</p>
-      <div class="form-row">
-        <label>Папка с обновлением</label>
-        <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-        <button class="btn btn-primary" onclick="applyFolderUpdate()">🔄 Применить обновление</button>
-        <span id="updateStatus" style="font-size:13px;color:#666"></span>
-      </div>
-    </div>
-
-    <div class="settings-card" style="max-width:560px;margin-bottom:20px">
-      <h3>Управление сервером</h3>
-      <p style="color:#666;margin-bottom:15px">Остановите сервер перед удалением программы или изменением настроек.</p>
-      <a href="/uninstall.html" target="_blank" class="btn btn-danger">🗑️ Остановить и удалить</a>
     </div>
     
     <div class="settings-card" style="max-width:560px;margin-bottom:20px">

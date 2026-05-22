@@ -1737,7 +1737,7 @@ async function applyFolderUpdate() {
 
   if (!confirm(`Сервер перезапустится для применения обновления.\n\nПапка: ${pathVal}\n\nПродолжить?`)) return;
 
-  const statusEl = document.getElementById('updateStatus');
+  const statusEl = document.getElementById('folderUpdateStatus');
   statusEl.textContent = 'Применяется…';
   statusEl.style.color = '#aaa';
 
