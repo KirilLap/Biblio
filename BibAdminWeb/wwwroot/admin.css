@@ -609,3 +609,8 @@ body {
   z-index: 10000;
 }
 .ctx-sub:hover > .ctx-sub-panel { display: block; }
+
+/* ── Radio buttons (session dialog) ── */
+.radio-group { display: flex; gap: 16px; margin-top: 4px; }
+.radio-opt { color: #AAAACC; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+
