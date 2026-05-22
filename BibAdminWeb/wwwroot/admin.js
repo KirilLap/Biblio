@@ -1556,7 +1556,9 @@ async function doImport() {
     const resultEl = document.getElementById('importResult');
     resultEl.innerHTML = html;
     resultEl.style.display = 'block';
-    btn.textContent = 'Готово';
+    btn.textContent = 'Закрыть';
+    btn.disabled = false;
+    btn.onclick = () => { closeDlg('dlgImportReaders'); btn.onclick = doImport; };
     await loadReaders();
     toast(`Импорт завершён: добавлено ${data.added}`, 'success');
   } catch (e) {
