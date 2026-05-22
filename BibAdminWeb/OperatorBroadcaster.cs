@@ -29,6 +29,9 @@ namespace BibAdminWeb
         public void NotifyOfflineResolved(string pcNumber, string decision)
             => _ = _ctx.Clients.All.SendAsync("offlineResolved", new { pcNumber, decision });
 
+        public Task NotifyServerRestartingAsync(string reason)
+            => _ctx.Clients.All.SendAsync("serverRestarting", new { reason });
+
         public void PushServiceTypes()
         {
             var settings = GlobalSettings.Load();

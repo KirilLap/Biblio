@@ -335,7 +335,14 @@ namespace BibAdminWeb
                 var script = string.Join("\r\n",
                     "@echo off",
                     "timeout /t 5 /nobreak >nul",
-                    $"xcopy /s /y /e /h \"{sourcePath}\\\" \"{appDir}\\\"",
+                    // Build xcopy exclusion list: skip data/config files that must not be overwritten
+                    "set EXF=%TEMP%\\bib_xcopy_exclude.txt",
+                    "echo .db> \"%TEMP%\\bib_xcopy_exclude.txt\"",
+                    "echo settings.json>> \"%TEMP%\\bib_xcopy_exclude.txt\"",
+                    "echo _history.json>> \"%TEMP%\\bib_xcopy_exclude.txt\"",
+                    "echo appsettings.json>> \"%TEMP%\\bib_xcopy_exclude.txt\"",
+                    $"xcopy /s /y /e /h /EXCLUDE:\"%TEMP%\\bib_xcopy_exclude.txt\" \"{sourcePath}\\\" \"{appDir}\\\"",
+                    "del \"%TEMP%\\bib_xcopy_exclude.txt\"",
                     $"start \"\" \"{exePath}\"",
                     "del \"%~f0\""
                 );
