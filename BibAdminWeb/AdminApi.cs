@@ -332,10 +332,18 @@ namespace BibAdminWeb
 
                 // Create a temp batch script that waits, copies files, then restarts
                 var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate.bat");
+                var flagPath   = Path.Combine(appDir, "update_restart.flag");
                 var script = string.Join("\r\n",
                     "@echo off",
                     "timeout /t 5 /nobreak >nul",
-                    $"xcopy /s /y /e /h \"{sourcePath}\\\" \"{appDir}\\\"",
+                    // robocopy: handles spaces in paths, no temp exclusion file needed
+                    // /E=subdirs /IS=overwrite same /IT=overwrite tweaked
+                    // /XF=exclude files  /NFL /NDL /NJH /NJS /NC /NS /NP=suppress output
+                    $"robocopy \"{sourcePath}\" \"{appDir}\" /E /IS /IT" +
+                    $" /XF *.db /XF settings.json /XF appsettings.json /XF *_history.json" +
+                    $" /NFL /NDL /NJH /NJS /NC /NS /NP",
+                    // Flag tells Program.cs not to open a new browser window
+                    $"echo.> \"{flagPath}\"",
                     $"start \"\" \"{exePath}\"",
                     "del \"%~f0\""
                 );
@@ -347,11 +355,13 @@ namespace BibAdminWeb
                     if (OperatorBroadcaster.Instance != null)
                         await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление из папки");
                     await Task.Delay(1500);
+                    // CreateNoWindow=true скрывает окно CMD — никакое окно не появляется
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "cmd.exe",
-                        Arguments = $"/c start \"\" \"{scriptPath}\"",
+                        Arguments = $"/c \"{scriptPath}\"",
                         CreateNoWindow = true,
+                        WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
                         UseShellExecute = false
                     });
                     await Task.Delay(300);
