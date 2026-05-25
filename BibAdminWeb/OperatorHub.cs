@@ -222,6 +222,54 @@ namespace BibAdminWeb
             await Clients.Caller.SendAsync("serviceCreated", new { total, isPaid = payNow, serviceName = svc.Name });
         }
 
+        // Пакетное создание нескольких услуг за один раз
+        public async Task CreateServiceBatch(
+            string[] serviceTypeIds, int[] quantities,
+            string pcNumber, string readerId, string readerName, bool payNow)
+        {
+            if (!IsAuthorized()) return;
+            var settings = GlobalSettings.Load();
+
+            var resolvedPc   = pcNumber?.Trim()    ?? "";
+            var resolvedId   = readerId?.Trim()    ?? "";
+            var resolvedName = readerName?.Trim()  ?? "";
+
+            if (!string.IsNullOrEmpty(resolvedPc) &&
+                AdminHub.KnownClients.TryGetValue(resolvedPc, out var pc) && pc.IsSession)
+            {
+                if (string.IsNullOrEmpty(resolvedId))   resolvedId   = pc.ReaderId ?? "";
+                if (string.IsNullOrEmpty(resolvedName)) resolvedName = pc.UserName ?? "";
+            }
+
+            var batchId  = Guid.NewGuid().ToString("N")[..8];
+            int totalAll = 0;
+            var names    = new System.Collections.Generic.List<string>();
+
+            for (int i = 0; i < serviceTypeIds.Length; i++)
+            {
+                var svc = settings.Services.FirstOrDefault(s => s.Id == serviceTypeIds[i] && s.IsActive);
+                if (svc == null) continue;
+                int qty   = i < quantities.Length ? Math.Max(1, quantities[i]) : 1;
+                int total = svc.Price * qty;
+                totalAll += total;
+                names.Add(svc.Name);
+                var tx = new ServiceTransaction
+                {
+                    ServiceTypeId = svc.Id, ServiceName = svc.Name, Unit = svc.Unit,
+                    Quantity = qty, PricePerUnit = svc.Price, TotalAmount = total,
+                    ReaderId = resolvedId, ReaderName = resolvedName,
+                    PcNumber = resolvedPc, BatchId = batchId
+                };
+                ServiceTransaction.Add(tx);
+                if (payNow) ServiceTransaction.MarkAsPaid(tx.Id);
+            }
+
+            if (names.Count == 0) return;
+            var label = names.Count == 1 ? names[0] : $"{names.Count} услуги";
+            await Clients.Caller.SendAsync("serviceCreated",
+                new { total = totalAll, isPaid = payNow, serviceName = label });
+        }
+
         public async Task<string> TransferSession(string fromPcNumber, string toPcNumber)
         {
             if (!IsAuthorized()) return "Нет авторизации";

@@ -181,18 +181,25 @@ namespace BibAdminWeb
         }
 
         // ── Report DTOs ──────────────────────────────────────────────────────
-        private sealed class ReportRowDto
+        private sealed class ServiceQtyDto
+        {
+            public int Qty    { get; set; }
+            public int Amount { get; set; }
+        }
+
+        private sealed class VisitRowDto
         {
             public DateTime Timestamp      { get; set; }
             public string   ReaderId       { get; set; } = "";
             public string   ReaderName     { get; set; } = "";
             public string   ReaderCategory { get; set; } = "";
-            public string   ReaderStatus   { get; set; } = "";   // registered | unregistered | anonymous
+            public string   ReaderStatus   { get; set; } = "";
             public string   PcNumber       { get; set; } = "";
-            public string   OperationType  { get; set; } = "";   // session | service
+            public bool     HasSession     { get; set; }
             public int      DurationMin    { get; set; }
-            public string   Detail         { get; set; } = "";
-            public int      Amount         { get; set; }
+            public int      SessionAmount  { get; set; }
+            public Dictionary<string, ServiceQtyDto> Services { get; set; } = new();
+            public int      TotalAmount    { get; set; }
         }
 
         private static (string name, string category, string status) ResolveReader(
@@ -210,135 +217,200 @@ namespace BibAdminWeb
             return (name, "", "unregistered");
         }
 
-        private static object BuildReport(string period, string dateStr)
+        private static (DateTime from, DateTime to) ParsePeriod(string period, string dateStr)
         {
-            DateTime from, to;
             if (period == "day")
             {
-                from = DateTime.ParseExact(dateStr, "yyyy-MM-dd", null).Date;
-                to   = from.AddDays(1);
+                var f = DateTime.ParseExact(dateStr, "yyyy-MM-dd", null).Date;
+                return (f, f.AddDays(1));
             }
-            else if (period == "month")
+            if (period == "month")
             {
                 var p = dateStr.Split('-');
-                from = new DateTime(int.Parse(p[0]), int.Parse(p[1]), 1);
-                to   = from.AddMonths(1);
+                var f = new DateTime(int.Parse(p[0]), int.Parse(p[1]), 1);
+                return (f, f.AddMonths(1));
             }
-            else throw new ArgumentException($"Неверный период: {period}");
+            throw new ArgumentException($"Неверный период: {period}");
+        }
+
+        private static object BuildReport(string period, string dateStr)
+        {
+            var (from, to) = ParsePeriod(period, dateStr);
 
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var r in ReaderStore.GetAll())
-                readerMap[r.CardId] = r;
+            foreach (var r in ReaderStore.GetAll()) readerMap[r.CardId] = r;
 
-            var rows = new List<ReportRowDto>();
+            // Filter sources
+            var sessions = FinanceStore.Sessions
+                .Where(s => s.EndTime >= from && s.EndTime < to).ToList();
+            var services = ServiceTransaction.All
+                .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
 
-            // Sessions — EndTime is DateTime.Now (local), StartTime may be UTC
-            foreach (var s in FinanceStore.Sessions)
+            // Dynamic service columns — all service types that appear in period
+            var serviceColumns = services
+                .GroupBy(t => t.ServiceTypeId)
+                .Select(g => new { id = g.Key, name = g.First().ServiceName })
+                .OrderBy(c => c.name).ToList();
+
+            var usedServiceIds = new HashSet<string>();
+            var rows = new List<VisitRowDto>();
+
+            // ── Session rows — find services that happened during each session on the same PC ──
+            foreach (var s in sessions)
             {
-                var ts = s.EndTime; // local
-                if (ts < from || ts >= to) continue;
+                var startLocal = s.StartTime.Kind == DateTimeKind.Utc
+                    ? s.StartTime.ToLocalTime() : s.StartTime;
+                var endLocal = s.EndTime;
+
+                var linked = services
+                    .Where(t => !string.IsNullOrEmpty(t.PcNumber)
+                             && t.PcNumber == s.PcNumber
+                             && t.CreatedAt.ToLocalTime() >= startLocal
+                             && t.CreatedAt.ToLocalTime() <= endLocal)
+                    .ToList();
+                foreach (var t in linked) usedServiceIds.Add(t.Id);
+
+                var svcDict = linked
+                    .GroupBy(t => t.ServiceTypeId)
+                    .ToDictionary(g => g.Key,
+                        g => new ServiceQtyDto { Qty = g.Sum(t => t.Quantity), Amount = g.Sum(t => t.TotalAmount) });
+
                 var (name, cat, status) = ResolveReader(s.ReaderId, s.UserName, readerMap);
-                rows.Add(new ReportRowDto
+                rows.Add(new VisitRowDto
                 {
-                    Timestamp      = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime,
+                    Timestamp      = startLocal,
                     ReaderId       = s.ReaderId,
-                    ReaderName     = name,
-                    ReaderCategory = cat,
-                    ReaderStatus   = status,
+                    ReaderName     = name, ReaderCategory = cat, ReaderStatus = status,
                     PcNumber       = s.PcNumber,
-                    OperationType  = "session",
+                    HasSession     = true,
                     DurationMin    = s.DurationSeconds / 60,
-                    Detail         = "",
-                    Amount         = s.EarnedAmount,
+                    SessionAmount  = s.EarnedAmount,
+                    Services       = svcDict,
+                    TotalAmount    = s.EarnedAmount + svcDict.Values.Sum(v => v.Amount)
                 });
             }
 
-            // Service transactions — CreatedAt is UTC
-            foreach (var t in ServiceTransaction.All)
+            // ── Standalone services — group by BatchId (or individually if no batch) ──
+            var standalone = services.Where(t => !usedServiceIds.Contains(t.Id)).ToList();
+            foreach (var grp in standalone.GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : ("b:" + t.BatchId)))
             {
-                var ts = t.CreatedAt.ToLocalTime();
-                if (ts < from || ts >= to) continue;
-                var (name, cat, status) = ResolveReader(t.ReaderId, t.ReaderName, readerMap);
-                rows.Add(new ReportRowDto
+                var items = grp.ToList();
+                var first = items[0];
+                var (name, cat, status) = ResolveReader(first.ReaderId, first.ReaderName, readerMap);
+                var svcDict = items
+                    .GroupBy(t => t.ServiceTypeId)
+                    .ToDictionary(g => g.Key,
+                        g => new ServiceQtyDto { Qty = g.Sum(t => t.Quantity), Amount = g.Sum(t => t.TotalAmount) });
+                rows.Add(new VisitRowDto
                 {
-                    Timestamp      = ts,
-                    ReaderId       = t.ReaderId,
-                    ReaderName     = name,
-                    ReaderCategory = cat,
-                    ReaderStatus   = status,
-                    PcNumber       = t.PcNumber ?? "",
-                    OperationType  = "service",
-                    DurationMin    = 0,
-                    Detail         = $"{t.ServiceName} ×{t.Quantity}",
-                    Amount         = t.TotalAmount,
+                    Timestamp      = first.CreatedAt.ToLocalTime(),
+                    ReaderId       = first.ReaderId,
+                    ReaderName     = name, ReaderCategory = cat, ReaderStatus = status,
+                    PcNumber       = first.PcNumber ?? "",
+                    HasSession     = false,
+                    Services       = svcDict,
+                    TotalAmount    = items.Sum(t => t.TotalAmount)
                 });
             }
 
             rows.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
 
-            var uniqueIds = new HashSet<string>(
-                rows.Where(r => !string.IsNullOrEmpty(r.ReaderId)).Select(r => r.ReaderId),
-                StringComparer.OrdinalIgnoreCase);
-            int anonCount = rows.Any(r => string.IsNullOrEmpty(r.ReaderId)) ? 1 : 0;
+            var uniqueReaders = rows
+                .Where(r => !string.IsNullOrEmpty(r.ReaderId))
+                .Select(r => r.ReaderId)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+            var svcSummary = serviceColumns.ToDictionary(
+                c => c.id,
+                c => new {
+                    name   = c.name,
+                    qty    = rows.Sum(r => r.Services.TryGetValue(c.id, out var v) ? v.Qty    : 0),
+                    amount = rows.Sum(r => r.Services.TryGetValue(c.id, out var v) ? v.Amount : 0)
+                });
 
             return new
             {
-                items   = rows,
-                summary = new
-                {
-                    totalSessions      = rows.Count(r => r.OperationType == "session"),
-                    totalServiceOps    = rows.Count(r => r.OperationType == "service"),
-                    totalUniqueReaders = uniqueIds.Count + anonCount,
-                    totalDurationMin   = rows.Where(r => r.OperationType == "session").Sum(r => r.DurationMin),
-                    totalAmount        = rows.Sum(r => r.Amount),
+                serviceColumns,
+                items = rows.Select(r => new {
+                    timestamp      = r.Timestamp,
+                    readerId       = r.ReaderId,
+                    readerName     = r.ReaderName,
+                    readerCategory = r.ReaderCategory,
+                    readerStatus   = r.ReaderStatus,
+                    pcNumber       = r.PcNumber,
+                    hasSession     = r.HasSession,
+                    durationMin    = r.DurationMin,
+                    sessionAmount  = r.SessionAmount,
+                    services       = r.Services.ToDictionary(
+                        k => k.Key,
+                        v => new { qty = v.Value.Qty, amount = v.Value.Amount }),
+                    totalAmount    = r.TotalAmount
+                }),
+                summary = new {
+                    totalVisits        = rows.Count,
+                    totalSessions      = rows.Count(r => r.HasSession),
+                    totalUniqueReaders = uniqueReaders,
+                    totalDurationMin   = rows.Sum(r => r.DurationMin),
+                    totalAmount        = rows.Sum(r => r.TotalAmount),
+                    servicesSummary    = svcSummary
                 }
             };
         }
 
         private static byte[] BuildReportExcel(object reportObj, string period, string dateStr)
         {
-            // Unbox using reflection-friendly cast via JSON round-trip is complex;
-            // rebuild directly from sources instead of re-parsing the anonymous object.
-            DateTime from, to;
-            if (period == "day")
-            {
-                from = DateTime.ParseExact(dateStr, "yyyy-MM-dd", null).Date;
-                to   = from.AddDays(1);
-            }
-            else
-            {
-                var p = dateStr.Split('-');
-                from = new DateTime(int.Parse(p[0]), int.Parse(p[1]), 1);
-                to   = from.AddMonths(1);
-            }
+            // Re-use BuildReport logic to get structured visit rows
+            var (from, to) = ParsePeriod(period, dateStr);
 
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var r in ReaderStore.GetAll())
-                readerMap[r.CardId] = r;
+            foreach (var r in ReaderStore.GetAll()) readerMap[r.CardId] = r;
 
-            var rows = new List<ReportRowDto>();
-            foreach (var s in FinanceStore.Sessions)
+            var sessions = FinanceStore.Sessions
+                .Where(s => s.EndTime >= from && s.EndTime < to).ToList();
+            var services = ServiceTransaction.All
+                .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+
+            var svcCols = services
+                .GroupBy(t => t.ServiceTypeId)
+                .Select(g => new { id = g.Key, name = g.First().ServiceName })
+                .OrderBy(c => c.name).ToList();
+
+            var usedIds = new HashSet<string>();
+            var rows = new List<VisitRowDto>();
+
+            foreach (var s in sessions)
             {
-                if (s.EndTime < from || s.EndTime >= to) continue;
-                var (name, cat, status) = ResolveReader(s.ReaderId, s.UserName, readerMap);
-                rows.Add(new ReportRowDto
+                var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                var el = s.EndTime;
+                var linked = services.Where(t => !string.IsNullOrEmpty(t.PcNumber)
+                    && t.PcNumber == s.PcNumber
+                    && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= el).ToList();
+                foreach (var t in linked) usedIds.Add(t.Id);
+                var svcDict = linked.GroupBy(t => t.ServiceTypeId)
+                    .ToDictionary(g => g.Key,
+                        g => new ServiceQtyDto { Qty = g.Sum(t => t.Quantity), Amount = g.Sum(t => t.TotalAmount) });
+                var (nm, cat, _) = ResolveReader(s.ReaderId, s.UserName, readerMap);
+                rows.Add(new VisitRowDto
                 {
-                    Timestamp = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime,
-                    ReaderId = s.ReaderId, ReaderName = name, ReaderCategory = cat, ReaderStatus = status,
-                    PcNumber = s.PcNumber, OperationType = "session", DurationMin = s.DurationSeconds / 60,
-                    Detail = "", Amount = s.EarnedAmount,
+                    Timestamp = sl, ReaderId = s.ReaderId, ReaderName = nm, ReaderCategory = cat,
+                    PcNumber = s.PcNumber, HasSession = true, DurationMin = s.DurationSeconds / 60,
+                    SessionAmount = s.EarnedAmount, Services = svcDict,
+                    TotalAmount = s.EarnedAmount + svcDict.Values.Sum(v => v.Amount)
                 });
             }
-            foreach (var t in ServiceTransaction.All)
+            foreach (var grp in services.Where(t => !usedIds.Contains(t.Id))
+                .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : ("b:" + t.BatchId)))
             {
-                var ts = t.CreatedAt.ToLocalTime();
-                if (ts < from || ts >= to) continue;
-                var (name, cat, status) = ResolveReader(t.ReaderId, t.ReaderName, readerMap);
-                rows.Add(new ReportRowDto
+                var items = grp.ToList(); var first = items[0];
+                var (nm, cat, _) = ResolveReader(first.ReaderId, first.ReaderName, readerMap);
+                var svcDict = items.GroupBy(t => t.ServiceTypeId)
+                    .ToDictionary(g => g.Key,
+                        g => new ServiceQtyDto { Qty = g.Sum(t => t.Quantity), Amount = g.Sum(t => t.TotalAmount) });
+                rows.Add(new VisitRowDto
                 {
-                    Timestamp = ts, ReaderId = t.ReaderId, ReaderName = name, ReaderCategory = cat,
-                    ReaderStatus = status, PcNumber = t.PcNumber ?? "", OperationType = "service",
-                    DurationMin = 0, Detail = $"{t.ServiceName} ×{t.Quantity}", Amount = t.TotalAmount,
+                    Timestamp = first.CreatedAt.ToLocalTime(), ReaderId = first.ReaderId,
+                    ReaderName = nm, ReaderCategory = cat, PcNumber = first.PcNumber ?? "",
+                    HasSession = false, Services = svcDict, TotalAmount = items.Sum(t => t.TotalAmount)
                 });
             }
             rows.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
@@ -347,28 +419,29 @@ namespace BibAdminWeb
                 ? from.ToString("dd.MM.yyyy")
                 : from.ToString("MMMM yyyy", new System.Globalization.CultureInfo("ru-RU"));
 
+            // Fixed columns: DateTime | Reader | Category | PC | Duration
+            // + dynamic service columns + Total
+            int fixedCols = 5;
+            int totalCols = fixedCols + svcCols.Count + 1;
+
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Отчёт");
-            ws.Column(1).Width = 16;
-            ws.Column(2).Width = 32;
-            ws.Column(3).Width = 18;
-            ws.Column(4).Width = 10;
-            ws.Column(5).Width = 10;
-            ws.Column(6).Width = 8;
-            ws.Column(7).Width = 26;
-            ws.Column(8).Width = 12;
+            ws.Column(1).Width = 16; ws.Column(2).Width = 30;
+            ws.Column(3).Width = 18; ws.Column(4).Width = 9; ws.Column(5).Width = 8;
+            for (int i = 0; i < svcCols.Count; i++) ws.Column(fixedCols + 1 + i).Width = 14;
+            ws.Column(totalCols).Width = 13;
 
             WriteHeader(ws, 1, $"Отчёт за {periodLabel}");
-            var hdrRow = ws.Row(2);
-            hdrRow.Cell(1).Value = "Дата/Время";
-            hdrRow.Cell(2).Value = "Читатель";
-            hdrRow.Cell(3).Value = "Категория";
-            hdrRow.Cell(4).Value = "ПК";
-            hdrRow.Cell(5).Value = "Тип";
-            hdrRow.Cell(6).Value = "Мин";
-            hdrRow.Cell(7).Value = "Детали";
-            hdrRow.Cell(8).Value = "Оплачено";
-            StyleHeader(ws.Row(2), 8);
+            var hdr = ws.Row(2);
+            hdr.Cell(1).Value = "Дата/Время";
+            hdr.Cell(2).Value = "Читатель";
+            hdr.Cell(3).Value = "Категория";
+            hdr.Cell(4).Value = "ПК";
+            hdr.Cell(5).Value = "Мин";
+            for (int i = 0; i < svcCols.Count; i++)
+                hdr.Cell(fixedCols + 1 + i).Value = svcCols[i].name;
+            hdr.Cell(totalCols).Value = "Итого (сум)";
+            StyleHeader(ws.Row(2), totalCols);
 
             int row = 3;
             foreach (var r in rows)
@@ -377,20 +450,28 @@ namespace BibAdminWeb
                 ws.Cell(row, 2).Value = r.ReaderName;
                 ws.Cell(row, 3).Value = r.ReaderCategory;
                 ws.Cell(row, 4).Value = r.PcNumber;
-                ws.Cell(row, 5).Value = r.OperationType == "session" ? "Сессия" : "Услуга";
-                ws.Cell(row, 6).Value = r.OperationType == "session" ? (int?)r.DurationMin : null;
-                ws.Cell(row, 7).Value = r.Detail;
-                ws.Cell(row, 8).Value = r.Amount;
+                ws.Cell(row, 5).Value = r.DurationMin > 0 ? (int?)r.DurationMin : null;
+                for (int i = 0; i < svcCols.Count; i++)
+                {
+                    if (r.Services.TryGetValue(svcCols[i].id, out var sv))
+                        ws.Cell(row, fixedCols + 1 + i).Value = sv.Qty;
+                }
+                ws.Cell(row, totalCols).Value = r.TotalAmount;
                 row++;
             }
 
-            // Summary
             row++;
             ws.Cell(row, 1).Value = "Итого:";
             ws.Cell(row, 1).Style.Font.Bold = true;
-            ws.Cell(row, 6).Value = rows.Where(r => r.OperationType == "session").Sum(r => r.DurationMin);
-            ws.Cell(row, 8).Value = rows.Sum(r => r.Amount);
-            ws.Cell(row, 8).Style.Font.Bold = true;
+            ws.Cell(row, 5).Value = rows.Sum(r => r.DurationMin);
+            for (int i = 0; i < svcCols.Count; i++)
+            {
+                var cid = svcCols[i].id;
+                ws.Cell(row, fixedCols + 1 + i).Value =
+                    rows.Sum(r => r.Services.TryGetValue(cid, out var v) ? v.Qty : 0);
+            }
+            ws.Cell(row, totalCols).Value = rows.Sum(r => r.TotalAmount);
+            ws.Cell(row, totalCols).Style.Font.Bold = true;
 
             using var ms = new MemoryStream();
             wb.SaveAs(ms);

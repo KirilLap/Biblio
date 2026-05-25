@@ -139,24 +139,26 @@
     <div class="dlg-title">Оказать услугу</div>
 
     <div class="field-row">
-      <label>Тип услуги</label>
-      <select id="dlgSvcType" onchange="updateSvcTotal()"></select>
-    </div>
-    <div class="field-row">
-      <label>Количество</label>
-      <input id="dlgSvcQty" type="number" min="1" max="999" value="1" oninput="updateSvcTotal()">
-    </div>
-    <div class="field-row">
-      <label>Итого</label>
-      <div id="dlgSvcTotal" class="total-display">—</div>
-    </div>
-    <div class="field-row">
       <label>Привязать к сессии</label>
       <select id="dlgSvcPc" onchange="onSvcPcChanged()">
         <option value="">— Без привязки —</option>
       </select>
     </div>
     <div id="dlgSvcSessionInfo" style="font-size:12px;color:#1D9E75;margin:-6px 0 8px;display:none"></div>
+
+    <div id="dlgSvcReaderRow" class="field-row" style="display:none">
+      <label>Читатель <span class="opt">(необязательно)</span></label>
+      <input type="text" id="dlgSvcReaderId" placeholder="Номер читательского билета">
+    </div>
+
+    <div style="border-top:1px solid #2D2D5B;margin:8px 0 10px"></div>
+    <div id="dlgSvcList"></div>
+    <button id="btnAddSvcRow" class="btn-sm" onclick="addSvcRow()" style="margin-bottom:12px;font-size:12px;padding:5px 12px">+ Добавить услугу</button>
+
+    <div class="field-row">
+      <label>Итого</label>
+      <div id="dlgSvcTotal" class="total-display">—</div>
+    </div>
     <div class="field-row">
       <label>Оплата</label>
       <div class="radio-group">

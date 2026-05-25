@@ -12,6 +12,7 @@ let sessionFields = { requireReaderId: true, requireUserName: false };
 let _readerLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
 let _readerLookedUpId = '';
 let latestClientVersion = '';
+let _svcRows = [];
 
 // ── Просмотр экрана ───────────────────────────────────────────────────────────
 let _screenPc = null;
@@ -633,12 +634,6 @@ async function confirmTransfer() {
 
 function openServiceDlg() {
   if (serviceTypes.length === 0) { toast('Нет доступных услуг', 'warn'); return; }
-  const sel = document.getElementById('dlgSvcType');
-  sel.innerHTML = serviceTypes.map(s =>
-    `<option value="${esc(s.id)}" data-price="${s.price}" data-unit="${esc(s.unit)}">${esc(s.name)} — ${fmt(s.price)} сум/${esc(s.unit)}</option>`
-  ).join('');
-  document.getElementById('dlgSvcQty').value = 1;
-  document.querySelectorAll('[name="svcPay"]')[0].checked = true;
 
   // Заполняем список активных сессий
   const pcSel = document.getElementById('dlgSvcPc');
@@ -655,24 +650,104 @@ function openServiceDlg() {
   if (selectedPc && pcs[selectedPc]?.isSession) pcSel.value = selectedPc;
   else pcSel.value = '';
 
-  document.getElementById('dlgSvcSessionInfo').style.display = 'none';
-  document.getElementById('dlgSvcDeferNote').style.display = 'none';
+  // Инициализируем строки услуг
+  _svcRows = [{ id: Date.now(), typeId: serviceTypes[0]?.id || '', qty: 1 }];
+
+  // Сброс поля читателя и оплаты
+  const readerInput = document.getElementById('dlgSvcReaderId');
+  if (readerInput) readerInput.value = '';
+  const payNowRadio = document.querySelector('[name="svcPay"][value="now"]');
+  if (payNowRadio) payNowRadio.checked = true;
+
+  renderSvcRows();
   updateSvcTotal();
+  onSvcPcChanged();
   openDlg('dlgService');
+}
+
+function addSvcRow() {
+  const usedTypes = new Set(_svcRows.map(r => r.typeId));
+  const nextType = serviceTypes.find(s => !usedTypes.has(s.id));
+  if (!nextType) { toast('Все доступные услуги уже добавлены', 'warn'); return; }
+  _svcRows.push({ id: Date.now(), typeId: nextType.id, qty: 1 });
+  renderSvcRows();
+  updateSvcTotal();
+}
+
+function removeSvcRow(rowId) {
+  _svcRows = _svcRows.filter(r => r.id !== rowId);
+  if (_svcRows.length === 0)
+    _svcRows = [{ id: Date.now(), typeId: serviceTypes[0]?.id || '', qty: 1 }];
+  renderSvcRows();
+  updateSvcTotal();
+}
+
+function onSvcRowTypeChange(rowId, typeId) {
+  const row = _svcRows.find(r => r.id === rowId);
+  if (row) row.typeId = typeId;
+  renderSvcRows();
+  updateSvcTotal();
+}
+
+function onSvcRowQtyChange(rowId, qty) {
+  const row = _svcRows.find(r => r.id === rowId);
+  if (row) row.qty = Math.max(1, parseInt(qty) || 1);
+  updateSvcTotal();
+}
+
+function renderSvcRows() {
+  const container = document.getElementById('dlgSvcList');
+  const usedTypes = new Set(_svcRows.map(r => r.typeId));
+
+  container.innerHTML = _svcRows.map(row => {
+    const opts = serviceTypes.map(s => {
+      const disabled = s.id !== row.typeId && usedTypes.has(s.id) ? 'disabled' : '';
+      const selected = s.id === row.typeId ? 'selected' : '';
+      return `<option value="${esc(s.id)}" ${disabled} ${selected}>${esc(s.name)} — ${fmt(s.price)} сум/${esc(s.unit)}</option>`;
+    }).join('');
+    const canRemove = _svcRows.length > 1;
+    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <select style="flex:1;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px"
+        onchange="onSvcRowTypeChange(${row.id}, this.value)">${opts}</select>
+      <input type="number" min="1" max="999" value="${row.qty}"
+        style="width:70px;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
+        oninput="onSvcRowQtyChange(${row.id}, this.value)">
+      ${canRemove
+        ? `<button onclick="removeSvcRow(${row.id})" style="padding:6px 10px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:14px;line-height:1">✕</button>`
+        : '<div style="width:34px"></div>'}
+    </div>`;
+  }).join('');
+
+  // Прячем кнопку «Добавить», если все типы уже выбраны
+  const btnAdd = document.getElementById('btnAddSvcRow');
+  if (btnAdd) btnAdd.style.display = usedTypes.size >= serviceTypes.length ? 'none' : '';
+}
+
+function updateSvcTotal() {
+  let total = 0;
+  _svcRows.forEach(row => {
+    const svc = serviceTypes.find(s => s.id === row.typeId);
+    if (svc) total += svc.price * row.qty;
+  });
+  document.getElementById('dlgSvcTotal').textContent = total > 0 ? fmt(total) + ' сум' : '—';
 }
 
 function onSvcPcChanged() {
   const pcVal = document.getElementById('dlgSvcPc').value;
   const info = document.getElementById('dlgSvcSessionInfo');
+  const readerRow = document.getElementById('dlgSvcReaderRow');
+
   if (pcVal && pcs[pcVal]) {
     const pc = pcs[pcVal];
     const reader = pc.userName || pc.readerId || '';
     info.textContent = reader
-      ? `✓ Сессия на ${esc(pcVal)}: ${esc(reader)}`
-      : `✓ Сессия на ${esc(pcVal)} (анонимный пользователь)`;
+      ? `✓ Сессия на ${pcVal}: ${reader}`
+      : `✓ Сессия на ${pcVal} (анонимный пользователь)`;
     info.style.display = 'block';
+    if (readerRow) readerRow.style.display = 'none';
   } else {
     info.style.display = 'none';
+    if (readerRow) readerRow.style.display = '';
   }
   updateDeferNote();
 }
@@ -686,29 +761,28 @@ function updateDeferNote() {
     (wantLater && !pcVal) ? 'block' : 'none';
 }
 
-function updateSvcTotal() {
-  const sel = document.getElementById('dlgSvcType');
-  const opt = sel.options[sel.selectedIndex];
-  if (!opt) return;
-  const price = parseInt(opt.dataset.price) || 0;
-  const qty = parseInt(document.getElementById('dlgSvcQty').value) || 1;
-  document.getElementById('dlgSvcTotal').textContent = fmt(price * qty) + ' сум';
-}
-
 async function confirmService() {
-  const sel = document.getElementById('dlgSvcType');
-  const id = sel.value;
-  const qty = parseInt(document.getElementById('dlgSvcQty').value) || 1;
-  const pcNumber = document.getElementById('dlgSvcPc').value;
-  const payNow = document.querySelector('[name="svcPay"]:checked')?.value === 'now';
+  if (_svcRows.length === 0) { toast('Добавьте хотя бы одну услугу', 'warn'); return; }
 
+  const typeIds    = _svcRows.map(r => r.typeId).filter(Boolean);
+  const quantities = _svcRows.map(r => r.qty);
+  const pcNumber   = document.getElementById('dlgSvcPc').value;
+  const payNow     = document.querySelector('[name="svcPay"]:checked')?.value === 'now';
+
+  let readerId = '', readerName = '';
   const pc = pcNumber ? pcs[pcNumber] : null;
-  const readerId = pc?.readerId || '';
-  const readerName = pc?.userName || '';
+  if (pc) {
+    readerId   = pc.readerId || '';
+    readerName = pc.userName || '';
+  } else {
+    readerId = (document.getElementById('dlgSvcReaderId')?.value || '').trim();
+  }
+
+  if (typeIds.length === 0) { toast('Выберите услугу', 'warn'); return; }
 
   closeDlg('dlgService');
   try {
-    await connection.invoke('CreateService', id, qty, readerId, readerName, payNow, pcNumber);
+    await connection.invoke('CreateServiceBatch', typeIds, quantities, pcNumber, readerId, readerName, payNow);
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 

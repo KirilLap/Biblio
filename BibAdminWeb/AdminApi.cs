@@ -84,6 +84,51 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Finance: services batch create ──────────────────────────────
+            if (path == "/api/admin/finance/services/batch" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+
+                var pcNumber   = root.TryGetProperty("pcNumber",   out var pp)  ? pp.GetString()  ?? "" : "";
+                var readerId   = root.TryGetProperty("readerId",   out var rp)  ? rp.GetString()  ?? "" : "";
+                var readerName = root.TryGetProperty("readerName", out var rnp) ? rnp.GetString() ?? "" : "";
+                var payNow     = root.TryGetProperty("payNow",     out var pnp) && pnp.GetBoolean();
+
+                // Resolve reader from active session on that PC
+                if (!string.IsNullOrEmpty(pcNumber) &&
+                    AdminHub.KnownClients.TryGetValue(pcNumber, out var pcClient) && pcClient.IsSession)
+                {
+                    if (string.IsNullOrEmpty(readerId))   readerId   = pcClient.ReaderId ?? "";
+                    if (string.IsNullOrEmpty(readerName)) readerName = pcClient.UserName ?? "";
+                }
+
+                var batchId = Guid.NewGuid().ToString("N")[..8];
+                var s2 = GlobalSettings.Load();
+                if (root.TryGetProperty("items", out var itemsEl))
+                {
+                    foreach (var item in itemsEl.EnumerateArray())
+                    {
+                        var typeId = item.TryGetProperty("serviceTypeId", out var tp) ? tp.GetString() ?? "" : "";
+                        var qty    = item.TryGetProperty("quantity",      out var qp) ? qp.GetInt32() : 1;
+                        var svc    = s2.Services.FirstOrDefault(x => x.Id == typeId && x.IsActive);
+                        if (svc == null) continue;
+                        var tx = new ServiceTransaction
+                        {
+                            ServiceTypeId = svc.Id, ServiceName = svc.Name, Unit = svc.Unit,
+                            Quantity = qty, PricePerUnit = svc.Price, TotalAmount = svc.Price * qty,
+                            ReaderId = readerId, ReaderName = readerName,
+                            PcNumber = pcNumber, BatchId = batchId
+                        };
+                        ServiceTransaction.Add(tx);
+                        if (payNow) ServiceTransaction.MarkAsPaid(tx.Id);
+                    }
+                }
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Finance: debts ───────────────────────────────────────────────
             if (path == "/api/admin/finance/debts" && method == "GET")
             {

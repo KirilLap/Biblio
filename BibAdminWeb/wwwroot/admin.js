@@ -292,6 +292,9 @@ function buildActions(c) {
     btns.push(`<button class="btn btn-outline" onclick="openTransfer('${esc(c.pcNumber)}')">↔</button>`);
     if (c.sessionType === 'Лимит')
       btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
+    btns.push(`<button class="btn btn-outline" onclick="openAdminServiceDlg('${esc(c.pcNumber)}')" title="Оказать услугу">🛎</button>`);
+  } else if (c.isOnline) {
+    btns.push(`<button class="btn btn-outline" onclick="openAdminServiceDlg('${esc(c.pcNumber)}')" title="Оказать услугу">🛎</button>`);
   }
   return btns.join('');
 }
@@ -1753,17 +1756,17 @@ async function loadReport() {
 }
 
 function renderReport(data) {
-  const { items, summary } = data;
+  const { items, serviceColumns = [], summary } = data;
 
   const sumEl = document.getElementById('reportSummary');
   sumEl.style.display = 'flex';
   const hrs = (summary.totalDurationMin / 60).toFixed(1);
   sumEl.innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Посещений</div><div class="stat-val">${items.length}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Сессий</div><div class="stat-val">${summary.totalSessions}</div></div>
-    <div class="stat-card" style="flex:1"><div class="stat-label">Услуг</div><div class="stat-val">${summary.totalServiceOps}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Читателей</div><div class="stat-val">${summary.totalUniqueReaders}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Времени (ч)</div><div class="stat-val green">${hrs}</div></div>
-    <div class="stat-card" style="flex:1"><div class="stat-label">Оплачено (сум)</div><div class="stat-val blue">${summary.totalAmount.toLocaleString('ru-RU')}</div></div>`;
+    <div class="stat-card" style="flex:1"><div class="stat-label">Итого (сум)</div><div class="stat-val blue">${summary.totalAmount.toLocaleString('ru-RU')}</div></div>`;
 
   const el = document.getElementById('reportTable');
   if (!items.length) {
@@ -1771,10 +1774,16 @@ function renderReport(data) {
     return;
   }
 
-  const cols = '130px 1fr 100px 75px 85px 55px 1fr 90px';
-  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    <span>Дата/Время</span><span>Читатель</span><span>Категория</span><span>ПК</span><span>Тип</span><span>Мин</span><span>Детали</span><span>Оплачено</span>
-  </div>`;
+  // serviceColumns is [{id, name}, ...]; row.services is keyed by id
+  const th  = s => `<th style="text-align:left;padding:6px 8px;white-space:nowrap;color:#666;font-weight:500;border-bottom:1px solid #2A2A4A">${s}</th>`;
+  const thc = s => `<th style="text-align:center;padding:6px 8px;white-space:nowrap;color:#666;font-weight:500;border-bottom:1px solid #2A2A4A">${s}</th>`;
+
+  let html = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr>
+      ${th('Дата/Время')}${th('Читатель')}${th('Категория')}${th('ПК')}${thc('Мин')}
+      ${serviceColumns.map(sc => thc(esc(sc.name))).join('')}
+      ${th('Итого')}
+    </tr></thead><tbody>`;
 
   items.forEach(row => {
     const dt = new Date(row.timestamp);
@@ -1783,22 +1792,31 @@ function renderReport(data) {
     const nameColor = row.readerStatus === 'registered' ? '#e0e0f0'
                     : row.readerStatus === 'temp'        ? '#AAAACC'
                     : row.readerStatus === 'anonymous'   ? '#666' : '#f59e0b';
-    const typeBadge = row.operationType === 'session'
-      ? '<span class="fin-badge fin-badge-session">Сессия</span>'
-      : '<span class="fin-badge fin-badge-service">Услуга</span>';
 
-    html += `<div class="fin-row" style="grid-template-columns:${cols}">
-      <span style="color:#666;font-size:12px">${dtStr}</span>
-      <span style="color:${nameColor}">${esc(row.readerName)}</span>
-      <span style="color:#666;font-size:12px">${esc(row.readerCategory || '—')}</span>
-      <span style="font-family:monospace;font-size:12px">${esc(row.pcNumber || '—')}</span>
-      <span>${typeBadge}</span>
-      <span style="color:#888">${row.operationType === 'session' ? row.durationMin : '—'}</span>
-      <span style="color:#888;font-size:12px">${esc(row.detail || '—')}</span>
-      <span style="color:#1d9e75;font-weight:600">${row.amount.toLocaleString('ru-RU')}</span>
-    </div>`;
+    const td = (content, style = '') =>
+      `<td style="padding:6px 8px;border-bottom:1px solid #1A1A2E${style ? ';' + style : ''}">${content}</td>`;
+
+    let tds = '';
+    tds += td(`<span style="color:#666;font-size:12px">${dtStr}</span>`);
+    tds += td(`<span style="color:${nameColor}">${esc(row.readerName || row.readerId || '—')}</span>`);
+    tds += td(`<span style="color:#666;font-size:12px">${esc(row.readerCategory || '—')}</span>`);
+    tds += td(`<span style="font-family:monospace;font-size:12px">${esc(row.pcNumber || '—')}</span>`);
+    tds += td(row.hasSession ? `<span style="color:#888">${row.durationMin}</span>` : `<span style="color:#333">—</span>`, 'text-align:center');
+
+    serviceColumns.forEach(sc => {
+      const s = row.services?.[sc.id];
+      if (s) {
+        tds += td(`<b style="color:#1d9e75">${s.qty}</b><br><span style="color:#555;font-size:11px">${s.amount.toLocaleString('ru-RU')}</span>`, 'text-align:center');
+      } else {
+        tds += td(`<span style="color:#333">—</span>`, 'text-align:center');
+      }
+    });
+
+    tds += td(`<b style="color:#1d9e75">${row.totalAmount.toLocaleString('ru-RU')}</b>`);
+    html += `<tr>${tds}</tr>`;
   });
 
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -1808,6 +1826,182 @@ function exportReport() {
     : document.getElementById('rptDateMonth').value;
   if (!dateVal) { toast('Выберите дату', 'warn'); return; }
   window.open(`/api/admin/readers/report/export?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`, '_blank');
+}
+
+// ─── Admin Service Dialog ─────────────────────────────────────────────────────
+let _adminSvcRows = [];
+let _adminSvcTargetPc = '';
+
+function openAdminServiceDlg(pcNumber) {
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  if (!svcTypes.length) { toast('Нет доступных услуг. Добавьте услуги в Настройках → Услуги.', 'warn'); return; }
+
+  _adminSvcTargetPc = pcNumber || '';
+
+  // Fill PC selector
+  const pcSel = document.getElementById('dlgAdminSvcPc');
+  pcSel.innerHTML = '<option value="">— Без привязки —</option>';
+  Object.values(pcs)
+    .filter(c => c.isSession)
+    .sort((a, b) => a.pcNumberValue - b.pcNumberValue)
+    .forEach(c => {
+      const reader = c.userName || c.readerId || '(анонимный)';
+      pcSel.innerHTML += `<option value="${esc(c.pcNumber)}">${esc(c.pcNumber)} — ${esc(reader)}</option>`;
+    });
+
+  // Pre-select if PC has session
+  if (_adminSvcTargetPc && pcs[_adminSvcTargetPc]?.isSession) pcSel.value = _adminSvcTargetPc;
+  else pcSel.value = '';
+
+  // Init rows
+  _adminSvcRows = [{ id: Date.now(), typeId: svcTypes[0]?.id || '', qty: 1 }];
+
+  // Reset reader input and payment
+  const readerInput = document.getElementById('dlgAdminSvcReaderId');
+  if (readerInput) readerInput.value = '';
+  const payNowRadio = document.querySelector('[name="svcAdminPay"][value="now"]');
+  if (payNowRadio) payNowRadio.checked = true;
+
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+  onAdminSvcPcChanged();
+  document.getElementById('dlgAdminService').style.display = 'flex';
+}
+
+function addAdminSvcRow() {
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  const usedTypes = new Set(_adminSvcRows.map(r => r.typeId));
+  const nextType = svcTypes.find(s => !usedTypes.has(s.id));
+  if (!nextType) { toast('Все доступные услуги уже добавлены', 'warn'); return; }
+  _adminSvcRows.push({ id: Date.now(), typeId: nextType.id, qty: 1 });
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+}
+
+function removeAdminSvcRow(rowId) {
+  _adminSvcRows = _adminSvcRows.filter(r => r.id !== rowId);
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  if (_adminSvcRows.length === 0)
+    _adminSvcRows = [{ id: Date.now(), typeId: svcTypes[0]?.id || '', qty: 1 }];
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+}
+
+function onAdminSvcRowTypeChange(rowId, typeId) {
+  const row = _adminSvcRows.find(r => r.id === rowId);
+  if (row) row.typeId = typeId;
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+}
+
+function onAdminSvcRowQtyChange(rowId, qty) {
+  const row = _adminSvcRows.find(r => r.id === rowId);
+  if (row) row.qty = Math.max(1, parseInt(qty) || 1);
+  updateAdminSvcTotal();
+}
+
+function renderAdminSvcRows() {
+  const container = document.getElementById('dlgAdminSvcList');
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  const usedTypes = new Set(_adminSvcRows.map(r => r.typeId));
+
+  container.innerHTML = _adminSvcRows.map(row => {
+    const opts = svcTypes.map(s => {
+      const disabled = s.id !== row.typeId && usedTypes.has(s.id) ? 'disabled' : '';
+      const selected = s.id === row.typeId ? 'selected' : '';
+      return `<option value="${esc(s.id)}" ${disabled} ${selected}>${esc(s.name)} — ${s.price.toLocaleString('ru-RU')} сум/${esc(s.unit)}</option>`;
+    }).join('');
+    const canRemove = _adminSvcRows.length > 1;
+    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <select style="flex:1;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px"
+        onchange="onAdminSvcRowTypeChange(${row.id}, this.value)">${opts}</select>
+      <input type="number" min="1" max="999" value="${row.qty}"
+        style="width:70px;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
+        oninput="onAdminSvcRowQtyChange(${row.id}, this.value)">
+      ${canRemove
+        ? `<button onclick="removeAdminSvcRow(${row.id})" style="padding:6px 10px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:14px;line-height:1">✕</button>`
+        : '<div style="width:34px"></div>'}
+    </div>`;
+  }).join('');
+
+  const btnAdd = document.getElementById('btnAdminAddSvcRow');
+  if (btnAdd) btnAdd.style.display = usedTypes.size >= svcTypes.length ? 'none' : '';
+}
+
+function updateAdminSvcTotal() {
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  let total = 0;
+  _adminSvcRows.forEach(row => {
+    const svc = svcTypes.find(s => s.id === row.typeId);
+    if (svc) total += svc.price * row.qty;
+  });
+  document.getElementById('dlgAdminSvcTotal').textContent = total > 0 ? total.toLocaleString('ru-RU') + ' сум' : '—';
+}
+
+function onAdminSvcPcChanged() {
+  const pcVal = document.getElementById('dlgAdminSvcPc').value;
+  const info = document.getElementById('dlgAdminSvcSessionInfo');
+  const readerRow = document.getElementById('dlgAdminSvcReaderRow');
+
+  if (pcVal && pcs[pcVal]) {
+    const c = pcs[pcVal];
+    const reader = c.userName || c.readerId || '';
+    info.textContent = reader ? `✓ Сессия на ${pcVal}: ${reader}` : `✓ Сессия на ${pcVal} (анонимный)`;
+    info.style.display = 'block';
+    if (readerRow) readerRow.style.display = 'none';
+  } else {
+    info.style.display = 'none';
+    if (readerRow) readerRow.style.display = '';
+  }
+  onAdminSvcPayChanged();
+}
+
+function onAdminSvcPayChanged() {
+  const pcVal = document.getElementById('dlgAdminSvcPc').value;
+  const wantLater = document.getElementById('rbAdminSvcLater')?.checked;
+  document.getElementById('dlgAdminSvcDeferNote').style.display =
+    (wantLater && !pcVal) ? 'block' : 'none';
+}
+
+async function confirmAdminService() {
+  if (_adminSvcRows.length === 0) { toast('Добавьте хотя бы одну услугу', 'warn'); return; }
+
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  const validRows = _adminSvcRows.filter(r => r.typeId);
+  if (!validRows.length) { toast('Выберите услугу', 'warn'); return; }
+
+  // Compute total for toast
+  let total = 0;
+  validRows.forEach(row => {
+    const svc = svcTypes.find(s => s.id === row.typeId);
+    if (svc) total += svc.price * row.qty;
+  });
+
+  const pcNumber = document.getElementById('dlgAdminSvcPc').value;
+  const payNow   = document.querySelector('[name="svcAdminPay"]:checked')?.value === 'now';
+
+  let readerId = '', readerName = '';
+  const c = pcNumber ? pcs[pcNumber] : null;
+  if (c) {
+    readerId   = c.readerId || '';
+    readerName = c.userName || '';
+  } else {
+    readerId = (document.getElementById('dlgAdminSvcReaderId')?.value || '').trim();
+  }
+
+  const items = validRows.map(r => ({ serviceTypeId: r.typeId, quantity: r.qty }));
+
+  closeDlg('dlgAdminService');
+  try {
+    const r = await fetch('/api/admin/finance/services/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, pcNumber, readerId, readerName, payNow })
+    });
+    if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка', 'warn'); return; }
+    toast(`Услуги созданы. Итого: ${total.toLocaleString('ru-RU')} сум${payNow ? '' : ' (отложено)'}`, 'success');
+    loadFinance();
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
 // ─── Self-update from publish folder ─────────────────────────────────────────
