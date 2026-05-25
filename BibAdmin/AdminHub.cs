@@ -201,6 +201,8 @@ namespace BibAdmin
                             DisconnectedAtUtc = c.DisconnectedAt?.ToString("o"),
                             ElapsedAtDisconnect = c.ElapsedAtDisconnect,
                             OfflineDecision = c.OfflineDecision.ToString(),
+                            ReaderId = c.ReaderId ?? "",
+                            UserName = c.UserName ?? "",
                             SavedAtUtc = DateTime.UtcNow
                         })
                         .ToList();
@@ -302,9 +304,40 @@ namespace BibAdmin
                         Enum.TryParse<OfflineDecision>(odProp.GetString(), out var parsedDecision))
                         offlineDecision = parsedDecision;
 
+                    // Пропускаем сессии старше 8 часов (защита от "фантомных" сессий)
+                    if (s.TryGetProperty("SavedAtUtc", out var savedAtProp) && savedAtProp.GetString() is string savedAtStr &&
+                        DateTime.TryParse(savedAtStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var savedAt) &&
+                        (DateTime.UtcNow - savedAt).TotalHours > 8)
+                    {
+                        Logger.Warn($"⚠️ Сессия {pcNumber} пропущена: устарела (сохранена {savedAt:HH:mm} UTC)");
+                        continue;
+                    }
+
+                    // Вычисляем актуальный elapsed (с учётом времени пока сервер был выключен)
+                    int currentElapsed;
+                    if (isPaused)
+                    {
+                        currentElapsed = accumulatedSeconds;
+                    }
+                    else if (sessionStart.HasValue)
+                    {
+                        currentElapsed = accumulatedSeconds + Math.Max(0, (int)(DateTime.UtcNow - sessionStart.Value).TotalSeconds);
+                    }
+                    else
+                    {
+                        currentElapsed = elapsedSeconds; // fallback
+                    }
+
+                    // Пропускаем сессии, у которых истёк лимит времени
+                    if (limitSeconds > 0 && currentElapsed >= limitSeconds)
+                    {
+                        Logger.Warn($"⚠️ Сессия {pcNumber} пропущена: лимит истёк ({currentElapsed}с / {limitSeconds}с)");
+                        continue;
+                    }
+
                     client.SessionType = sessionType;
                     client.SessionStart = sessionStart;
-                    client.ElapsedSeconds = elapsedSeconds;
+                    client.ElapsedSeconds = currentElapsed;
                     client.IsPaused = isPaused;
                     client.AccumulatedSeconds = accumulatedSeconds;
                     client.PaidAmount = paidAmount;
@@ -317,12 +350,18 @@ namespace BibAdmin
 
                     client.SessionId = sessionIdVal;
                     client.DisconnectedAt = disconnectedAt;
-                    client.ElapsedAtDisconnect = elapsedAtDisconnect; // ✅ СОХРАНЯЕМ!
+                    client.ElapsedAtDisconnect = elapsedAtDisconnect;
                     client.OfflineDecision = offlineDecision;
+
+                    // Восстанавливаем данные читателя
+                    if (s.TryGetProperty("ReaderId", out var ridProp) && ridProp.GetString() is string rid && !string.IsNullOrEmpty(rid))
+                        client.ReaderId = rid;
+                    if (s.TryGetProperty("UserName", out var unProp) && unProp.GetString() is string un && !string.IsNullOrEmpty(un))
+                        client.UserName = un;
 
                     KnownClients[pcNumber] = client;
                     restoredCount++;
-                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | {elapsedSeconds}с");
+                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | elapsed={currentElapsed}с (сохранено было {elapsedSeconds}с)");
                 }
                 Logger.Info($"✅ Загружено {restoredCount} сессий из файла");
             }

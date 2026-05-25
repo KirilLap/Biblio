@@ -37,6 +37,11 @@ echo.
 
 :: [1/6] Остановить BibAdminWeb и BibAdmin
 echo [1/6] Останавливаем сервисы...
+:: Сначала запрашиваем мягкое завершение (WM_CLOSE / CTRL_CLOSE) — это позволяет
+:: сохранить active_sessions.json через StopAsync. После 5 секунд добиваем /f.
+taskkill /im BibAdminWeb.exe 2>nul
+taskkill /im BibAdmin.exe    2>nul
+timeout /t 5 /nobreak >nul
 taskkill /f /im BibAdminWeb.exe 2>nul
 taskkill /f /im BibAdmin.exe    2>nul
 timeout /t 2 /nobreak >nul

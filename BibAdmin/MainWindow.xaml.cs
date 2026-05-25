@@ -81,8 +81,10 @@ namespace BibAdmin
             try
             {
                 var port = GlobalSettings.Load().ServerPort;
-                await _server.StartAsync(port);
 
+                // Загружаем данные ДО старта сервера, чтобы исключить гонку:
+                // при быстром реконнекте BibClient может успеть обратиться к RegisterClient
+                // ещё до того, как KnownClients будет заполнен сессиями из файла.
                 AdminHub.LoadRegistry();
                 Logger.Info("✅ Реестр клиентов загружен");
 
@@ -97,6 +99,8 @@ namespace BibAdmin
 
                 ServiceTransaction.LoadHistory();
                 Logger.Info("✅ История услуг загружена");
+
+                await _server.StartAsync(port);
 
                 if (MainFrame.Content is FinancePage financePage)
                     financePage.RefreshUI();

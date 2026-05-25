@@ -131,19 +131,27 @@ namespace BibClient
                 var heartbeat = SessionManager.ReadHeartbeat();
                 string sessionId = heartbeat?.sessionId ?? "";
                 int offlineSeconds = 0;
-                if (heartbeat.HasValue && IsRestoring)
+
+                // Если heartbeat существует — значит на клиенте была активная сессия.
+                // Даже если IsRestoring уже сброшен (например, сервер перезапустился пока
+                // клиент работал), мы всё равно восстанавливаем режим, чтобы:
+                //   1) Не слать «Заблокирован» после регистрации (иначе сервер сбросит сессию)
+                //   2) Корректно передать время оффлайна для верификации тайминга
+                bool effectivelyRestoring = IsRestoring || heartbeat.HasValue;
+
+                if (heartbeat.HasValue)
                 {
                     offlineSeconds = Math.Max(0, (int)(DateTime.UtcNow - heartbeat.Value.lastSync).TotalSeconds);
-                    Logger.Info($"🕐 Heartbeat: lastSync={heartbeat.Value.lastSync:HH:mm:ss}, offline={offlineSeconds}с, sessionId={sessionId[..Math.Min(8, sessionId.Length)]}…");
+                    Logger.Info($"🕐 Heartbeat: lastSync={heartbeat.Value.lastSync:HH:mm:ss}, offline={offlineSeconds}с, sessionId={sessionId[..Math.Min(8, sessionId.Length)]}… (effectivelyRestoring={effectivelyRestoring})");
                 }
 
-                _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", info, info.MacAddress, IsRestoring, sessionId, offlineSeconds);
+                _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", info, info.MacAddress, effectivelyRestoring, sessionId, offlineSeconds);
 
                 // При регистрации сервер возвращает полное имя (например, "Комп 10" или "ПК 10")
                 // Но нам НЕ нужно парсить его через сеттер PcNumber, чтобы избежать дублирования номера
                 // Вместо этого просто сохраняем для отображения, но не трогаем CustomName/PcNumberValue
                 Logger.Info($"✅ Зарегистрирован как: {_pcNumber}");
-                if (!IsRestoring) await SendStatusAsync("Заблокирован");
+                if (!effectivelyRestoring) await SendStatusAsync("Заблокирован");
                 OnRegistered?.Invoke();
             }
             catch (Exception ex) { Logger.Error($"❌ Ошибка регистрации: {ex.Message}"); }
@@ -152,7 +160,9 @@ namespace BibClient
         public async Task SendStatusAsync(string status)
         {
             if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
-            if (IsRestoring && status == "Заблокирован") return;
+            // Защита: не посылаем «Заблокирован» пока идёт восстановление сессии.
+            // Проверяем и IsRestoring (начальная загрузка), и наличие heartbeat (реконнект при перезапуске сервера).
+            if (status == "Заблокирован" && (IsRestoring || SessionManager.ReadHeartbeat().HasValue)) return;
             try
             {
                 var sessionType = PolicyEngine.ActiveSessionType;
