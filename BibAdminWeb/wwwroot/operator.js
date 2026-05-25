@@ -11,6 +11,7 @@ let readerCardPrefix = 'FAA';
 let sessionFields = { requireReaderId: true, requireUserName: false };
 let _readerLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
 let _readerLookedUpId = '';
+let _readerLookupInFlight = null;  // deduplicate concurrent lookups
 let latestClientVersion = '';
 let _svcRows = [];
 
@@ -428,7 +429,14 @@ async function confirmStartSession() {
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
+// Deduplication wrapper — prevents two concurrent lookups (blur + button click)
 async function lookupReader() {
+  if (_readerLookupInFlight) { await _readerLookupInFlight; return; }
+  _readerLookupInFlight = _lookupReaderImpl();
+  try { await _readerLookupInFlight; } finally { _readerLookupInFlight = null; }
+}
+
+async function _lookupReaderImpl() {
   const nums   = document.getElementById('dlgReaderId').value.trim();
   const infoEl = document.getElementById('dlgReaderInfo');
   if (!nums) { infoEl.style.display = 'none'; _readerLookupState = null; return; }

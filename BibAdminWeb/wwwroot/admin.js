@@ -314,6 +314,7 @@ let _ssType = 'Лимит';
 let _ssSyncing = false;
 let _ssLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
 let _ssLookedUpId  = '';
+let _ssLookupInFlight = null;  // deduplicate concurrent lookups
 
 function _ssParseRegDate(str) {
   if (!str) return null;
@@ -337,7 +338,14 @@ function ssOnCardTypeChanged() {
   document.getElementById('dlgSsReader').placeholder = isTemp ? '842' : '260500456';
 }
 
+// Deduplication wrapper — prevents two concurrent lookups (blur + button click)
 async function ssLookupReader() {
+  if (_ssLookupInFlight) { await _ssLookupInFlight; return; }
+  _ssLookupInFlight = _ssLookupReaderImpl();
+  try { await _ssLookupInFlight; } finally { _ssLookupInFlight = null; }
+}
+
+async function _ssLookupReaderImpl() {
   const nums   = document.getElementById('dlgSsReader').value.trim();
   const infoEl = document.getElementById('dlgSsReaderInfo');
   if (!nums) { infoEl.style.display = 'none'; _ssLookupState = null; return; }
