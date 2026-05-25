@@ -322,9 +322,31 @@ namespace BibAdminWeb
                         Enum.TryParse<OfflineDecision>(odProp.GetString(), out var parsedDecision))
                         offlineDecision = parsedDecision;
 
+                    // Вычисляем актуальный elapsed (сколько прошло с учётом времени пока сервер был выключен)
+                    int currentElapsed;
+                    if (isPaused)
+                    {
+                        currentElapsed = accumulatedSeconds;
+                    }
+                    else if (sessionStart.HasValue)
+                    {
+                        currentElapsed = accumulatedSeconds + Math.Max(0, (int)(DateTime.UtcNow - sessionStart.Value).TotalSeconds);
+                    }
+                    else
+                    {
+                        currentElapsed = elapsedSeconds; // fallback: используем сохранённое значение
+                    }
+
+                    // Пропускаем сессии, у которых истёк лимит времени (лимит > 0 и elapsed >= limit)
+                    if (limitSeconds > 0 && currentElapsed >= limitSeconds)
+                    {
+                        Logger.Warn($"⚠️ Сессия {pcNumber} пропущена: лимит истёк ({currentElapsed}с / {limitSeconds}с) — возможно, сессия завершилась пока сервер был выключен");
+                        continue;
+                    }
+
                     client.SessionType = sessionType;
                     client.SessionStart = sessionStart;
-                    client.ElapsedSeconds = elapsedSeconds;
+                    client.ElapsedSeconds = currentElapsed;
                     client.IsPaused = isPaused;
                     client.AccumulatedSeconds = accumulatedSeconds;
                     client.PaidAmount = paidAmount;
@@ -349,7 +371,7 @@ namespace BibAdminWeb
 
                     KnownClients[pcNumber] = client;
                     restoredCount++;
-                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | {elapsedSeconds}с | читатель: {client.ReaderId}");
+                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | elapsed={currentElapsed}с (сохранено было {elapsedSeconds}с) | читатель: {client.ReaderId}");
                 }
                 Logger.Info($"✅ Загружено {restoredCount} сессий из файла");
             }

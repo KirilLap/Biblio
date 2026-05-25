@@ -24,6 +24,15 @@ namespace BibAdminWeb
 
             var port = GlobalSettings.Load().ServerPort;
 
+            // Загружаем данные ДО старта сервера, чтобы исключить гонку:
+            // при быстром реконнекте BibClient не получит пустое состояние.
+            AdminHub.LoadRegistry();
+            AdminHub.LoadActiveSessions();
+            AdminHub.LoadDeletedPcs();
+            FinanceStore.LoadHistory();
+            ServiceTransaction.LoadHistory();
+            ReaderStore.Init();
+
             var server = new ServerHost();
             try
             {
@@ -35,13 +44,6 @@ namespace BibAdminWeb
                     "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-
-            AdminHub.LoadRegistry();
-            AdminHub.LoadActiveSessions();
-            AdminHub.LoadDeletedPcs();
-            FinanceStore.LoadHistory();
-            ServiceTransaction.LoadHistory();
-            ReaderStore.Init();
 
             Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{port}");
 
