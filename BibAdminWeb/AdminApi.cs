@@ -389,8 +389,9 @@ namespace BibAdminWeb
                     $" /NFL /NDL /NJH /NJS /NC /NS /NP",
                     // Flag tells Program.cs not to open a new browser window
                     $"echo.> \"{flagPath}\"",
-                    $"start \"\" \"{exePath}\"",
-                    "del \"%~f0\""
+                    $"start \"\" \"{exePath}\""
+                    // Примечание: del "%~f0" НЕ используем — самоудаление батника при работе
+                    // в cmd.exe /c оставляет cmd открытым вместо выхода (известная проблема Windows)
                 );
                 File.WriteAllText(scriptPath, script, Encoding.Default);
 
@@ -400,14 +401,13 @@ namespace BibAdminWeb
                     if (OperatorBroadcaster.Instance != null)
                         await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление из папки");
                     await Task.Delay(1500);
-                    // CreateNoWindow=true скрывает окно CMD — никакое окно не появляется
+                    // UseShellExecute=true + WindowStyle=Hidden надёжнее скрывает окно для .bat файлов.
+                    // UseShellExecute=false + CreateNoWindow иногда не скрывает окно cmd.exe.
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
-                        FileName = "cmd.exe",
-                        Arguments = $"/c \"{scriptPath}\"",
-                        CreateNoWindow = true,
+                        FileName = scriptPath,
                         WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-                        UseShellExecute = false
+                        UseShellExecute = true
                     });
                     await Task.Delay(300);
                     Environment.Exit(0);
