@@ -12,6 +12,7 @@ let sessionFields = { requireReaderId: true, requireUserName: false };
 let _readerLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
 let _readerLookedUpId = '';
 let _readerLookupInFlight = null;  // deduplicate concurrent lookups
+let _readerLookupTimer = null;     // debounce timer for auto-lookup on input
 let latestClientVersion = '';
 let _svcRows = [];
 
@@ -327,6 +328,21 @@ function parseRegDate(dateStr) {
   if (p.length !== 3) return null;
   const d = new Date(+p[2], +p[1] - 1, +p[0]);
   return isNaN(d) ? null : d;
+}
+
+// Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
+function onReaderInput() {
+  const el = document.getElementById('dlgReaderId');
+  el.value = el.value.replace(/\D/g, '');
+  _readerLookupState = null;
+  clearTimeout(_readerLookupTimer);
+  const nums = el.value;
+  if (nums.length >= 6) {
+    _readerLookupTimer = setTimeout(lookupReader, 500);
+  } else {
+    document.getElementById('dlgReaderInfo').style.display = 'none';
+    document.getElementById('dlgUserName').value = '';
+  }
 }
 
 function onCardTypeChanged() {

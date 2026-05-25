@@ -357,6 +357,7 @@ let _ssSyncing = false;
 let _ssLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
 let _ssLookedUpId  = '';
 let _ssLookupInFlight = null;  // deduplicate concurrent lookups
+let _ssLookupTimer    = null;  // debounce timer for auto-lookup on input
 
 function _ssParseRegDate(str) {
   if (!str) return null;
@@ -378,6 +379,21 @@ function ssOnCardTypeChanged() {
   document.getElementById('dlgSsReaderInfo').style.display = 'none';
   document.getElementById('dlgSsName').value = '';
   document.getElementById('dlgSsReader').placeholder = isTemp ? '842' : '260500456';
+}
+
+// Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
+function onSsReaderInput() {
+  const el = document.getElementById('dlgSsReader');
+  el.value = el.value.replace(/\D/g, '');
+  _ssLookupState = null;
+  clearTimeout(_ssLookupTimer);
+  const nums = el.value;
+  if (nums.length >= 6) {
+    _ssLookupTimer = setTimeout(ssLookupReader, 500);
+  } else {
+    document.getElementById('dlgSsReaderInfo').style.display = 'none';
+    document.getElementById('dlgSsName').value = '';
+  }
 }
 
 // Deduplication wrapper — prevents two concurrent lookups (blur + button click)

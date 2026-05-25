@@ -614,3 +614,40 @@ body {
 .radio-group { display: flex; gap: 16px; margin-top: 4px; }
 .radio-opt { color: #AAAACC; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 
+/* ── PC card selected state ─────────────────────────────── */
+.pc-card.selected { border-color: #4a90d9; box-shadow: 0 0 0 3px rgba(74,144,217,.2); }
+.pc-card { cursor: pointer; }
+
+/* ── Bottom action bar ──────────────────────────────────── */
+.action-bar {
+  position: fixed;
+  bottom: 0; left: 200px; right: 0;
+  background: #16162a;
+  border-top: 1px solid #222240;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 300;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.4);
+}
+.action-bar.hidden { display: none; }
+.ab-pc-name { color: #e0e0f0; font-size: 15px; font-weight: 700; min-width: 80px; }
+.ab-status  { color: #888;    font-size: 13px; min-width: 90px; }
+.ab-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.ab-btn {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: opacity .15s;
+}
+.ab-btn:hover { opacity: .85; }
+.ab-btn.green { background: #1d9e75; color: #fff; }
+.ab-btn.red   { background: #5a2020; border-color: #8b3030; color: #f87171; }
+.ab-btn.amber { background: #3d2a00; border-color: #8b6000; color: #ffc040; }
+.ab-btn.blue  { background: #1a3a6a; border-color: #2a5aa0; color: #90c0ff; }
+
