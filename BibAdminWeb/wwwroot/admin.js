@@ -467,7 +467,6 @@ function ssSyncMoney() {
 async function confirmStartSession() {
   const isTemp  = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
   const nums    = document.getElementById('dlgSsReader').value.trim();
-  const name    = document.getElementById('dlgSsName').value.trim();
   if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
 
   const prefix = settings.readerCardPrefix || 'FAA';
@@ -479,6 +478,7 @@ async function confirmStartSession() {
     if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
     if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
   }
+  const name = document.getElementById('dlgSsName').value.trim();
   if (settings.requireUserName && !name) { toast('Введите имя пользователя', 'warn'); return; }
 
   let limitSeconds = 0, paidAmount = 0;

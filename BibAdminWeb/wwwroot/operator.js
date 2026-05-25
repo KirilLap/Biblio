@@ -397,7 +397,6 @@ async function confirmStartSession() {
   const sessionType = document.querySelector('[name="stype"]:checked')?.value || 'Лимит';
   const limitMin    = parseInt(document.getElementById('dlgLimitMin').value) || 0;
   const paidAmount  = parseInt(document.getElementById('dlgAmount').value) || 0;
-  const userName    = document.getElementById('dlgUserName').value.trim();
   const isTemp     = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
   const readerNums = document.getElementById('dlgReaderId').value.trim();
 
@@ -417,6 +416,7 @@ async function confirmStartSession() {
     if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
   }
 
+  const userName = document.getElementById('dlgUserName').value.trim();
   if (!!sessionFields.requireUserName && !userName) { toast('Введите имя пользователя', 'warn'); return; }
 
   closeDlg('dlgSession');
