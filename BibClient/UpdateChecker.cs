@@ -64,6 +64,10 @@ namespace BibClient
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
         }
 
+        // Имя флагового файла, который читает BibClientService для запуска инсталлятора от SYSTEM.
+        // Путь к инсталлятору записывается в этот файл; сам файл кладётся рядом с exe.
+        public static readonly string UpdateFlagFileName = "BibClientUpdate.flag";
+
         private static async Task DownloadAndRunAsync(string serverBaseUrl, string installerFile)
         {
             if (Interlocked.CompareExchange(ref _downloading, 1, 0) != 0)
@@ -73,11 +77,13 @@ namespace BibClient
             }
 
             var downloadUrl = serverBaseUrl.TrimEnd('/') + "/updates/" + installerFile;
-            var tempPath = Path.Combine(Path.GetTempPath(), installerFile);
+            // Кладём инсталлятор в папку приложения, а не в %TEMP% —
+            // AppLocker в заблокированных средах запрещает запуск exe из временных папок.
+            var installerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, installerFile);
             try
             {
                 var bytes = await _downloadHttp.GetByteArrayAsync(downloadUrl);
-                await File.WriteAllBytesAsync(tempPath, bytes);
+                await File.WriteAllBytesAsync(installerPath, bytes);
             }
             catch (Exception ex)
             {
@@ -87,14 +93,21 @@ namespace BibClient
                 return;
             }
 
-            // /VERYSILENT — без окон, /NORESTART — без перезагрузки ПК,
-            // /COMPONENTS=client — только BibClient, без серверных компонентов
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            // Записываем флаг-файл для BibClientService.
+            // Служба работает от SYSTEM — она запустит инсталлятор без UAC и без ограничений AppLocker.
+            try
             {
-                FileName = tempPath,
-                Arguments = "/VERYSILENT /NORESTART /COMPONENTS=client",
-                UseShellExecute = true
-            });
+                var flagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, UpdateFlagFileName);
+                await File.WriteAllTextAsync(flagPath, installerPath);
+                Logger.Info($"📋 Флаг обновления записан: {flagPath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка записи флага обновления: {ex.Message}");
+                UpdateFailed?.Invoke("download_failed");
+                Interlocked.Exchange(ref _downloading, 0);
+                return;
+            }
 
             // Сигнализируем Guardian и Windows-службе что закрытие легальное —
             // иначе они немедленно перезапустят BibClient и инсталлятор не сможет
@@ -103,7 +116,7 @@ namespace BibClient
             ServiceManager.SignalLegalClose();
 
             await Task.Delay(1000);
-            Logger.Info("⬆️ Завершаем BibClient для установки обновления...");
+            Logger.Info("⬆️ Завершаем BibClient — установку выполнит BibClientService от SYSTEM...");
             Environment.Exit(0);
         }
 

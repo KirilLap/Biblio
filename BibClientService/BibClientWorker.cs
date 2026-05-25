@@ -19,6 +19,13 @@ namespace BibClientService
             "BibClientLegalClose.flag"
         );
 
+        // Флаг обновления — BibClient записывает сюда путь к скачанному инсталлятору.
+        // Служба запускает инсталлятор от SYSTEM, обходя UAC и AppLocker пользователя.
+        private static readonly string UpdateFlagPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "BibClientUpdate.flag"
+        );
+
         // Минимальный интервал между перезапусками (защита от бесконечного цикла при краше при старте)
         private static readonly TimeSpan RestartCooldown = TimeSpan.FromSeconds(5);
 
@@ -52,6 +59,24 @@ namespace BibClientService
 
                     if (!isRunning)
                     {
+                        // Проверяем флаг обновления ПЕРВЫМ — приоритет над ожиданием легального закрытия.
+                        // BibClient записывает путь к инсталлятору и создаёт оба флага перед выходом.
+                        if (File.Exists(UpdateFlagPath))
+                        {
+                            string installerPath = "";
+                            try { installerPath = (await File.ReadAllTextAsync(UpdateFlagPath, stoppingToken)).Trim(); }
+                            catch { }
+                            File.Delete(UpdateFlagPath);
+                            // Убираем флаг легального закрытия — после установки сразу перезапускаем
+                            try { File.Delete(LegalCloseFlagPath); } catch { }
+
+                            _logger.LogInformation("Флаг обновления обнаружен — запуск инсталлятора от SYSTEM: {Path}", installerPath);
+                            await RunInstallerAsSystemAsync(installerPath, stoppingToken);
+                            // Даём инсталлятору время завершить финальные шаги перед следующей итерацией
+                            await Task.Delay(3000, stoppingToken);
+                            continue;
+                        }
+
                         // Проверяем флаг легального закрытия (администратор закрыл через пароль)
                         if (File.Exists(LegalCloseFlagPath))
                         {
@@ -85,6 +110,56 @@ namespace BibClientService
             }
 
             _logger.LogInformation("BibClientService остановлен");
+        }
+
+        private async Task RunInstallerAsSystemAsync(string installerPath, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(installerPath) || !File.Exists(installerPath))
+            {
+                _logger.LogError("Инсталлятор не найден: {Path}", installerPath);
+                return;
+            }
+
+            try
+            {
+                // Служба работает как SYSTEM — запуск напрямую без UAC и без ограничений AppLocker
+                var psi = new ProcessStartInfo
+                {
+                    FileName = installerPath,
+                    Arguments = "/VERYSILENT /NORESTART /COMPONENTS=client",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                using var p = Process.Start(psi);
+                if (p == null)
+                {
+                    _logger.LogError("Не удалось запустить инсталлятор");
+                    return;
+                }
+
+                // Ждём завершения максимум 10 минут
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
+                try
+                {
+                    await p.WaitForExitAsync(timeoutCts.Token);
+                    _logger.LogInformation("Инсталлятор завершён с кодом {ExitCode}", p.ExitCode);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogError("Таймаут ожидания инсталлятора — принудительное завершение");
+                    try { p.Kill(); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка запуска инсталлятора от SYSTEM");
+            }
+            finally
+            {
+                // Удаляем файл инсталлятора после установки
+                try { File.Delete(installerPath); } catch { }
+            }
         }
 
         private bool IsBibClientRunning()
