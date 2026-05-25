@@ -293,8 +293,6 @@ function buildActions(c) {
     if (c.sessionType === 'Лимит')
       btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
   }
-  // Кнопка услуги — всегда для онлайн-ПК (в сессии или нет)
-  btns.push(`<button class="btn btn-outline" onclick="openAdminServiceDlg('${esc(c.pcNumber)}')" title="Оказать услугу">🛎</button>`);
   return btns.join('');
 }
 
