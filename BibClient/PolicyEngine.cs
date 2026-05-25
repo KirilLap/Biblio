@@ -328,12 +328,14 @@ namespace BibClient
                     case "HIDE_DRIVE_C":
                         SettingsManager.Current.HideDriveC = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetHideDriveC(SettingsManager.Current.HideDriveC);
                         SettingsChanged?.Invoke();
                         break;
 
                     case "BLOCK_INSTALL_UNINSTALL":
                         SettingsManager.Current.BlockInstall = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetBlockInstallUninstall(SettingsManager.Current.BlockInstall);
                         SettingsChanged?.Invoke();
                         break;
 

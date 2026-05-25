@@ -40,6 +40,11 @@ namespace BibClient
 
         public static async Task CheckAsync(string serverBaseUrl)
         {
+            // Локальная папка updates/ рядом с exe имеет приоритет над HTTP.
+            // Достаточно положить bibclient-version.json и инсталлятор в эту папку —
+            // BibClient подхватит их без скачивания.
+            if (await CheckLocalFolderAsync()) return;
+
             VersionInfo? info = null;
             try
             {
@@ -62,6 +67,35 @@ namespace BibClient
 
             Logger.Info($"Доступна версия {info.Version}, текущая {CurrentVersion} — запуск тихого обновления");
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
+        }
+
+        private static async Task<bool> CheckLocalFolderAsync()
+        {
+            var localDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+            var versionFile = Path.Combine(localDir, "bibclient-version.json");
+            if (!File.Exists(versionFile)) return false;
+
+            VersionInfo? info;
+            try
+            {
+                var json = await File.ReadAllTextAsync(versionFile);
+                info = JsonSerializer.Deserialize<VersionInfo>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch { return false; }
+
+            if (info == null || !IsNewer(info.Version, CurrentVersion)) return false;
+
+            var installerPath = Path.Combine(localDir, info.InstallerFile);
+            if (!File.Exists(installerPath))
+            {
+                Logger.Warn($"⚠️ bibclient-version.json найден, но инсталлятор отсутствует: {installerPath}");
+                return false;
+            }
+
+            Logger.Info($"📦 Локальная версия {info.Version} (текущая {CurrentVersion}) — установка из папки updates/");
+            await TriggerInstallAsync(installerPath);
+            return true;
         }
 
         // Имя флагового файла, который читает BibClientService для запуска инсталлятора от SYSTEM.
@@ -93,8 +127,14 @@ namespace BibClient
                 return;
             }
 
-            // Записываем флаг-файл для BibClientService.
-            // Служба работает от SYSTEM — она запустит инсталлятор без UAC и без ограничений AppLocker.
+            await TriggerInstallAsync(installerPath);
+            Interlocked.Exchange(ref _downloading, 0);
+        }
+
+        // Записывает флаг для BibClientService и завершает BibClient.
+        // Служба работает от SYSTEM — запустит инсталлятор без UAC и без ограничений AppLocker.
+        private static async Task TriggerInstallAsync(string installerPath)
+        {
             try
             {
                 var flagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, UpdateFlagFileName);
@@ -105,7 +145,6 @@ namespace BibClient
             {
                 Logger.Error($"Ошибка записи флага обновления: {ex.Message}");
                 UpdateFailed?.Invoke("download_failed");
-                Interlocked.Exchange(ref _downloading, 0);
                 return;
             }
 

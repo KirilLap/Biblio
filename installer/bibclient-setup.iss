@@ -22,6 +22,7 @@ DisableWelcomePage=yes
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 CreateUninstallRegKey=no
+Uninstallable=no
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -29,9 +30,6 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 [Files]
 Source: "{#SrcClient}\*"; DestDir: "{app}\BibClient"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
-
-[Icons]
-Name: "{autodesktop}\BibClient"; Filename: "{app}\BibClient\BibClient.exe"
 
 [Run]
 Filename: "sc.exe"; \
