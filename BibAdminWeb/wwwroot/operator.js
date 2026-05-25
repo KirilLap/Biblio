@@ -706,15 +706,15 @@ function renderSvcRows() {
       return `<option value="${esc(s.id)}" ${disabled} ${selected}>${esc(s.name)} — ${fmt(s.price)} сум/${esc(s.unit)}</option>`;
     }).join('');
     const canRemove = _svcRows.length > 1;
-    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <select style="flex:1;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px"
+    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;min-width:0">
+      <select style="flex:1;min-width:0;padding:7px 8px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:12px"
         onchange="onSvcRowTypeChange(${row.id}, this.value)">${opts}</select>
       <input type="number" min="1" max="999" value="${row.qty}"
-        style="width:70px;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
+        style="width:60px;flex-shrink:0;padding:7px 6px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
         oninput="onSvcRowQtyChange(${row.id}, this.value)">
       ${canRemove
-        ? `<button onclick="removeSvcRow(${row.id})" style="padding:6px 10px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:14px;line-height:1">✕</button>`
-        : '<div style="width:34px"></div>'}
+        ? `<button onclick="removeSvcRow(${row.id})" style="flex-shrink:0;width:28px;height:28px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;padding:0">✕</button>`
+        : '<div style="width:28px;flex-shrink:0"></div>'}
     </div>`;
   }).join('');
 

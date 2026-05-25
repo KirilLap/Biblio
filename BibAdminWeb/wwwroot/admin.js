@@ -292,10 +292,9 @@ function buildActions(c) {
     btns.push(`<button class="btn btn-outline" onclick="openTransfer('${esc(c.pcNumber)}')">↔</button>`);
     if (c.sessionType === 'Лимит')
       btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="openAdminServiceDlg('${esc(c.pcNumber)}')" title="Оказать услугу">🛎</button>`);
-  } else if (c.isOnline) {
-    btns.push(`<button class="btn btn-outline" onclick="openAdminServiceDlg('${esc(c.pcNumber)}')" title="Оказать услугу">🛎</button>`);
   }
+  // Кнопка услуги — всегда для онлайн-ПК (в сессии или нет)
+  btns.push(`<button class="btn btn-outline" onclick="openAdminServiceDlg('${esc(c.pcNumber)}')" title="Оказать услугу">🛎</button>`);
   return btns.join('');
 }
 
@@ -1912,15 +1911,15 @@ function renderAdminSvcRows() {
       return `<option value="${esc(s.id)}" ${disabled} ${selected}>${esc(s.name)} — ${s.price.toLocaleString('ru-RU')} сум/${esc(s.unit)}</option>`;
     }).join('');
     const canRemove = _adminSvcRows.length > 1;
-    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <select style="flex:1;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px"
+    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;min-width:0">
+      <select style="flex:1;min-width:0;padding:7px 8px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:12px"
         onchange="onAdminSvcRowTypeChange(${row.id}, this.value)">${opts}</select>
       <input type="number" min="1" max="999" value="${row.qty}"
-        style="width:70px;padding:7px 10px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
+        style="width:60px;flex-shrink:0;padding:7px 6px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
         oninput="onAdminSvcRowQtyChange(${row.id}, this.value)">
       ${canRemove
-        ? `<button onclick="removeAdminSvcRow(${row.id})" style="padding:6px 10px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:14px;line-height:1">✕</button>`
-        : '<div style="width:34px"></div>'}
+        ? `<button onclick="removeAdminSvcRow(${row.id})" style="flex-shrink:0;width:28px;height:28px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;padding:0">✕</button>`
+        : '<div style="width:28px;flex-shrink:0"></div>'}
     </div>`;
   }).join('');
 

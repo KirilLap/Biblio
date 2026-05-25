@@ -51,6 +51,7 @@
           <option value="ByNumber">По номеру</option>
           <option value="ByName">По имени</option>
         </select>
+        <button class="btn btn-primary" onclick="openAdminServiceDlg('')">🛎 Услуга</button>
         <button class="btn btn-outline" onclick="lockAll()">🔒 Заблокировать всех</button>
         <button class="btn btn-outline" onclick="unlockAll()">🔓 Разблокировать всех</button>
       </div>
@@ -675,7 +676,7 @@
 
 <!-- Admin Service dialog -->
 <div id="dlgAdminService" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeDlg('dlgAdminService')">
-  <div class="dlg">
+  <div class="dlg" style="width:480px">
     <div class="dlg-title">🛎 Оказать услугу</div>
 
     <div class="form-row">
@@ -684,7 +685,7 @@
         <option value="">— Без привязки —</option>
       </select>
     </div>
-    <div id="dlgAdminSvcSessionInfo" style="font-size:12px;color:#1D9E75;margin:-6px 0 8px;display:none"></div>
+    <div id="dlgAdminSvcSessionInfo" style="font-size:12px;color:#1D9E75;margin:4px 0 8px;display:none"></div>
 
     <div id="dlgAdminSvcReaderRow" class="form-row" style="display:none">
       <label>Читатель <span style="color:#666;font-size:11px">(необязательно)</span></label>

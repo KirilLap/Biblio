@@ -202,6 +202,8 @@ namespace BibAdminWeb
                             DisconnectedAtUtc = c.DisconnectedAt?.ToString("o"),
                             ElapsedAtDisconnect = c.ElapsedAtDisconnect,
                             OfflineDecision = c.OfflineDecision.ToString(),
+                            ReaderId = c.ReaderId ?? "",
+                            UserName = c.UserName ?? "",
                             SavedAtUtc = DateTime.UtcNow
                         })
                         .ToList();
@@ -335,12 +337,19 @@ namespace BibAdminWeb
 
                     client.SessionId = sessionIdVal;
                     client.DisconnectedAt = disconnectedAt;
-                    client.ElapsedAtDisconnect = elapsedAtDisconnect; // ✅ СОХРАНЯЕМ!
+                    client.ElapsedAtDisconnect = elapsedAtDisconnect;
                     client.OfflineDecision = offlineDecision;
+
+                    // Восстанавливаем данные читателя (чтобы после перезапуска сессия
+                    // не становилась «анонимной»)
+                    if (s.TryGetProperty("ReaderId", out var ridProp) && ridProp.GetString() is string rid && !string.IsNullOrEmpty(rid))
+                        client.ReaderId = rid;
+                    if (s.TryGetProperty("UserName", out var unProp) && unProp.GetString() is string un && !string.IsNullOrEmpty(un))
+                        client.UserName = un;
 
                     KnownClients[pcNumber] = client;
                     restoredCount++;
-                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | {elapsedSeconds}с");
+                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | {elapsedSeconds}с | читатель: {client.ReaderId}");
                 }
                 Logger.Info($"✅ Загружено {restoredCount} сессий из файла");
             }
