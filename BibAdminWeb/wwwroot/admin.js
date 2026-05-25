@@ -6,7 +6,8 @@ let finSessions = [];
 let finServices = [];
 let settings = {};
 let finTab = 'sessions';
-let activePc = null;    // selected pc for dialogs
+let activePc = null;         // selected pc for dialogs
+let selectedAdminPc = null;  // pc highlighted in grid → bottom action bar
 let pendingOfflinePc = null;
 let pendingConflict = null;
 let renamePcVal = null;
@@ -152,6 +153,7 @@ function renderPcGrid() {
   list.forEach(c => grid.appendChild(buildPcCard(c)));
 
   renderUpdatePanel(list);
+  if (selectedAdminPc) renderAdminActionBar();
 }
 
 function renderUpdatePanel(list) {
@@ -197,6 +199,11 @@ function buildPcCard(c) {
   div.className = 'pc-card';
   div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
   div.id = 'pc-' + c.pcNumber.replace(/\s/g, '_');
+  div.dataset.pcnumber = c.pcNumber;
+  if (selectedAdminPc === c.pcNumber) div.classList.add('selected');
+  div.addEventListener('click', e => {
+    if (!e.target.closest('button') && !e.target.closest('.pc-name')) selectAdminPc(c.pcNumber);
+  });
 
   // Оффлайн + сессия: карточка с тёплым красным акцентом
   if (!c.isOnline && c.isSession) {
@@ -255,7 +262,7 @@ function buildPcCard(c) {
     ${badge}
     ${timer}
     ${meta}
-    <div class="pc-actions">${actions}</div>
+    ${actions ? `<div class="pc-actions">${actions}</div>` : ''}
   `;
   return div;
 }
@@ -274,26 +281,63 @@ function statusBadge(c) {
 }
 
 function buildActions(c) {
-  if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑</button>`;
+  // Для оффлайн-ПК — только удаление прямо на карточке
+  if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑 Удалить</button>`;
+  // Для онлайн-ПК все действия в нижней панели (selectAdminPc → renderAdminActionBar)
+  return '';
+}
 
+// ─── Bottom action bar ───────────────────────────────────────────────────────
+function selectAdminPc(pcNumber) {
+  if (!pcNumber || selectedAdminPc === pcNumber) {
+    selectedAdminPc = null;
+    document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+    document.getElementById('adminActionBar').classList.add('hidden');
+    return;
+  }
+  selectedAdminPc = pcNumber;
+  document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`#pcGrid [data-pcnumber="${CSS.escape(pcNumber)}"]`);
+  if (card) card.classList.add('selected');
+  renderAdminActionBar();
+}
+
+function renderAdminActionBar() {
+  const ab = document.getElementById('adminActionBar');
+  const pc = pcs[selectedAdminPc];
+  if (!pc) { ab.classList.add('hidden'); return; }
+
+  document.getElementById('aabPcName').textContent = pc.pcNumber;
+  document.getElementById('aabStatus').textContent = pc.status;
+
+  const p = pc.pcNumber;
   const btns = [];
-  btns.push(`<button class="btn btn-outline" onclick="openScreenView('${esc(c.pcNumber)}')" title="Просмотр экрана">👁</button>`);
-  if (!c.isSession && !c.isFree) {
-    btns.push(`<button class="btn btn-primary" onclick="openStartSession('${esc(c.pcNumber)}')">▶ Старт</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="unlock('${esc(c.pcNumber)}')">🔓</button>`);
+
+  if (!pc.isOnline) {
+    btns.push(`<button class="ab-btn red" onclick="deletePc('${esc(p)}')">🗑 Удалить</button>`);
+  } else {
+    btns.push(`<button class="ab-btn" style="background:#374151;border-color:#4b5563" onclick="openScreenView('${esc(p)}')">👁 Экран</button>`);
+    if (!pc.isSession && !pc.isFree) {
+      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
+      btns.push(`<button class="ab-btn" style="background:#1A3A1A;border-color:#2A5A2A;color:#90E090" onclick="unlock('${esc(p)}')">🔓 Разблокировать</button>`);
+    }
+    if (!pc.isSession && pc.isFree) {
+      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
+      btns.push(`<button class="ab-btn" style="background:#3A1A1A;border-color:#5A2A2A;color:#E09090" onclick="lock('${esc(p)}')">🔒 Заблокировать</button>`);
+    }
+    if (pc.isSession) {
+      const pauseLabel = pc.isPaused ? '▶ Продолжить' : '⏸ Пауза';
+      const pauseCls   = pc.isPaused ? 'green' : 'amber';
+      btns.push(`<button class="ab-btn ${pauseCls}" onclick="togglePause('${esc(p)}')">${pauseLabel}</button>`);
+      btns.push(`<button class="ab-btn blue" onclick="openTransfer('${esc(p)}')">↔ Пересадить</button>`);
+      if (pc.sessionType === 'Лимит')
+        btns.push(`<button class="ab-btn blue" onclick="openExtend('${esc(p)}')">+⏱ Время</button>`);
+      btns.push(`<button class="ab-btn red" onclick="endSession('${esc(p)}')">⏹ Завершить</button>`);
+    }
   }
-  if (!c.isSession && c.isFree) {
-    btns.push(`<button class="btn btn-primary" onclick="openStartSession('${esc(c.pcNumber)}')">▶ Старт</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="lock('${esc(c.pcNumber)}')">🔒</button>`);
-  }
-  if (c.isSession) {
-    btns.push(`<button class="btn btn-danger" onclick="endSession('${esc(c.pcNumber)}')">⏹ Стоп</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="togglePause('${esc(c.pcNumber)}')">${c.isPaused ? '▶' : '⏸'}</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="openTransfer('${esc(c.pcNumber)}')">↔</button>`);
-    if (c.sessionType === 'Лимит')
-      btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
-  }
-  return btns.join('');
+
+  document.getElementById('aabActions').innerHTML = btns.join('');
+  ab.classList.remove('hidden');
 }
 
 // ─── Timers ──────────────────────────────────────────────────────────────────
