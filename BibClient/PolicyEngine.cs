@@ -432,6 +432,12 @@ namespace BibClient
                         _ = UpdateChecker.CheckAsync(serverBase);
                         break;
 
+                    case "UPDATE_FOLDER_NOW":
+                        Logger.Info("📦 Получена команда UPDATE_FOLDER_NOW — обновление из папки");
+                        var serverBaseFolder = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                        _ = UpdateChecker.CheckFolderUpdateAsync(serverBaseFolder);
+                        break;
+
                     case "GET_LOGS":
                         Logger.Info("📋 Запрос логов от сервера");
                         try

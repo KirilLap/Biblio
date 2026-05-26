@@ -607,6 +607,7 @@ async function restartAll() {
 async function updateAllClients() {
   if (!confirm('Отправить команду обновления всем клиентским ПК?\n\nОни автоматически скачают и тихо установят новую версию BibClient. Клиенты перезапустятся сами.')) return;
   const btn = document.getElementById('btnUpdateClients');
+  const statusEl = document.getElementById('updateStatusClients');
   btn.disabled = true;
   btn.textContent = '⏳ Отправка...';
   updatePanelDismissed = false;
@@ -619,11 +620,62 @@ async function updateAllClients() {
     await conn.invoke('SendCommandToAll', 'UPDATE_NOW', '');
     toast('Команда обновления отправлена всем ПК', 'good');
     btn.textContent = '✓ Отправлено';
-    setTimeout(() => { btn.disabled = false; btn.textContent = '⬆️ Обновить все клиенты'; }, 4000);
+    if (statusEl) { statusEl.style.display = 'inline'; statusEl.style.color = '#1d9e75'; statusEl.textContent = '✓ Команда отправлена'; }
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⬆️ Обновить все клиенты (exe)'; if (statusEl) statusEl.style.display = 'none'; }, 5000);
   } catch (e) {
     toast('Ошибка отправки команды', 'error');
     btn.disabled = false;
-    btn.textContent = '⬆️ Обновить все клиенты';
+    btn.textContent = '⬆️ Обновить все клиенты (exe)';
+  }
+}
+
+// ─── Client folder update (zip, no installer) ────────────────────────────────
+async function applyClientFolderUpdate() {
+  const pathVal = document.getElementById('clientFolderPath').value.trim();
+  if (!pathVal) { toast('Укажите путь к папке с обновлением BibClient', 'warn'); return; }
+
+  localStorage.setItem('bib_client_update_folder', pathVal);
+
+  if (!confirm(`Упаковать папку и разослать обновление всем клиентам?\n\nПапка: ${pathVal}\n\nКлиенты скачают архив, перезапустятся и продолжат работу с новыми файлами.`)) return;
+
+  const statusEl = document.getElementById('clientFolderUpdateStatus');
+  statusEl.textContent = '📦 Упаковка...';
+  statusEl.style.color = '#aaa';
+
+  // Шаг 1: Упаковываем папку в zip на сервере
+  try {
+    const r = await fetch('/api/admin/pack-client-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourcePath: pathVal })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка упаковки';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка упаковки', 'error');
+      return;
+    }
+  } catch (e) {
+    statusEl.textContent = 'Ошибка: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка упаковки: ' + e, 'error');
+    return;
+  }
+
+  // Шаг 2: Рассылаем команду UPDATE_FOLDER_NOW всем клиентам
+  statusEl.textContent = '📡 Рассылаю команду...';
+  try {
+    updatePanelDismissed = false;
+    await conn.invoke('SendCommandToAll', 'UPDATE_FOLDER_NOW', '');
+    statusEl.textContent = '✓ Команда отправлена. Клиенты обновляются...';
+    statusEl.style.color = '#1d9e75';
+    toast('Команда обновления из папки отправлена клиентам', 'good');
+    setTimeout(() => { statusEl.textContent = ''; }, 8000);
+  } catch (e) {
+    statusEl.textContent = 'Ошибка рассылки: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка рассылки: ' + e, 'error');
   }
 }
 
@@ -2325,8 +2377,10 @@ async function applyFolderUpdate() {
   }
 }
 
-// Restore saved update folder path on page load
+// Restore saved update folder paths on page load
 document.addEventListener('DOMContentLoaded', () => {
   const saved = localStorage.getItem('bib_update_folder');
   if (saved) { const el = document.getElementById('updateFolderPath'); if (el) el.value = saved; }
+  const savedClient = localStorage.getItem('bib_client_update_folder');
+  if (savedClient) { const el = document.getElementById('clientFolderPath'); if (el) el.value = savedClient; }
 });

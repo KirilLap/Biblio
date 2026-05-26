@@ -334,6 +334,22 @@ namespace BibAdminWeb
                     AdminHub.KnownClients[pcNumber] = client;
                     AdminHub.RaiseClientUpdated(client);
                 }
+                if (type == "UPDATE_FOLDER_NOW" && client.IsOnline)
+                {
+                    // Если клиент в сессии — откладываем обновление до её конца
+                    if (client.IsSession)
+                    {
+                        client.UpdateStatus = "deferred";
+                        client.PreUpdateVersion = client.ClientVersion;
+                        AdminHub.KnownClients[pcNumber] = client;
+                        AdminHub.RaiseClientUpdated(client);
+                        continue;
+                    }
+                    client.UpdateStatus = "pending";
+                    client.PreUpdateVersion = client.ClientVersion;
+                    AdminHub.KnownClients[pcNumber] = client;
+                    AdminHub.RaiseClientUpdated(client);
+                }
                 if (client.IsOnline)
                     await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
                 else

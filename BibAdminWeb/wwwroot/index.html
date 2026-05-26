@@ -383,23 +383,20 @@
         <div class="settings-col">
 
           <div class="settings-card">
-            <h3>Обновления</h3>
+            <h3>🖥️ Обновление сервера (BibAdminWeb)</h3>
+            <p class="settings-hint" style="margin-bottom:10px">Через установщик exe:</p>
             <p id="updateCurrentVer" class="settings-hint">Нажмите кнопку для проверки</p>
             <div class="form-row">
               <label>Папка обновлений</label>
               <input type="text" id="sUpdatesPath" placeholder="Пусто = updates\ рядом с сервером">
             </div>
             <p class="settings-hint">Локальный или сетевой путь, например \\server\updates</p>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
               <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">🔄 Проверить обновления</button>
-              <button class="btn btn-outline" id="btnUpdateClients" onclick="updateAllClients()" style="border-color:#1d9e75;color:#1d9e75">⬆️ Обновить все клиенты</button>
               <span id="updateStatus" style="display:none;font-size:12px"></span>
             </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>🔄 Обновление из папки</h3>
-            <p class="settings-hint">Соберите проект командой <code style="background:#111128;padding:2px 6px;border-radius:4px;font-size:12px">publish.cmd</code>, укажите путь и нажмите «Применить». Сервер перезапустится автоматически.</p>
+            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
+            <p class="settings-hint" style="margin-bottom:8px">Из папки (без установщика, для быстрого тестирования):</p>
             <div class="form-row">
               <label>Папка с обновлением</label>
               <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
@@ -407,6 +404,25 @@
             <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
               <button class="btn btn-primary" onclick="applyFolderUpdate()">🔄 Применить обновление</button>
               <span id="folderUpdateStatus" style="font-size:13px;color:#666"></span>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>💻 Обновление клиентов (BibClient)</h3>
+            <p class="settings-hint" style="margin-bottom:8px">Через установщик exe — клиенты скачают и установят автоматически:</p>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-outline" id="btnUpdateClients" onclick="updateAllClients()" style="border-color:#1d9e75;color:#1d9e75">⬆️ Обновить все клиенты (exe)</button>
+              <span id="updateStatusClients" style="display:none;font-size:12px"></span>
+            </div>
+            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
+            <p class="settings-hint" style="margin-bottom:8px">Из папки (без установщика, для быстрого тестирования):</p>
+            <div class="form-row">
+              <label>Папка с обновлением</label>
+              <input type="text" id="clientFolderPath" placeholder="C:\...\BibClient\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+              <button class="btn btn-primary" onclick="applyClientFolderUpdate()">📁 Обновить клиенты из папки</button>
+              <span id="clientFolderUpdateStatus" style="font-size:13px;color:#666"></span>
             </div>
           </div>
 
