@@ -137,19 +137,22 @@ namespace BibClientService
                     return;
                 }
 
-                // Ждём завершения максимум 10 минут
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
+                // Таймаут НЕ привязан к ct: инсталлятор запустит "sc stop BibClientWatchdog",
+                // что отменит ct. Если привязать — мы убьём инсталлятор раньше времени.
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                 try
                 {
                     await p.WaitForExitAsync(timeoutCts.Token);
                     _logger.LogInformation("Инсталлятор завершён с кодом {ExitCode}", p.ExitCode);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
                 {
+                    // Убиваем только по таймауту, не при остановке службы
                     _logger.LogError("Таймаут ожидания инсталлятора — принудительное завершение");
                     try { p.Kill(); } catch { }
                 }
+                // Если ct отменён (служба останавливается из-за sc stop) — не трогаем инсталлятор,
+                // он продолжает работать как осиротевший процесс и завершит установку самостоятельно
             }
             catch (Exception ex)
             {

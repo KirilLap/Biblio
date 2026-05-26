@@ -35,6 +35,9 @@ Source: "{#SrcClient}\*"; DestDir: "{app}\BibClient"; \
 Filename: "sc.exe"; \
     Parameters: "create BibClientWatchdog binPath= ""{app}\BibClient\BibClientService.exe"" start= auto DisplayName= ""BibClient Watchdog"""; \
     Flags: runhidden waituntilterminated
+Filename: "sc.exe"; \
+    Parameters: "failure BibClientWatchdog reset= 0 actions= restart/5000/restart/5000/restart/5000"; \
+    Flags: runhidden waituntilterminated
 Filename: "sc.exe"; Parameters: "start BibClientWatchdog"; \
     Flags: runhidden waituntilterminated
 
@@ -47,8 +50,11 @@ procedure StopRunningProcesses();
 var
   ResultCode: Integer;
 begin
-  Exec('sc.exe', 'stop BibClientWatchdog', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Останавливаем службу и сразу удаляем — при обновлении sc create иначе падает
+  // с ошибкой "служба уже существует". После установки [Run] создаст её заново.
+  Exec('sc.exe', 'stop BibClientWatchdog',   '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(2000);
+  Exec('sc.exe', 'delete BibClientWatchdog', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/f /im BibClientGuardian.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/f /im BibClient.exe',         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
@@ -59,10 +65,6 @@ begin
   Result := '';
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
-begin
-  if CurStep = ssPostInstall then
-    Exec(ExpandConstant('{app}\BibClient\BibClient.exe'), '', '', SW_SHOW, ewNoWait, ResultCode);
-end;
+// BibClient НЕ запускается здесь — инсталлятор работает от SYSTEM в Session 0
+// и не может показать UI пользователю. После sc start BibClientWatchdog служба
+// сама запустит BibClient.exe в сессии пользователя через CreateProcessAsUser.
