@@ -137,8 +137,30 @@ namespace BibAdminWeb
                                 if (c.CustomName == "ПК") c.CustomName = "";
                             }
                             c.IsOnline = false;
-                            c.Status = c.IsPaused ? "Пауза" : "Оффлайн";
                             c.LastSeen = DateTime.MinValue;
+
+                            // Очищаем все поля сессии при загрузке реестра.
+                            // Авторитетный источник сессий — active_sessions.json, который загружается
+                            // следом через LoadActiveSessions(). Если оставлять эти поля из registry.json,
+                            // то после перезапуска сервера RegisterClient видит устаревшую сессию
+                            // (сохранённую в реестре при последнем подключении ПК) и восстанавливает
+                            // «призрак» даже если сессия давно завершилась.
+                            c.SessionType = "";
+                            c.SessionStart = null;
+                            c.SessionId = "";
+                            c.IsPaused = false;
+                            c.ElapsedSeconds = 0;
+                            c.AccumulatedSeconds = 0;
+                            c.LimitSeconds = 0;
+                            c.PaidAmount = 0;
+                            c.DisconnectedAt = null;
+                            c.ElapsedAtDisconnect = 0;
+                            c.OfflineDecision = OfflineDecision.None;
+                            c.PendingStartSessionSentAt = null;
+                            c.ReaderId = null;
+                            c.UserName = null;
+                            c.StartedByOperatorName = "";
+                            c.Status = "Оффлайн";
                             KnownClients[c.PcNumber] = c;
                         }
                         Logger.Info($"✅ Загружено {list.Count} клиентов");
