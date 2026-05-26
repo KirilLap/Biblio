@@ -21,11 +21,20 @@ let _screenPc = null;
 let _screenInterval = null;
 
 // ── Инициализация ─────────────────────────────────────────────────────────────
+// ── Права оператора ───────────────────────────────────────────────────────────
+let opPerms = { canViewReaders: false, canViewFinance: false };
+
 (async function init() {
   // Проверяем авторизацию
   const me = await fetch('/api/op/me').then(r => r.ok ? r.json() : null).catch(() => null);
   if (!me) { window.location.href = '/login.html'; return; }
   document.getElementById('opName').textContent = me.displayName;
+
+  // Применяем права
+  opPerms.canViewReaders = !!me.canViewReaders;
+  opPerms.canViewFinance = !!me.canViewFinance;
+  if (opPerms.canViewReaders) document.getElementById('tabBtnReaders').style.display = '';
+  if (opPerms.canViewFinance) document.getElementById('tabBtnFinance').style.display = '';
 
   // Загружаем настройки полей сессии
   fetch('/api/session-fields')
@@ -1014,4 +1023,150 @@ function esc(s) {
   return String(s ?? '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Вкладки оператора
+// ══════════════════════════════════════════════════════════════════════════════
+let _currentOpTab = 'pcs';
+let _financeLoaded = false;
+
+function switchOpTab(tab) {
+  _currentOpTab = tab;
+  ['pcs', 'readers', 'finance'].forEach(t => {
+    const panel = document.getElementById('panelP' + t.charAt(0).toUpperCase() + t.slice(1)) ||
+                  document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1));
+    const btn   = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (panel) panel.classList.toggle('active', t === tab);
+    if (btn)   btn.classList.toggle('active',   t === tab);
+  });
+  if (tab === 'finance' && !_financeLoaded) { _financeLoaded = true; loadFinanceHistory(); }
+}
+
+// ── Читатели ──────────────────────────────────────────────────────────────────
+async function searchReaders() {
+  const q = document.getElementById('readersSearchInput').value.trim();
+  const res = document.getElementById('readersResult');
+  res.innerHTML = '<div class="op-empty">Поиск…</div>';
+  try {
+    const r = await fetch('/api/op/readers?search=' + encodeURIComponent(q));
+    if (!r.ok) { res.innerHTML = '<div class="op-empty" style="color:#E24B4A">Ошибка: ' + r.status + '</div>'; return; }
+    const list = await r.json();
+    if (!list.length) { res.innerHTML = '<div class="op-empty">Ничего не найдено</div>'; return; }
+    res.innerHTML = `
+      <div class="op-table-wrap">
+        <table class="op-table">
+          <thead><tr>
+            <th>№ билета</th><th>ФИО</th><th>Категория</th>
+            <th>Дата рождения</th><th>Пол</th><th>Зарегистрирован</th>
+          </tr></thead>
+          <tbody>
+            ${list.map(rd => `<tr>
+              <td><code style="font-size:11px">${esc(rd.cardId)}</code></td>
+              <td>${esc(rd.fullName)}</td>
+              <td>${esc(rd.category)}</td>
+              <td>${esc(rd.birthDate)}</td>
+              <td>${esc(rd.gender)}</td>
+              <td>${esc(rd.registeredAt)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:11px;color:#555;margin-top:6px">Найдено: ${list.length}</div>`;
+  } catch(e) {
+    res.innerHTML = '<div class="op-empty" style="color:#E24B4A">Ошибка соединения</div>';
+  }
+}
+
+// ── История финансов ──────────────────────────────────────────────────────────
+let _finSessions = [];
+let _finServices = [];
+let _finTab = 'sessions';
+
+async function loadFinanceHistory() {
+  const [rS, rSvc] = await Promise.all([
+    fetch('/api/op/finance/sessions').then(r => r.ok ? r.json() : []),
+    fetch('/api/op/finance/services').then(r => r.ok ? r.json() : [])
+  ]);
+  _finSessions = Array.isArray(rS) ? rS : [];
+  _finServices = Array.isArray(rSvc) ? rSvc : [];
+  renderFinanceSessions();
+  renderFinanceServices();
+}
+
+function switchFinanceTab(tab) {
+  _finTab = tab;
+  document.getElementById('finTabSessions').classList.toggle('active', tab === 'sessions');
+  document.getElementById('finTabServices').classList.toggle('active', tab === 'services');
+  document.getElementById('financeSessionsPanel').style.display  = tab === 'sessions' ? '' : 'none';
+  document.getElementById('financeServicesPanel').style.display  = tab === 'services' ? '' : 'none';
+}
+
+function fmtDur(secs) {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function renderFinanceSessions() {
+  const el = document.getElementById('financeSessionsResult');
+  if (!_finSessions.length) { el.innerHTML = '<div class="op-empty">Нет данных</div>'; return; }
+  el.innerHTML = `
+    <table class="op-table">
+      <thead><tr>
+        <th>ПК</th><th>Тип</th><th>Читатель</th><th>Пользователь</th>
+        <th>Длительность</th><th>Сумма</th><th>Оплачено</th><th>Возврат</th>
+        <th>Оператор</th><th>Начало</th><th>Конец</th>
+      </tr></thead>
+      <tbody>
+        ${_finSessions.map(s => `<tr>
+          <td>${esc(s.pcNumber)}</td>
+          <td>${esc(s.sessionType)}</td>
+          <td><code style="font-size:11px">${esc(s.readerId||'—')}</code></td>
+          <td>${esc(s.userName||'—')}</td>
+          <td>${fmtDur(s.durationSeconds||0)}</td>
+          <td>${fmt(s.earnedAmount)}</td>
+          <td>${fmt(s.paidAmount)}</td>
+          <td>${s.refundAmount ? fmt(s.refundAmount) : '—'}</td>
+          <td>${esc(s.operatorName||'—')}</td>
+          <td>${fmtLocal(s.startTime)}</td>
+          <td>${fmtLocal(s.endTime)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderFinanceServices() {
+  const el = document.getElementById('financeServicesResult');
+  if (!_finServices.length) { el.innerHTML = '<div class="op-empty">Нет данных</div>'; return; }
+  el.innerHTML = `
+    <table class="op-table">
+      <thead><tr>
+        <th>Услуга</th><th>Единица</th><th>Кол-во</th><th>Цена/ед</th>
+        <th>Итого</th><th>Оплачено</th><th>Читатель</th><th>ПК</th><th>Дата</th>
+      </tr></thead>
+      <tbody>
+        ${_finServices.map(t => `<tr>
+          <td>${esc(t.serviceName)}</td>
+          <td>${esc(t.unit)}</td>
+          <td>${t.quantity}</td>
+          <td>${fmt(t.pricePerUnit)}</td>
+          <td>${fmt(t.totalAmount)}</td>
+          <td>${fmt(t.paidAmount)}</td>
+          <td>${esc(t.readerName||'—')}</td>
+          <td>${esc(t.pcNumber||'—')}</td>
+          <td>${fmtLocal(t.createdAt)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function fmtLocal(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function exportFinanceXlsx() {
+  window.location.href = '/api/op/finance/export';
 }

@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Http;
 
 namespace BibAdminWeb
@@ -167,27 +169,13 @@ namespace BibAdminWeb
                 return;
             }
 
-            // ─── Finance: export CSV ─────────────────────────────────────────
+            // ─── Finance: export XLSX ────────────────────────────────────────
             if (path == "/api/admin/finance/export" && method == "GET")
             {
-                var sb = new StringBuilder();
-                sb.AppendLine("=== СЕССИИ ===");
-                sb.AppendLine("ПК;Тип;ID читателя;Пользователь;Длительность;Сумма;Оплачено;Возврат;Оператор;Начало;Конец");
-                foreach (var s in FinanceStore.Sessions)
-                {
-                    int h = s.DurationSeconds / 3600, m = (s.DurationSeconds % 3600) / 60, sec = s.DurationSeconds % 60;
-                    sb.AppendLine($"{s.PcNumber};{s.SessionType};{s.ReaderId};{s.UserName};{h:D2}:{m:D2}:{sec:D2};{s.EarnedAmount};{s.PaidAmount};{s.RefundAmount};{s.OperatorName};{s.StartTime:dd.MM.yyyy HH:mm};{s.EndTime:dd.MM.yyyy HH:mm}");
-                }
-                sb.AppendLine();
-                sb.AppendLine("=== УСЛУГИ ===");
-                sb.AppendLine("Услуга;Единица;Кол-во;Цена/ед;Итого;Оплачено;Читатель;Дата");
-                foreach (var t in ServiceTransaction.All)
-                    sb.AppendLine($"{t.ServiceName};{t.Unit};{t.Quantity};{t.PricePerUnit};{t.TotalAmount};{t.PaidAmount};{t.ReaderName};{t.CreatedAt:dd.MM.yyyy HH:mm}");
-
-                var csv = sb.ToString();
-                ctx.Response.ContentType = "text/csv; charset=utf-8";
-                ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-                await ctx.Response.WriteAsync(csv, Encoding.UTF8);
+                var bytes = BuildFinanceExcel(FinanceStore.Sessions, ServiceTransaction.All);
+                ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                await ctx.Response.Body.WriteAsync(bytes);
                 return;
             }
 
@@ -212,10 +200,13 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = $"Логин '{login}' уже занят" }));
                     return;
                 }
+                var canReaders = data.TryGetProperty("canViewReaders", out var rvr) && rvr.GetBoolean();
+                var canFinance = data.TryGetProperty("canViewFinance", out var rvf) && rvf.GetBoolean();
                 s.Operators.Add(new OperatorAccount
                 {
                     Login = login, DisplayName = displayName,
-                    PasswordHash = HashPassword(password), IsActive = true
+                    PasswordHash = HashPassword(password), IsActive = true,
+                    CanViewReaders = canReaders, CanViewFinance = canFinance
                 });
                 s.Save();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
@@ -245,6 +236,22 @@ namespace BibAdminWeb
                     var s = GlobalSettings.Load();
                     var op = s.Operators.Find(o => o.Id == id);
                     if (op != null) { op.PasswordHash = HashPassword(password); s.Save(); }
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                    return;
+                }
+                if (id.EndsWith("/permissions") && method == "PATCH")
+                {
+                    id = id.Replace("/permissions", "");
+                    var body = await ReadBody(ctx);
+                    var data = JsonSerializer.Deserialize<JsonElement>(body);
+                    var s = GlobalSettings.Load();
+                    var op = s.Operators.Find(o => o.Id == id);
+                    if (op != null)
+                    {
+                        if (data.TryGetProperty("canViewReaders", out var rvr)) op.CanViewReaders = rvr.GetBoolean();
+                        if (data.TryGetProperty("canViewFinance", out var rvf)) op.CanViewFinance = rvf.GetBoolean();
+                        s.Save();
+                    }
                     await ctx.Response.WriteAsync("{\"ok\":true}");
                     return;
                 }
@@ -445,6 +452,167 @@ namespace BibAdminWeb
             }
 
             await next(ctx);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // Operator-facing API (/api/op/...)  — требует куки bib_op + нужное право
+        // ══════════════════════════════════════════════════════════════════════
+        public static async Task HandleOperator(HttpContext ctx, RequestDelegate next)
+        {
+            var path   = ctx.Request.Path.Value ?? "";
+            var method = ctx.Request.Method;
+
+            if (!path.StartsWith("/api/op/readers") && !path.StartsWith("/api/op/finance"))
+            {
+                await next(ctx);
+                return;
+            }
+
+            ctx.Response.ContentType = "application/json";
+
+            // Проверяем авторизацию оператора
+            var token = ctx.Request.Cookies["bib_op"];
+            if (token == null || !OperatorApi.ValidateToken(token, out var opId))
+            {
+                ctx.Response.StatusCode = 401;
+                await ctx.Response.WriteAsync("{\"error\":\"Не авторизован\"}");
+                return;
+            }
+            var settings = GlobalSettings.Load();
+            var op = settings.Operators.Find(o => o.Id == opId && o.IsActive);
+            if (op == null)
+            {
+                ctx.Response.StatusCode = 401;
+                await ctx.Response.WriteAsync("{\"error\":\"Оператор не найден\"}");
+                return;
+            }
+
+            // ─── Operator: список/поиск читателей ─────────────────────────────
+            if (path == "/api/op/readers" && method == "GET")
+            {
+                if (!op.CanViewReaders)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к разделу читателей\"}");
+                    return;
+                }
+                var search = ctx.Request.Query["search"].ToString();
+                var readers = ReaderStore.GetAll(string.IsNullOrWhiteSpace(search) ? null : search);
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(readers, _json));
+                return;
+            }
+
+            // ─── Operator: история сессий ─────────────────────────────────────
+            if (path == "/api/op/finance/sessions" && method == "GET")
+            {
+                if (!op.CanViewFinance)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
+                    return;
+                }
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(FinanceStore.Sessions, _json));
+                return;
+            }
+
+            // ─── Operator: история услуг ──────────────────────────────────────
+            if (path == "/api/op/finance/services" && method == "GET")
+            {
+                if (!op.CanViewFinance)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
+                    return;
+                }
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ServiceTransaction.All, _json));
+                return;
+            }
+
+            // ─── Operator: экспорт финансов XLSX ─────────────────────────────
+            if (path == "/api/op/finance/export" && method == "GET")
+            {
+                if (!op.CanViewFinance)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
+                    return;
+                }
+                var bytes = BuildFinanceExcel(FinanceStore.Sessions, ServiceTransaction.All);
+                ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                await ctx.Response.Body.WriteAsync(bytes);
+                return;
+            }
+
+            await next(ctx);
+        }
+
+        // ── XLSX-экспорт финансов (сессии + услуги) ───────────────────────────
+        private static byte[] BuildFinanceExcel(
+            IEnumerable<SessionRecord> sessions,
+            IEnumerable<ServiceTransaction> services)
+        {
+            using var wb = new XLWorkbook();
+
+            // ── Лист «Сессии» ────────────────────────────────────────────────
+            var wsS = wb.AddWorksheet("Сессии");
+            string[] sHdr = { "ПК", "Тип", "ID читателя", "Пользователь", "Длительность",
+                               "Сумма", "Оплачено", "Возврат", "Оператор", "Начало", "Конец" };
+            for (int i = 0; i < sHdr.Length; i++)
+            {
+                wsS.Cell(1, i + 1).Value = sHdr[i];
+                wsS.Cell(1, i + 1).Style.Font.Bold = true;
+                wsS.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.FromArgb(0x2D, 0x2D, 0x5B);
+                wsS.Cell(1, i + 1).Style.Font.FontColor = XLColor.White;
+            }
+            int row = 2;
+            foreach (var s in sessions)
+            {
+                int h = s.DurationSeconds / 3600, m = (s.DurationSeconds % 3600) / 60, sec = s.DurationSeconds % 60;
+                wsS.Cell(row, 1).Value = s.PcNumber;
+                wsS.Cell(row, 2).Value = s.SessionType;
+                wsS.Cell(row, 3).Value = s.ReaderId;
+                wsS.Cell(row, 4).Value = s.UserName;
+                wsS.Cell(row, 5).Value = $"{h:D2}:{m:D2}:{sec:D2}";
+                wsS.Cell(row, 6).Value = s.EarnedAmount;
+                wsS.Cell(row, 7).Value = s.PaidAmount;
+                wsS.Cell(row, 8).Value = s.RefundAmount;
+                wsS.Cell(row, 9).Value = s.OperatorName;
+                wsS.Cell(row, 10).Value = s.StartTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+                wsS.Cell(row, 11).Value = s.EndTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+                row++;
+            }
+            wsS.Columns().AdjustToContents();
+
+            // ── Лист «Услуги» ────────────────────────────────────────────────
+            var wsSvc = wb.AddWorksheet("Услуги");
+            string[] tHdr = { "Услуга", "Единица", "Кол-во", "Цена/ед", "Итого", "Оплачено", "Читатель", "ПК", "Дата" };
+            for (int i = 0; i < tHdr.Length; i++)
+            {
+                wsSvc.Cell(1, i + 1).Value = tHdr[i];
+                wsSvc.Cell(1, i + 1).Style.Font.Bold = true;
+                wsSvc.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.FromArgb(0x2D, 0x2D, 0x5B);
+                wsSvc.Cell(1, i + 1).Style.Font.FontColor = XLColor.White;
+            }
+            row = 2;
+            foreach (var t in services)
+            {
+                wsSvc.Cell(row, 1).Value = t.ServiceName;
+                wsSvc.Cell(row, 2).Value = t.Unit;
+                wsSvc.Cell(row, 3).Value = t.Quantity;
+                wsSvc.Cell(row, 4).Value = t.PricePerUnit;
+                wsSvc.Cell(row, 5).Value = t.TotalAmount;
+                wsSvc.Cell(row, 6).Value = t.PaidAmount;
+                wsSvc.Cell(row, 7).Value = t.ReaderName;
+                wsSvc.Cell(row, 8).Value = t.PcNumber;
+                wsSvc.Cell(row, 9).Value = t.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+                row++;
+            }
+            wsSvc.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
         }
 
         private static string GetUpdatesPath()

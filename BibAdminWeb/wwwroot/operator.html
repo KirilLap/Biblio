@@ -212,28 +212,94 @@
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
+<!-- Стили вкладок и таблиц -->
+<style>
+.op-tab-nav{display:flex;gap:4px;padding:10px 16px 0;background:#0D0D1A;border-bottom:1px solid #2D2D5B}
+.op-tab-btn{padding:8px 18px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:#888;transition:all .18s}
+.op-tab-btn:hover{color:#ccc;background:#1A1A2E}
+.op-tab-btn.active{background:#1A1A2E;color:#1D9E75;border-bottom:2px solid #1D9E75}
+.op-panel{display:none;padding:14px 16px}
+.op-panel.active{display:block}
+.op-search-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.op-search-row input{flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid #3D3D6B;background:#1A1A2E;color:#fff;font-size:13px}
+.op-search-row button{padding:8px 16px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+.op-table-wrap{overflow-x:auto;border-radius:8px;border:1px solid #2D2D5B}
+.op-table{width:100%;border-collapse:collapse;font-size:12px}
+.op-table th{padding:8px 10px;background:#2D2D5B;color:#ccc;text-align:left;font-weight:600;white-space:nowrap}
+.op-table td{padding:7px 10px;border-top:1px solid #1E1E3A;color:#ddd;white-space:nowrap}
+.op-table tr:hover td{background:#1A1A2E}
+.op-finance-tabs{display:flex;gap:6px;margin-bottom:12px}
+.op-finance-tab{padding:5px 14px;border-radius:6px;border:1px solid #3D3D6B;background:transparent;color:#888;font-size:12px;cursor:pointer}
+.op-finance-tab.active{background:#1D9E75;color:#fff;border-color:#1D9E75}
+.op-empty{color:#555;padding:20px;text-align:center;font-size:13px}
+</style>
+
 <!-- Основная область -->
 <main>
-  <!-- Статистика -->
-  <div class="stats-bar">
-    <div class="stat-item"><span id="stTotal">0</span><small>ПК всего</small></div>
-    <div class="stat-item"><span id="stOnline">0</span><small>онлайн</small></div>
-    <div class="stat-item stat-green"><span id="stSessions">0</span><small>сессий</small></div>
-    <div class="stat-item stat-amber"><span id="stLocked">0</span><small>заблок.</small></div>
-    <button class="btn-service-top" onclick="openServiceDlg()">🛎 Услуга</button>
-    <button class="btn-service-top" onclick="openDebtsDlg()" style="background:#854F0B;margin-left:4px">⚠ Долги</button>
-    <button class="btn-service-top" onclick="restartAll()" style="background:#f5a623;margin-left:4px">🔄 Перезагрузить</button>
-    <button class="btn-service-top" onclick="shutdownAll()" style="background:#E24B4A;margin-left:4px">⏻ Выкл. все</button>
+  <!-- Навигация по вкладкам (показывается только при наличии прав) -->
+  <div class="op-tab-nav" id="opTabNav">
+    <button class="op-tab-btn active" id="tabBtnPcs" onclick="switchOpTab('pcs')">🖥 ПК</button>
+    <button class="op-tab-btn" id="tabBtnReaders" onclick="switchOpTab('readers')" style="display:none">📋 Читатели</button>
+    <button class="op-tab-btn" id="tabBtnFinance" onclick="switchOpTab('finance')" style="display:none">💰 История</button>
   </div>
 
-  <!-- Грид ПК -->
-  <div id="grid" class="pc-grid"></div>
+  <!-- ── Вкладка: ПК ────────────────────────────────────────────────── -->
+  <div id="panelPcs" class="op-panel active">
+    <!-- Статистика -->
+    <div class="stats-bar" style="margin:0 -16px;padding:8px 16px">
+      <div class="stat-item"><span id="stTotal">0</span><small>ПК всего</small></div>
+      <div class="stat-item"><span id="stOnline">0</span><small>онлайн</small></div>
+      <div class="stat-item stat-green"><span id="stSessions">0</span><small>сессий</small></div>
+      <div class="stat-item stat-amber"><span id="stLocked">0</span><small>заблок.</small></div>
+      <button class="btn-service-top" onclick="openServiceDlg()">🛎 Услуга</button>
+      <button class="btn-service-top" onclick="openDebtsDlg()" style="background:#854F0B;margin-left:4px">⚠ Долги</button>
+      <button class="btn-service-top" onclick="restartAll()" style="background:#f5a623;margin-left:4px">🔄 Перезагрузить</button>
+      <button class="btn-service-top" onclick="shutdownAll()" style="background:#E24B4A;margin-left:4px">⏻ Выкл. все</button>
+    </div>
+    <!-- Грид ПК -->
+    <div id="grid" class="pc-grid"></div>
+    <!-- Панель действий -->
+    <div id="actionBar" class="action-bar hidden">
+      <div id="abPcName" class="ab-pc-name"></div>
+      <div id="abStatus" class="ab-status"></div>
+      <div id="abActions" class="ab-actions"></div>
+    </div>
+  </div>
 
-  <!-- Панель действий -->
-  <div id="actionBar" class="action-bar hidden">
-    <div id="abPcName" class="ab-pc-name"></div>
-    <div id="abStatus" class="ab-status"></div>
-    <div id="abActions" class="ab-actions"></div>
+  <!-- ── Вкладка: Читатели ─────────────────────────────────────────── -->
+  <div id="panelReaders" class="op-panel">
+    <div class="op-search-row">
+      <input type="text" id="readersSearchInput" placeholder="Поиск по ФИО или номеру билета…"
+             onkeydown="if(event.key==='Enter') searchReaders()">
+      <button onclick="searchReaders()">🔍 Найти</button>
+    </div>
+    <div id="readersResult">
+      <div class="op-empty">Введите запрос и нажмите «Найти»</div>
+    </div>
+  </div>
+
+  <!-- ── Вкладка: История финансов ────────────────────────────────── -->
+  <div id="panelFinance" class="op-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div class="op-finance-tabs">
+        <button class="op-finance-tab active" id="finTabSessions" onclick="switchFinanceTab('sessions')">Сессии</button>
+        <button class="op-finance-tab" id="finTabServices" onclick="switchFinanceTab('services')">Услуги</button>
+      </div>
+      <button onclick="exportFinanceXlsx()"
+        style="padding:6px 14px;border-radius:6px;border:none;background:#217F5A;color:#fff;font-size:12px;font-weight:600;cursor:pointer">
+        ⬇ Скачать Excel
+      </button>
+    </div>
+    <div id="financeSessionsPanel">
+      <div id="financeSessionsResult" class="op-table-wrap">
+        <div class="op-empty">Загрузка…</div>
+      </div>
+    </div>
+    <div id="financeServicesPanel" style="display:none">
+      <div id="financeServicesResult" class="op-table-wrap">
+        <div class="op-empty">Загрузка…</div>
+      </div>
+    </div>
   </div>
 </main>
 

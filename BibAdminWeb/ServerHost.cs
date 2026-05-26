@@ -163,6 +163,8 @@ namespace BibAdminWeb
 
                         // Admin REST API
                         app.Use(AdminApi.Handle);
+                        // Operator-facing REST API (/api/op/readers, /api/op/finance/...)
+                        app.Use(AdminApi.HandleOperator);
                         // Readers API (lookup for operators + admin management)
                         app.Use(ReadersApi.Handle);
 

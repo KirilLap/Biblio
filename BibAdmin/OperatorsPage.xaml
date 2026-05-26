@@ -31,6 +31,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="130"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
@@ -55,7 +56,17 @@
                                      VerticalContentAlignment="Center" FontSize="13"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
+                    <StackPanel Grid.Column="3" VerticalAlignment="Bottom" Margin="0,0,10,0">
+                        <TextBlock Text="Права доступа" FontSize="11" Foreground="#666" Margin="0,0,0,4"/>
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Center" Height="34" Margin="2,0">
+                            <CheckBox x:Name="ChkNewOpReaders" Content="👁 Читатели"
+                                      FontSize="11" Margin="0,2,0,2"/>
+                            <CheckBox x:Name="ChkNewOpFinance" Content="💰 Финансы"
+                                      FontSize="11" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="4" VerticalAlignment="Bottom">
                         <Button Content="Добавить" Height="34" Padding="16,0"
                                 Background="#1D9E75" Foreground="White"
                                 BorderThickness="0" FontSize="13" Cursor="Hand"
@@ -95,16 +106,18 @@
                 <Grid DockPanel.Dock="Top" Margin="20,14,20,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="130"/>
                         <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="70"/>
                         <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="90"/>
                         <ColumnDefinition Width="80"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="Имя / Логин" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="1" Text="Пароль" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="2" Text="Статус" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="3" Text="Активен" FontSize="11" Foreground="#999" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                    <TextBlock Grid.Column="4" Text="" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="1" Text="Права" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="2" Text="Пароль" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="3" Text="Статус" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="4" Text="Активен" FontSize="11" Foreground="#999" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Column="5" Text="" FontSize="11" Foreground="#999" FontWeight="SemiBold"/>
                 </Grid>
                 <Border DockPanel.Dock="Top" Height="1" Background="#F0F0F0" Margin="20,10,20,0"/>
 

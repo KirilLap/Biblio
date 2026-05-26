@@ -72,11 +72,12 @@ namespace BibAdmin
             {
                 var row = new Grid { Margin = new Thickness(20, 6, 20, 6) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) }); // зазор
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) }); // права
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) }); // пароль
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });  // зазор
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });  // статус
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });  // чекбокс
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });  // удалить
 
                 // Имя и логин
                 var namePanel = new StackPanel();
@@ -96,6 +97,31 @@ namespace BibAdmin
                 Grid.SetColumn(namePanel, 0);
                 row.Children.Add(namePanel);
 
+                // Права доступа
+                var permsPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                var chkReaders = new CheckBox
+                {
+                    Content = "👁 Читатели",
+                    IsChecked = op.CanViewReaders,
+                    FontSize = 11, Margin = new Thickness(0, 0, 0, 3),
+                    Tag = op.Id + ":readers"
+                };
+                var chkFinance = new CheckBox
+                {
+                    Content = "💰 Финансы",
+                    IsChecked = op.CanViewFinance,
+                    FontSize = 11,
+                    Tag = op.Id + ":finance"
+                };
+                chkReaders.Checked   += PermissionToggle_Changed;
+                chkReaders.Unchecked += PermissionToggle_Changed;
+                chkFinance.Checked   += PermissionToggle_Changed;
+                chkFinance.Unchecked += PermissionToggle_Changed;
+                permsPanel.Children.Add(chkReaders);
+                permsPanel.Children.Add(chkFinance);
+                Grid.SetColumn(permsPanel, 1);
+                row.Children.Add(permsPanel);
+
                 // Сброс пароля
                 var resetBtn = new Button
                 {
@@ -110,10 +136,10 @@ namespace BibAdmin
                     Tag = op.Id
                 };
                 resetBtn.Click += ResetPassword_Click;
-                Grid.SetColumn(resetBtn, 1);
+                Grid.SetColumn(resetBtn, 2);
                 row.Children.Add(resetBtn);
 
-                // Статус (онлайн/оффлайн — будущее)
+                // Статус
                 var statusText = new TextBlock
                 {
                     Text = op.IsActive ? "Активен" : "Отключён",
@@ -123,7 +149,7 @@ namespace BibAdmin
                         : new SolidColorBrush(Color.FromRgb(180, 180, 180)),
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(statusText, 3);
+                Grid.SetColumn(statusText, 4);
                 row.Children.Add(statusText);
 
                 // Чекбокс активности
@@ -136,7 +162,7 @@ namespace BibAdmin
                 };
                 activeChk.Checked += ActiveToggle_Changed;
                 activeChk.Unchecked += ActiveToggle_Changed;
-                Grid.SetColumn(activeChk, 4);
+                Grid.SetColumn(activeChk, 5);
                 row.Children.Add(activeChk);
 
                 // Удалить
@@ -154,7 +180,7 @@ namespace BibAdmin
                     Tag = op.Id
                 };
                 delBtn.Click += DeleteOperator_Click;
-                Grid.SetColumn(delBtn, 5);
+                Grid.SetColumn(delBtn, 6);
                 row.Children.Add(delBtn);
 
                 OperatorsPanel.Children.Add(row);
@@ -193,13 +219,17 @@ namespace BibAdmin
                 DisplayName = displayName,
                 Login = login,
                 PasswordHash = OperatorApi.HashPassword(password),
-                IsActive = true
+                IsActive = true,
+                CanViewReaders = ChkNewOpReaders.IsChecked == true,
+                CanViewFinance = ChkNewOpFinance.IsChecked == true
             });
             settings.Save();
 
             TxtNewDisplayName.Text = "";
             TxtNewLogin.Text = "";
             TxtNewPassword.Password = "";
+            ChkNewOpReaders.IsChecked = false;
+            ChkNewOpFinance.IsChecked = false;
 
             ShowSaved();
             RenderOperators();
@@ -218,6 +248,23 @@ namespace BibAdmin
             op.PasswordHash = OperatorApi.HashPassword(dialog.Result);
             settings.Save();
             ShowSaved();
+        }
+
+        private void PermissionToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            var tag   = (string)((CheckBox)sender).Tag;   // "opId:readers" или "opId:finance"
+            var parts = tag.Split(':');
+            if (parts.Length != 2) return;
+            var id    = parts[0];
+            var field = parts[1];
+            var value = ((CheckBox)sender).IsChecked == true;
+
+            var settings = GlobalSettings.Load();
+            var op = settings.Operators.Find(o => o.Id == id);
+            if (op == null) return;
+            if (field == "readers") op.CanViewReaders = value;
+            else if (field == "finance") op.CanViewFinance = value;
+            settings.Save();
         }
 
         private void ActiveToggle_Changed(object sender, RoutedEventArgs e)

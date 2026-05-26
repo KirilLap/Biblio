@@ -1560,10 +1560,24 @@ function renderOperators(list) {
   const el = document.getElementById('operatorsList');
   if (!list.length) { el.innerHTML = '<div style="color:#555;padding:12px">Нет операторов</div>'; return; }
   el.innerHTML = list.map(op => `
-    <div class="op-row">
+    <div class="op-row" style="flex-wrap:wrap;gap:8px">
       <div class="op-info">
         <div class="op-name">${esc(op.displayName)}</div>
         <div class="op-login">${esc(op.login)}</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;color:#aaa">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр списка читателей">
+          <input type="checkbox" ${op.canViewReaders ? 'checked' : ''}
+            onchange="setOpPermission('${op.id}','canViewReaders',this.checked)"
+            style="width:13px;height:13px">
+          👁 Читатели
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр истории финансов">
+          <input type="checkbox" ${op.canViewFinance ? 'checked' : ''}
+            onchange="setOpPermission('${op.id}','canViewFinance',this.checked)"
+            style="width:13px;height:13px">
+          💰 Финансы
+        </label>
       </div>
       <span class="op-active-badge ${op.isActive ? 'active' : 'inactive'}">${op.isActive ? 'Активен' : 'Отключён'}</span>
       <div class="op-actions">
@@ -1580,18 +1594,30 @@ async function addOperator() {
   const login = document.getElementById('newOpLogin').value.trim();
   const pwd = document.getElementById('newOpPwd').value;
   if (!name || !login || !pwd) { toast('Заполните все поля', 'warn'); return; }
+  const canViewReaders = document.getElementById('newOpReaders').checked;
+  const canViewFinance = document.getElementById('newOpFinance').checked;
   const r = await fetch('/api/admin/operators', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ displayName: name, login, password: pwd })
+    body: JSON.stringify({ displayName: name, login, password: pwd, canViewReaders, canViewFinance })
   });
   if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка', 'warn'); return; }
   document.getElementById('newOpName').value = '';
   document.getElementById('newOpLogin').value = '';
   document.getElementById('newOpPwd').value = '';
+  document.getElementById('newOpReaders').checked = false;
+  document.getElementById('newOpFinance').checked = false;
   const badge = document.getElementById('opSaved');
   badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2000);
   await loadOperators();
+}
+
+async function setOpPermission(id, field, value) {
+  await fetch(`/api/admin/operators/${id}/permissions`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [field]: value })
+  });
 }
 
 async function toggleOpActive(id, isActive) {

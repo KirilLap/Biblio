@@ -178,6 +178,9 @@ namespace BibAdminWeb
         public string PasswordHash { get; set; } = "";
         public string DisplayName { get; set; } = "";
         public bool IsActive { get; set; } = true;
+        // Права доступа: что оператор может просматривать
+        public bool CanViewReaders { get; set; } = false;
+        public bool CanViewFinance { get; set; } = false;
     }
 
     public class PendingCommand
