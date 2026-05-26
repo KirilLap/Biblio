@@ -383,9 +383,21 @@ namespace BibAdminWeb
                     "timeout /t 5 /nobreak >nul",
                     // robocopy: handles spaces in paths, no temp exclusion file needed
                     // /E=subdirs /IS=overwrite same /IT=overwrite tweaked
-                    // /XF=exclude files  /NFL /NDL /NJH /NJS /NC /NS /NP=suppress output
+                    // /XF=exclude files  /XD=exclude dirs
+                    // /NFL /NDL /NJH /NJS /NC /NS /NP=suppress output
+                    //
+                    // Исключаем все файлы настроек и runtime-данных, чтобы обновление
+                    // не перезаписало порт, пароль, реестр ПК и историю финансов.
                     $"robocopy \"{sourcePath}\" \"{appDir}\" /E /IS /IT" +
-                    $" /XF *.db /XF settings.json /XF appsettings.json /XF *_history.json" +
+                    // Настройки — самое важное
+                    $" /XF global_settings.json" +
+                    // Прочие конфиги
+                    $" /XF *.db /XF settings.json /XF appsettings.json" +
+                    // Runtime JSON-данные (реестр ПК, сессии, история)
+                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
+                    // Папка с загруженными фоновыми изображениями
+                    $" /XD Files" +
                     $" /NFL /NDL /NJH /NJS /NC /NS /NP",
                     // Flag tells Program.cs not to open a new browser window
                     $"echo.> \"{flagPath}\"",
