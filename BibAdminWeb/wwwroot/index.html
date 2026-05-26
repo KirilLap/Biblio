@@ -244,20 +244,6 @@
             <p class="settings-hint">Отступ применяется к прижатым краям (лево/право/верх/низ). Центрированные элементы не смещаются.</p>
 
             <div class="lock-section-sep"></div>
-            <div class="lock-section-title">Предпросмотр расположения</div>
-            <div id="lockScreenPreview">
-              <div class="pv-cell pv-tl" id="pv-TopLeft"></div>
-              <div class="pv-cell pv-tc" id="pv-TopCenter"></div>
-              <div class="pv-cell pv-tr" id="pv-TopRight"></div>
-              <div class="pv-cell pv-ml" id="pv-MiddleLeft"></div>
-              <div class="pv-cell pv-mc" id="pv-MiddleCenter"></div>
-              <div class="pv-cell pv-mr" id="pv-MiddleRight"></div>
-              <div class="pv-cell pv-bl" id="pv-BottomLeft"></div>
-              <div class="pv-cell pv-bc" id="pv-BottomCenter"></div>
-              <div class="pv-cell pv-br" id="pv-BottomRight"></div>
-            </div>
-
-            <div class="lock-section-sep"></div>
             <div class="lock-section-title">Номер ПК</div>
             <div class="form-row">
               <label>Позиция</label>
@@ -361,6 +347,22 @@
             </div>
             <button class="btn btn-outline" style="margin-top:8px" onclick="uploadBgFile()">📤 Загрузить и отправить всем</button>
             <span id="bgUploadStatus" style="display:none;color:#1d9e75;font-size:12px;margin-left:10px">✓ Отправлено</span>
+          </div>
+
+          <div class="settings-card">
+            <h3>Предпросмотр экрана блокировки</h3>
+            <p class="settings-hint">Расположение, размер шрифтов и фоновое изображение</p>
+            <div id="lockScreenPreview">
+              <div class="pv-cell pv-tl" id="pv-TopLeft"></div>
+              <div class="pv-cell pv-tc" id="pv-TopCenter"></div>
+              <div class="pv-cell pv-tr" id="pv-TopRight"></div>
+              <div class="pv-cell pv-ml" id="pv-MiddleLeft"></div>
+              <div class="pv-cell pv-mc" id="pv-MiddleCenter"></div>
+              <div class="pv-cell pv-mr" id="pv-MiddleRight"></div>
+              <div class="pv-cell pv-bl" id="pv-BottomLeft"></div>
+              <div class="pv-cell pv-bc" id="pv-BottomCenter"></div>
+              <div class="pv-cell pv-br" id="pv-BottomRight"></div>
+            </div>
           </div>
 
         </div>

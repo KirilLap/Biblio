@@ -502,24 +502,39 @@ body {
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: 1fr 1fr 1fr;
   width: 100%;
-  max-width: 360px;
-  height: 195px;
+  aspect-ratio: 16 / 9;
+  height: auto;
   background: #12121f;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   border: 2px solid #2a2a4a;
   border-radius: 6px;
   overflow: hidden;
   margin-top: 6px;
   box-sizing: border-box;
 }
+/* Слой затемнения поверх фона (opacity управляется через --pv-dim) */
+#lockScreenPreview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--pv-dim, 0.3));
+  z-index: 1;
+  pointer-events: none;
+}
+/* Пунктирная рамка отступа — поверх чипов */
 #lockScreenPreview::after {
   content: '';
   position: absolute;
   inset: var(--pv-oy, 0px) var(--pv-ox, 0px);
-  border: 1px dashed rgba(255,255,255,0.15);
+  border: 1px dashed rgba(255,255,255,0.35);
   border-radius: 2px;
   pointer-events: none;
+  z-index: 3;
 }
-.pv-cell { display: flex; flex-direction: column; gap: 2px; padding: 4px; overflow: hidden; }
+/* Ячейки сетки — поверх затемнения, но под рамкой */
+.pv-cell { display: flex; flex-direction: column; gap: 2px; padding: 4px; overflow: hidden; position: relative; z-index: 2; }
 .pv-tl { align-items: flex-start; justify-content: flex-start; }
 .pv-tc { align-items: center;     justify-content: flex-start; }
 .pv-tr { align-items: flex-end;   justify-content: flex-start; }
@@ -529,18 +544,18 @@ body {
 .pv-bl { align-items: flex-start; justify-content: flex-end; }
 .pv-bc { align-items: center;     justify-content: flex-end; }
 .pv-br { align-items: flex-end;   justify-content: flex-end; }
+/* font-size задаётся динамически через JS в зависимости от слайдера */
 .pv-chip {
   padding: 1px 5px;
   border-radius: 3px;
-  font-size: 10px;
   white-space: nowrap;
   color: #fff;
-  font-weight: 500;
-  line-height: 16px;
+  font-weight: 600;
+  line-height: 1.3;
 }
-.pv-pc     { background: #3a6fd8; }
-.pv-locked { background: #c0392b; }
-.pv-time   { background: #1a7a5a; }
+.pv-pc     { background: rgba(58, 111, 216, 0.85); }
+.pv-locked { background: rgba(192,  57,  43, 0.85); }
+.pv-time   { background: rgba( 26, 122,  90, 0.85); }
 
 /* ── Lock screen section dividers in settings ──────────── */
 .lock-section-sep {

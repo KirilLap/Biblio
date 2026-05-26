@@ -15,6 +15,7 @@ let _screenPc = null;
 let _screenInterval = null;
 let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/bibclient-version.json)
 let updatePanelDismissed = false;
+let pvBgUrl = null;             // URL фона для предпросмотра (blob: после выбора файла, /files/... после загрузки)
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
@@ -1232,6 +1233,30 @@ function fillSettingsForm() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', updateLockPreview);
   });
+  // Слайдеры шрифтов и прозрачности — обновляем превью в реальном времени
+  ['sPcNumberFontSize','sLockedTextFontSize','sTimeFontSize','sBgOpacity'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateLockPreview);
+  });
+  // Порядок стекинга
+  ['sPcNumberOrder','sLockedTextOrder','sTimeOrder'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateLockPreview);
+  });
+  // Фоновое изображение — предпросмотр сразу при выборе файла (до загрузки)
+  const bgFileInput = document.getElementById('sBgFileInput');
+  if (bgFileInput) bgFileInput.onchange = () => {
+    if (bgFileInput.files?.[0]) {
+      if (pvBgUrl?.startsWith('blob:')) URL.revokeObjectURL(pvBgUrl);
+      pvBgUrl = URL.createObjectURL(bgFileInput.files[0]);
+    }
+    updateLockPreview();
+  };
+  // Если фон уже задан в настройках — загружаем с сервера (если blob не выбран)
+  if (!pvBgUrl?.startsWith('blob:')) {
+    const bgName = settings.backgroundFileName ?? '';
+    pvBgUrl = bgName ? `/files/${encodeURIComponent(bgName)}` : null;
+  }
   updateLockPreview();
 
   const pcFont     = settings.pcNumberFontSize   ?? 52;
@@ -1329,12 +1354,30 @@ function updateLockPreview() {
     if (cell) cell.innerHTML = '';
   });
 
+  // ── Фоновое изображение ───────────────────────────────────────────────────
+  preview.style.backgroundImage = pvBgUrl ? `url('${pvBgUrl}')` : 'none';
+
+  // ── Затемнение (слайдер 0..100 → CSS-переменная 0..1) ────────────────────
+  const opacityPct = parseInt(document.getElementById('sBgOpacity')?.value) || 30;
+  preview.style.setProperty('--pv-dim', (opacityPct / 100).toFixed(2));
+
+  // ── Пунктирная рамка отступа (масштаб ~1:6) ───────────────────────────────
   const offX = parseInt(document.getElementById('sScreenOffsetX')?.value) || 0;
   const offY = parseInt(document.getElementById('sScreenOffsetY')?.value) || 0;
-  // Показываем пунктирную рамку отступа (масштаб ~1:6)
-  const scale = 1 / 6;
-  preview.style.setProperty('--pv-ox', Math.round(offX * scale) + 'px');
-  preview.style.setProperty('--pv-oy', Math.round(offY * scale) + 'px');
+  const offsetScale = 1 / 6;
+  preview.style.setProperty('--pv-ox', Math.round(offX * offsetScale) + 'px');
+  preview.style.setProperty('--pv-oy', Math.round(offY * offsetScale) + 'px');
+
+  // ── Масштаб шрифтов: preview_height / 1080 ───────────────────────────────
+  // Размеры берём из слайдеров и масштабируем пропорционально высоте превью
+  const pvH = preview.offsetHeight || 195;
+  const fontScale = pvH / 1080;
+  const pcFontPx = Math.max(7, Math.min(30,
+    Math.round((parseInt(document.getElementById('sPcNumberFontSize')?.value)   || 52)  * fontScale)));
+  const lockedFontPx = Math.max(5, Math.min(16,
+    Math.round((parseInt(document.getElementById('sLockedTextFontSize')?.value) || 16)  * fontScale)));
+  const timeFontPx = Math.max(6, Math.min(18,
+    Math.round((parseInt(document.getElementById('sTimeFontSize')?.value)       || 36)  * fontScale)));
 
   const showPc     = document.getElementById('sShowPcNumber')?.checked ||
                      document.getElementById('sShowPcName')?.checked;
@@ -1344,14 +1387,14 @@ function updateLockPreview() {
   if (showPc)
     items.push({ pos: document.getElementById('sPcNumberPosition')?.value   || 'MiddleCenter',
                  order: parseInt(document.getElementById('sPcNumberOrder')?.value)   || 1,
-                 cls: 'pv-pc',     label: '# Номер ПК' });
+                 cls: 'pv-pc',     label: '42',            fontPx: pcFontPx });
   if (showLocked)
     items.push({ pos: document.getElementById('sLockedTextPosition')?.value || 'MiddleCenter',
                  order: parseInt(document.getElementById('sLockedTextOrder')?.value) || 2,
-                 cls: 'pv-locked', label: '🔒 Заблокировано' });
+                 cls: 'pv-locked', label: 'Заблокировано', fontPx: lockedFontPx });
   items.push(  { pos: document.getElementById('sTimePosition')?.value       || 'BottomCenter',
                  order: parseInt(document.getElementById('sTimeOrder')?.value)       || 3,
-                 cls: 'pv-time',   label: '🕐 Время' });
+                 cls: 'pv-time',   label: '14:23',         fontPx: timeFontPx });
 
   // Группируем по позиции, сортируем по порядку
   const groups = {};
@@ -1366,6 +1409,7 @@ function updateLockPreview() {
       const chip = document.createElement('div');
       chip.className = 'pv-chip ' + it.cls;
       chip.textContent = it.label;
+      chip.style.fontSize = it.fontPx + 'px';
       cell.appendChild(chip);
     });
   });
