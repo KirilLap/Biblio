@@ -71,6 +71,18 @@ namespace BibClient
         public string TimePosition { get; set; } = "BottomCenter";
         public double TimeFontSize { get; set; } = 36;
         public double BackgroundOpacity { get; set; } = 0.3;
+
+        // Общий отступ от краёв монитора (пиксели) для всех панелей
+        public int ScreenOffsetX { get; set; } = 0;
+        public int ScreenOffsetY { get; set; } = 0;
+
+        // Показывать иконку онлайн/офлайн (красный/зелёный кружок)
+        public bool ShowStatusDot { get; set; } = true;
+
+        // Порядок стекинга когда несколько элементов на одной позиции (меньше = выше)
+        public int PcNumberOrder { get; set; } = 1;
+        public int LockedTextOrder { get; set; } = 2;
+        public int TimeOrder { get; set; } = 3;
         public string BackgroundImagePath { get; set; } = "";
         public int Tariff { get; set; } = 3000;
 

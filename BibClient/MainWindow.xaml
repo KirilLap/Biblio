@@ -16,8 +16,8 @@
         <!-- Затемнение (управляется слайдером BackgroundOpacity) -->
         <Rectangle x:Name="DimOverlay" Fill="Black" Opacity="0.5"/>
 
-        <!-- Основной контент — 8px от всех краёв, элементы позиционируются независимо -->
-        <Grid Margin="8">
+        <!-- Основной контент — элементы позиционируются независимо, отступ задаётся динамически -->
+        <Grid x:Name="LayoutGrid" Margin="8">
             <!-- Только номер/имя ПК — позиция задаётся PcNumberPosition -->
             <StackPanel x:Name="PanelCenter" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock x:Name="TxtPcNumber" FontSize="52" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>

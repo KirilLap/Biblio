@@ -226,6 +226,57 @@ namespace BibClient
                         SettingsChanged?.Invoke();
                         break;
 
+                    case "SET_SCREEN_OFFSET_X":
+                        if (int.TryParse(value, out int offX))
+                        {
+                            SettingsManager.Current.ScreenOffsetX = Math.Clamp(offX, 0, 500);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SET_SCREEN_OFFSET_Y":
+                        if (int.TryParse(value, out int offY))
+                        {
+                            SettingsManager.Current.ScreenOffsetY = Math.Clamp(offY, 0, 500);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SHOW_STATUS_DOT":
+                        SettingsManager.Current.ShowStatusDot = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        SettingsChanged?.Invoke();
+                        break;
+
+                    case "SET_PC_NUMBER_ORDER":
+                        if (int.TryParse(value, out int pcOrd))
+                        {
+                            SettingsManager.Current.PcNumberOrder = Math.Clamp(pcOrd, 1, 10);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SET_LOCKED_TEXT_ORDER":
+                        if (int.TryParse(value, out int lockedOrd))
+                        {
+                            SettingsManager.Current.LockedTextOrder = Math.Clamp(lockedOrd, 1, 10);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SET_TIME_ORDER":
+                        if (int.TryParse(value, out int timeOrd))
+                        {
+                            SettingsManager.Current.TimeOrder = Math.Clamp(timeOrd, 1, 10);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
                     case "SET_TIME_FONT_SIZE":
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double timeFont))
                         {

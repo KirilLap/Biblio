@@ -215,12 +215,25 @@
             <h3>Отображение на экране блокировки</h3>
             <div class="form-check"><label><input type="checkbox" id="sShowPcName"> Показывать название ПК</label></div>
             <div class="form-check"><label><input type="checkbox" id="sShowPcNumber"> Показывать номер ПК</label></div>
-            <div class="form-check" style="margin-bottom:16px"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись «Заблокировано»</label></div>
+            <div class="form-check"><label><input type="checkbox" id="sShowLockedText"> Показывать надпись «Заблокировано»</label></div>
+            <div class="form-check" style="margin-bottom:16px"><label><input type="checkbox" id="sShowStatusDot"> Показывать иконку онлайн-статуса</label></div>
 
             <div class="form-row">
               <label>Затемнение поверх фона (<span id="sBgOpacityVal">50</span>%)</label>
               <input type="range" id="sBgOpacity" min="0" max="100" step="5">
             </div>
+
+            <div class="lock-section-sep"></div>
+            <div class="lock-section-title">Отступы от краёв монитора (px)</div>
+            <div class="form-row">
+              <label>По горизонтали (<span id="sOffsetXVal">0</span> px)</label>
+              <input type="range" id="sScreenOffsetX" min="0" max="300" step="4">
+            </div>
+            <div class="form-row">
+              <label>По вертикали (<span id="sOffsetYVal">0</span> px)</label>
+              <input type="range" id="sScreenOffsetY" min="0" max="300" step="4">
+            </div>
+            <p class="settings-hint">Отступ применяется к прижатым краям (лево/право/верх/низ). Центрированные элементы не смещаются.</p>
 
             <div class="lock-section-sep"></div>
             <div class="lock-section-title">Номер ПК</div>
@@ -241,6 +254,14 @@
             <div class="form-row">
               <label>Размер шрифта (<span id="sPcFontSizeVal">120</span>)</label>
               <input type="range" id="sPcNumberFontSize" min="50" max="1500" step="10">
+            </div>
+            <div class="form-row">
+              <label>Порядок при совпадении позиции</label>
+              <select id="sPcNumberOrder">
+                <option value="1">1 — первый (выше всех)</option>
+                <option value="2">2</option>
+                <option value="3">3 — третий (ниже всех)</option>
+              </select>
             </div>
 
             <div class="lock-section-sep"></div>
@@ -263,6 +284,14 @@
               <label>Размер шрифта (<span id="sLockedFontSizeVal">16</span>)</label>
               <input type="range" id="sLockedTextFontSize" min="10" max="40" step="1">
             </div>
+            <div class="form-row">
+              <label>Порядок при совпадении позиции</label>
+              <select id="sLockedTextOrder">
+                <option value="1">1 — первый (выше всех)</option>
+                <option value="2">2</option>
+                <option value="3">3 — третий (ниже всех)</option>
+              </select>
+            </div>
 
             <div class="lock-section-sep"></div>
             <div class="lock-section-title">Время и дата</div>
@@ -283,6 +312,14 @@
             <div class="form-row">
               <label>Размер шрифта (<span id="sTimeFontSizeVal">36</span>)</label>
               <input type="range" id="sTimeFontSize" min="12" max="80" step="2">
+            </div>
+            <div class="form-row">
+              <label>Порядок при совпадении позиции</label>
+              <select id="sTimeOrder">
+                <option value="1">1 — первый (выше всех)</option>
+                <option value="2">2</option>
+                <option value="3">3 — третий (ниже всех)</option>
+              </select>
             </div>
           </div>
 

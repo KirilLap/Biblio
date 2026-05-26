@@ -1202,10 +1202,28 @@ function fillSettingsForm() {
   document.getElementById('sBgOpacity').value = opacityPct;
   document.getElementById('sBgOpacityVal').textContent = opacityPct;
 
+  // Иконка онлайн-статуса
+  document.getElementById('sShowStatusDot').checked = settings.showStatusDot ?? true;
+
+  // Отступы от краёв монитора
+  const offX = settings.screenOffsetX ?? 0;
+  const offY = settings.screenOffsetY ?? 0;
+  document.getElementById('sScreenOffsetX').value = offX;
+  document.getElementById('sScreenOffsetY').value = offY;
+  document.getElementById('sOffsetXVal').textContent = offX;
+  document.getElementById('sOffsetYVal').textContent = offY;
+  document.getElementById('sScreenOffsetX').oninput = e => document.getElementById('sOffsetXVal').textContent = e.target.value;
+  document.getElementById('sScreenOffsetY').oninput = e => document.getElementById('sOffsetYVal').textContent = e.target.value;
+
   // Позиции и размеры шрифтов экрана блокировки
   document.getElementById('sPcNumberPosition').value  = settings.pcNumberPosition   ?? 'MiddleCenter';
   document.getElementById('sLockedTextPosition').value = settings.lockedTextPosition ?? 'MiddleCenter';
   document.getElementById('sTimePosition').value       = settings.timePosition       ?? 'BottomCenter';
+
+  // Порядок стекинга при совпадении позиции
+  document.getElementById('sPcNumberOrder').value   = settings.pcNumberOrder   ?? 1;
+  document.getElementById('sLockedTextOrder').value = settings.lockedTextOrder ?? 2;
+  document.getElementById('sTimeOrder').value       = settings.timeOrder       ?? 3;
 
   const pcFont     = settings.pcNumberFontSize   ?? 52;
   const lockedFont = settings.lockedTextFontSize ?? 16;
@@ -1270,13 +1288,19 @@ function readSettingsForm() {
     showPcNumber: document.getElementById('sShowPcNumber').checked,
     showLockedText: document.getElementById('sShowLockedText').checked,
     backgroundOpacity: opacityPct / 100,
-    // Экран блокировки — позиции и размеры шрифтов
+    // Экран блокировки — позиции, размеры шрифтов, отступы, порядок, иконка
+    showStatusDot:      document.getElementById('sShowStatusDot').checked,
+    screenOffsetX:      parseInt(document.getElementById('sScreenOffsetX').value) || 0,
+    screenOffsetY:      parseInt(document.getElementById('sScreenOffsetY').value) || 0,
     pcNumberPosition:   document.getElementById('sPcNumberPosition').value,
     pcNumberFontSize:   parseInt(document.getElementById('sPcNumberFontSize').value) || 52,
+    pcNumberOrder:      parseInt(document.getElementById('sPcNumberOrder').value) || 1,
     lockedTextPosition: document.getElementById('sLockedTextPosition').value,
     lockedTextFontSize: parseInt(document.getElementById('sLockedTextFontSize').value) || 16,
+    lockedTextOrder:    parseInt(document.getElementById('sLockedTextOrder').value) || 2,
     timePosition:       document.getElementById('sTimePosition').value,
     timeFontSize:       parseInt(document.getElementById('sTimeFontSize').value) || 36,
+    timeOrder:          parseInt(document.getElementById('sTimeOrder').value) || 3,
     // Фон — имя файла берём из поля (uploadBgFile() обновляет его отдельно)
     backgroundFileName: document.getElementById('sBgFileName').value,
     services: readServicesForm(),

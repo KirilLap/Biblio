@@ -17,6 +17,12 @@ namespace BibAdminWeb
         public double LockedTextFontSize { get; set; } = 16;
         public string TimePosition { get; set; } = "BottomCenter";
         public double TimeFontSize { get; set; } = 36;
+        public int ScreenOffsetX { get; set; } = 0;
+        public int ScreenOffsetY { get; set; } = 0;
+        public bool ShowStatusDot { get; set; } = true;
+        public int PcNumberOrder { get; set; } = 1;
+        public int LockedTextOrder { get; set; } = 2;
+        public int TimeOrder { get; set; } = 3;
 
         public bool UsbBlocked { get; set; } = false;
         public bool TaskMgrDisabled { get; set; } = false;
@@ -131,6 +137,12 @@ namespace BibAdminWeb
                 new("SET_LOCKED_TEXT_FONT_SIZE", LockedTextFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new("SET_TIME_POSITION", TimePosition),
                 new("SET_TIME_FONT_SIZE", TimeFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("SET_SCREEN_OFFSET_X", ScreenOffsetX.ToString()),
+                new("SET_SCREEN_OFFSET_Y", ScreenOffsetY.ToString()),
+                new("SHOW_STATUS_DOT", ShowStatusDot.ToString().ToLower()),
+                new("SET_PC_NUMBER_ORDER", PcNumberOrder.ToString()),
+                new("SET_LOCKED_TEXT_ORDER", LockedTextOrder.ToString()),
+                new("SET_TIME_ORDER", TimeOrder.ToString()),
                 new("USB_BLOCK", UsbBlocked.ToString().ToLower()),
                 new("TASKMGR_DISABLE", TaskMgrDisabled.ToString().ToLower()),
                 new("ADMIN_PASSWORD", AdminPasswordHash),
