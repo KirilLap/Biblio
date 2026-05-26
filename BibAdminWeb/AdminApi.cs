@@ -251,6 +251,9 @@ namespace BibAdminWeb
                         if (data.TryGetProperty("canViewReaders", out var rvr)) op.CanViewReaders = rvr.GetBoolean();
                         if (data.TryGetProperty("canViewFinance", out var rvf)) op.CanViewFinance = rvf.GetBoolean();
                         s.Save();
+                        // Уведомляем оператора в реальном времени — его браузер обновит вкладки
+                        if (OperatorBroadcaster.Instance != null)
+                            await OperatorBroadcaster.Instance.NotifyPermissionsUpdatedAsync(id);
                     }
                     await ctx.Response.WriteAsync("{\"ok\":true}");
                     return;

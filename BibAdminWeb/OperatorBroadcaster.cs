@@ -32,6 +32,13 @@ namespace BibAdminWeb
         public Task NotifyServerRestartingAsync(string reason)
             => _ctx.Clients.All.SendAsync("serverRestarting", new { reason });
 
+        /// <summary>
+        /// Уведомляет всех подключённых операторов об изменении прав.
+        /// Каждый клиент сам решает, относится ли сообщение к нему (по operatorId).
+        /// </summary>
+        public Task NotifyPermissionsUpdatedAsync(string operatorId)
+            => _ctx.Clients.All.SendAsync("permissionsUpdated", new { operatorId });
+
         public void PushServiceTypes()
         {
             var settings = GlobalSettings.Load();

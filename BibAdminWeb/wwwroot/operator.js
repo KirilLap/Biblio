@@ -23,12 +23,14 @@ let _screenInterval = null;
 // ── Инициализация ─────────────────────────────────────────────────────────────
 // ── Права оператора ───────────────────────────────────────────────────────────
 let opPerms = { canViewReaders: false, canViewFinance: false };
+let meId = null;
 
 (async function init() {
   // Проверяем авторизацию
   const me = await fetch('/api/op/me').then(r => r.ok ? r.json() : null).catch(() => null);
   if (!me) { window.location.href = '/login.html'; return; }
   document.getElementById('opName').textContent = me.displayName;
+  meId = me.id;
 
   // Применяем права
   opPerms.canViewReaders = !!me.canViewReaders;
@@ -105,6 +107,20 @@ function startSignalR() {
 
   connection.on('serverRestarting', data => {
     showRestartOverlay(data.reason || 'Обновление системы');
+  });
+
+  connection.on('permissionsUpdated', async data => {
+    if (data.operatorId !== meId) return;
+    const fresh = await fetch('/api/op/me').then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!fresh) return;
+    opPerms.canViewReaders = !!fresh.canViewReaders;
+    opPerms.canViewFinance = !!fresh.canViewFinance;
+    document.getElementById('tabBtnReaders').style.display = opPerms.canViewReaders ? '' : 'none';
+    document.getElementById('tabBtnFinance').style.display = opPerms.canViewFinance ? '' : 'none';
+    // Если текущая вкладка стала недоступна — возвращаемся на ПК
+    if (_currentOpTab === 'readers' && !opPerms.canViewReaders) switchOpTab('pcs');
+    if (_currentOpTab === 'finance' && !opPerms.canViewFinance) switchOpTab('pcs');
+    toast('Права доступа обновлены', 'good');
   });
 
   connection.on('sessionSummary', s => {

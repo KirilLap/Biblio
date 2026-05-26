@@ -1565,19 +1565,20 @@ function renderOperators(list) {
         <div class="op-name">${esc(op.displayName)}</div>
         <div class="op-login">${esc(op.login)}</div>
       </div>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;color:#aaa">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#aaa">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр списка читателей">
-          <input type="checkbox" ${op.canViewReaders ? 'checked' : ''}
-            onchange="setOpPermission('${op.id}','canViewReaders',this.checked)"
+          <input type="checkbox" id="opChkReaders_${op.id}" ${op.canViewReaders ? 'checked' : ''}
             style="width:13px;height:13px">
           👁 Читатели
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр истории финансов">
-          <input type="checkbox" ${op.canViewFinance ? 'checked' : ''}
-            onchange="setOpPermission('${op.id}','canViewFinance',this.checked)"
+          <input type="checkbox" id="opChkFinance_${op.id}" ${op.canViewFinance ? 'checked' : ''}
             style="width:13px;height:13px">
           💰 Финансы
         </label>
+        <button class="btn btn-outline" onclick="applyOpPermissions('${op.id}')"
+          style="font-size:11px;padding:3px 10px">Применить</button>
+        <span id="opPermSaved_${op.id}" style="display:none;color:#1D9E75;font-size:11px">✓ Сохранено</span>
       </div>
       <span class="op-active-badge ${op.isActive ? 'active' : 'inactive'}">${op.isActive ? 'Активен' : 'Отключён'}</span>
       <div class="op-actions">
@@ -1612,12 +1613,20 @@ async function addOperator() {
   await loadOperators();
 }
 
-async function setOpPermission(id, field, value) {
-  await fetch(`/api/admin/operators/${id}/permissions`, {
+async function applyOpPermissions(id) {
+  const canViewReaders = document.getElementById(`opChkReaders_${id}`)?.checked ?? false;
+  const canViewFinance = document.getElementById(`opChkFinance_${id}`)?.checked ?? false;
+  const r = await fetch(`/api/admin/operators/${id}/permissions`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [field]: value })
+    body: JSON.stringify({ canViewReaders, canViewFinance })
   });
+  if (r.ok) {
+    const badge = document.getElementById(`opPermSaved_${id}`);
+    if (badge) { badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2500); }
+  } else {
+    toast('Ошибка сохранения прав', 'warn');
+  }
 }
 
 async function toggleOpActive(id, isActive) {
