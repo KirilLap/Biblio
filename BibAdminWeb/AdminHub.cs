@@ -204,6 +204,7 @@ namespace BibAdminWeb
                             OfflineDecision = c.OfflineDecision.ToString(),
                             ReaderId = c.ReaderId ?? "",
                             UserName = c.UserName ?? "",
+                            StartedByOperatorName = c.StartedByOperatorName ?? "",
                             SavedAtUtc = DateTime.UtcNow
                         })
                         .ToList();
@@ -362,12 +363,14 @@ namespace BibAdminWeb
                     client.ElapsedAtDisconnect = elapsedAtDisconnect;
                     client.OfflineDecision = offlineDecision;
 
-                    // Восстанавливаем данные читателя (чтобы после перезапуска сессия
+                    // Восстанавливаем данные читателя и оператора (чтобы после перезапуска сессия
                     // не становилась «анонимной»)
                     if (s.TryGetProperty("ReaderId", out var ridProp) && ridProp.GetString() is string rid && !string.IsNullOrEmpty(rid))
                         client.ReaderId = rid;
                     if (s.TryGetProperty("UserName", out var unProp) && unProp.GetString() is string un && !string.IsNullOrEmpty(un))
                         client.UserName = un;
+                    if (s.TryGetProperty("StartedByOperatorName", out var opProp) && opProp.GetString() is string op && !string.IsNullOrEmpty(op))
+                        client.StartedByOperatorName = op;
 
                     KnownClients[pcNumber] = client;
                     restoredCount++;
@@ -613,10 +616,17 @@ namespace BibAdminWeb
                 SessionId = !string.IsNullOrEmpty(sessionId) ? sessionId : existingByMac?.SessionId ?? "",
                 DisconnectedAt = null,
                 OfflineDecision = existingByMac?.OfflineDecision ?? OfflineDecision.None,
-                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // ✅ КОПИРУЕМ!
+                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0,
                 ClientVersion = !string.IsNullOrEmpty(info.ClientVersion) ? info.ClientVersion : (existingByMac?.ClientVersion ?? ""),
                 PreUpdateVersion = existingByMac?.PreUpdateVersion ?? "",
                 UpdateStatus = ResolveUpdateStatus(existingByMac, info.ClientVersion),
+                // Сохраняем данные читателя и оператора — без этого сессия после
+                // перезапуска сервера теряет ReaderId/UserName и записывается анонимной
+                ReaderId = existingByMac?.ReaderId,
+                UserName = existingByMac?.UserName,
+                StartedByOperatorName = existingByMac?.StartedByOperatorName ?? "",
+                // Сохраняем индивидуальный фон (иначе он сбрасывается при реконнекте)
+                BackgroundFileName = existingByMac?.BackgroundFileName ?? "",
             };
 
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);
