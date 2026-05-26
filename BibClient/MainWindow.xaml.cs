@@ -349,7 +349,7 @@ namespace BibClient
                     var wrapper = new StackPanel
                     {
                         Tag = "group-wrapper",
-                        Orientation = Orientation.Vertical
+                        Orientation = System.Windows.Controls.Orientation.Vertical
                     };
                     foreach (var (panel, _) in items.OrderBy(x => x.order))
                     {
