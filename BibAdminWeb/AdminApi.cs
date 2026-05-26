@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -438,6 +439,47 @@ namespace BibAdminWeb
                     await Task.Delay(300);
                     Environment.Exit(0);
                 });
+                return;
+            }
+
+            // ─── Pack BibClient folder update (zip for folder-based client update) ──
+            if (path == "/api/admin/pack-client-update" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                string bodyPack = await ReadBody(ctx);
+                string packSource = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(bodyPack);
+                    packSource = doc.RootElement.GetProperty("sourcePath").GetString()?.Trim() ?? "";
+                }
+                catch { }
+
+                if (string.IsNullOrWhiteSpace(packSource) || !Directory.Exists(packSource))
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Папка не найдена\"}");
+                    return;
+                }
+
+                var updDirPack = GetUpdatesPath();
+                var zipPath = Path.Combine(updDirPack, "bibclient-update.zip");
+                try
+                {
+                    if (File.Exists(zipPath)) File.Delete(zipPath);
+                    using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+                    foreach (var file in Directory.GetFiles(packSource, "*", SearchOption.AllDirectories))
+                    {
+                        var entryName = Path.GetRelativePath(packSource, file);
+                        archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+                    }
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
                 return;
             }
 
