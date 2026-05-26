@@ -158,6 +158,12 @@ namespace BibClient
                         Current.BlockInstall = loaded.BlockInstall;
                         Current.PreventClose = loaded.PreventClose;
                         Current.AutoStartWithUser = loaded.AutoStartWithUser;
+                        Current.ScreenOffsetX = loaded.ScreenOffsetX;
+                        Current.ScreenOffsetY = loaded.ScreenOffsetY;
+                        Current.ShowStatusDot = loaded.ShowStatusDot;
+                        Current.PcNumberOrder = loaded.PcNumberOrder;
+                        Current.LockedTextOrder = loaded.LockedTextOrder;
+                        Current.TimeOrder = loaded.TimeOrder;
                     }
                 }
             }

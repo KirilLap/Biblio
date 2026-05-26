@@ -28,8 +28,13 @@ Uninstallable=no
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Files]
+; Основные файлы — settings.json исключён, чтобы не перезаписать настройки при обновлении
 Source: "{#SrcClient}\*"; DestDir: "{app}\BibClient"; \
-    Flags: ignoreversion recursesubdirs createallsubdirs
+    Flags: ignoreversion recursesubdirs createallsubdirs; \
+    Excludes: "settings.json"
+; Файл настроек — копируется только при первой установке (если файла ещё нет)
+Source: "{#SrcClient}\settings.json"; DestDir: "{app}\BibClient"; \
+    Flags: onlyifdoesntexist skipifsourcedoesntexist
 
 [Run]
 Filename: "sc.exe"; \

@@ -50,8 +50,14 @@ Name: "adminweb";  Description: "BibAdminWeb — веб-интерфейс ад�
 ; -------------------------------------------------------
 [Files]
 ; BibClient — все файлы включая BibClientService и BibClientGuardian
+; settings.json исключён, чтобы не перезаписать настройки при обновлении
 Source: "{#SrcClient}\*"; DestDir: "{app}\BibClient"; \
-    Flags: ignoreversion recursesubdirs createallsubdirs; Components: client
+    Flags: ignoreversion recursesubdirs createallsubdirs; \
+    Excludes: "settings.json"; Components: client
+; Файл настроек BibClient — копируется только при первой установке
+; При обновлении файл уже существует и не трогается; порт записывается в CurStepChanged
+Source: "{#SrcClient}\settings.json"; DestDir: "{app}\BibClient"; \
+    Flags: onlyifdoesntexist skipifsourcedoesntexist; Components: client
 
 ; BibAdmin
 Source: "{#SrcAdmin}\*"; DestDir: "{app}\BibAdmin"; \
