@@ -1259,7 +1259,7 @@ function fillSettingsForm() {
   }
   updateLockPreview();
 
-  const pcFont     = settings.pcNumberFontSize   ?? 52;
+  const pcFont     = settings.pcNumberFontSize   ?? 150;
   const lockedFont = settings.lockedTextFontSize ?? 16;
   const timeFont   = settings.timeFontSize       ?? 36;
   document.getElementById('sPcNumberFontSize').value  = pcFont;
@@ -1372,8 +1372,8 @@ function updateLockPreview() {
   // Размеры берём из слайдеров и масштабируем пропорционально высоте превью
   const pvH = preview.offsetHeight || 195;
   const fontScale = pvH / 1080;
-  const pcFontPx = Math.max(7, Math.min(30,
-    Math.round((parseInt(document.getElementById('sPcNumberFontSize')?.value)   || 52)  * fontScale)));
+  const pcFontPx = Math.max(7, Math.min(36,
+    Math.round((parseInt(document.getElementById('sPcNumberFontSize')?.value)   || 150) * fontScale)));
   const lockedFontPx = Math.max(5, Math.min(16,
     Math.round((parseInt(document.getElementById('sLockedTextFontSize')?.value) || 16)  * fontScale)));
   const timeFontPx = Math.max(6, Math.min(18,
@@ -1450,7 +1450,7 @@ function readSettingsForm() {
     screenOffsetX:      parseInt(document.getElementById('sScreenOffsetX').value) || 0,
     screenOffsetY:      parseInt(document.getElementById('sScreenOffsetY').value) || 0,
     pcNumberPosition:   document.getElementById('sPcNumberPosition').value,
-    pcNumberFontSize:   parseInt(document.getElementById('sPcNumberFontSize').value) || 52,
+    pcNumberFontSize:   parseInt(document.getElementById('sPcNumberFontSize').value) || 150,
     pcNumberOrder:      parseInt(document.getElementById('sPcNumberOrder').value) || 1,
     lockedTextPosition: document.getElementById('sLockedTextPosition').value,
     lockedTextFontSize: parseInt(document.getElementById('sLockedTextFontSize').value) || 16,

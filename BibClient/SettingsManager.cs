@@ -63,7 +63,7 @@ namespace BibClient
 
         public bool ShowPcName { get; set; } = true;       // Показывать имя (например, "ПК" или "Комп")
         public bool ShowPcNumber { get; set; } = true;      // Показывать цифровой номер (например, "1")
-        public double PcNumberFontSize { get; set; } = 52;
+        public double PcNumberFontSize { get; set; } = 150;
         public string PcNumberPosition { get; set; } = "MiddleCenter";
         public bool ShowLockedText { get; set; } = true;
         public double LockedTextFontSize { get; set; } = 16;
