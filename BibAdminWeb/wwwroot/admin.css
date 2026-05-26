@@ -484,6 +484,64 @@ body {
 .ss-type-icon { font-size: 20px; margin-bottom: 4px; }
 .ss-type-label { font-size: 12px; font-weight: 600; color: #666; }
 
+/* ── Offset row: slider + number input ─────────────────── */
+.offset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.offset-row input[type="range"]  { flex: 1; min-width: 0; }
+.offset-row input[type="number"] { width: 62px; text-align: right; padding: 4px 6px; background: #1a1a2e; border: 1px solid #3a3a5c; border-radius: 4px; color: #eee; font-size: 13px; }
+.offset-row .unit { color: #888; font-size: 12px; white-space: nowrap; }
+
+/* ── Lock screen preview (9-zone grid) ──────────────────── */
+#lockScreenPreview {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  width: 100%;
+  max-width: 360px;
+  height: 195px;
+  background: #12121f;
+  border: 2px solid #2a2a4a;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+#lockScreenPreview::after {
+  content: '';
+  position: absolute;
+  inset: var(--pv-oy, 0px) var(--pv-ox, 0px);
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.pv-cell { display: flex; flex-direction: column; gap: 2px; padding: 4px; overflow: hidden; }
+.pv-tl { align-items: flex-start; justify-content: flex-start; }
+.pv-tc { align-items: center;     justify-content: flex-start; }
+.pv-tr { align-items: flex-end;   justify-content: flex-start; }
+.pv-ml { align-items: flex-start; justify-content: center; }
+.pv-mc { align-items: center;     justify-content: center; }
+.pv-mr { align-items: flex-end;   justify-content: center; }
+.pv-bl { align-items: flex-start; justify-content: flex-end; }
+.pv-bc { align-items: center;     justify-content: flex-end; }
+.pv-br { align-items: flex-end;   justify-content: flex-end; }
+.pv-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  white-space: nowrap;
+  color: #fff;
+  font-weight: 500;
+  line-height: 16px;
+}
+.pv-pc     { background: #3a6fd8; }
+.pv-locked { background: #c0392b; }
+.pv-time   { background: #1a7a5a; }
+
 /* ── Lock screen section dividers in settings ──────────── */
 .lock-section-sep {
   height: 1px;

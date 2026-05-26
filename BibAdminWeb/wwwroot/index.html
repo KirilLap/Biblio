@@ -224,16 +224,38 @@
             </div>
 
             <div class="lock-section-sep"></div>
-            <div class="lock-section-title">Отступы от краёв монитора (px)</div>
+            <div class="lock-section-title">Отступы от краёв монитора</div>
             <div class="form-row">
-              <label>По горизонтали (<span id="sOffsetXVal">0</span> px)</label>
-              <input type="range" id="sScreenOffsetX" min="0" max="300" step="4">
+              <label>По горизонтали</label>
+              <div class="offset-row">
+                <input type="range"  id="sScreenOffsetX"    min="0" max="300" step="2">
+                <input type="number" id="sScreenOffsetXNum" min="0" max="300" value="0">
+                <span class="unit">px</span>
+              </div>
             </div>
             <div class="form-row">
-              <label>По вертикали (<span id="sOffsetYVal">0</span> px)</label>
-              <input type="range" id="sScreenOffsetY" min="0" max="300" step="4">
+              <label>По вертикали</label>
+              <div class="offset-row">
+                <input type="range"  id="sScreenOffsetY"    min="0" max="300" step="2">
+                <input type="number" id="sScreenOffsetYNum" min="0" max="300" value="0">
+                <span class="unit">px</span>
+              </div>
             </div>
             <p class="settings-hint">Отступ применяется к прижатым краям (лево/право/верх/низ). Центрированные элементы не смещаются.</p>
+
+            <div class="lock-section-sep"></div>
+            <div class="lock-section-title">Предпросмотр расположения</div>
+            <div id="lockScreenPreview">
+              <div class="pv-cell pv-tl" id="pv-TopLeft"></div>
+              <div class="pv-cell pv-tc" id="pv-TopCenter"></div>
+              <div class="pv-cell pv-tr" id="pv-TopRight"></div>
+              <div class="pv-cell pv-ml" id="pv-MiddleLeft"></div>
+              <div class="pv-cell pv-mc" id="pv-MiddleCenter"></div>
+              <div class="pv-cell pv-mr" id="pv-MiddleRight"></div>
+              <div class="pv-cell pv-bl" id="pv-BottomLeft"></div>
+              <div class="pv-cell pv-bc" id="pv-BottomCenter"></div>
+              <div class="pv-cell pv-br" id="pv-BottomRight"></div>
+            </div>
 
             <div class="lock-section-sep"></div>
             <div class="lock-section-title">Номер ПК</div>

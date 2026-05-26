@@ -1205,25 +1205,34 @@ function fillSettingsForm() {
   // Иконка онлайн-статуса
   document.getElementById('sShowStatusDot').checked = settings.showStatusDot ?? true;
 
-  // Отступы от краёв монитора
+  // Отступы от краёв монитора — синхронизируем слайдер и числовое поле
   const offX = settings.screenOffsetX ?? 0;
   const offY = settings.screenOffsetY ?? 0;
-  document.getElementById('sScreenOffsetX').value = offX;
-  document.getElementById('sScreenOffsetY').value = offY;
-  document.getElementById('sOffsetXVal').textContent = offX;
-  document.getElementById('sOffsetYVal').textContent = offY;
-  document.getElementById('sScreenOffsetX').oninput = e => document.getElementById('sOffsetXVal').textContent = e.target.value;
-  document.getElementById('sScreenOffsetY').oninput = e => document.getElementById('sOffsetYVal').textContent = e.target.value;
+  document.getElementById('sScreenOffsetX').value    = offX;
+  document.getElementById('sScreenOffsetXNum').value = offX;
+  document.getElementById('sScreenOffsetY').value    = offY;
+  document.getElementById('sScreenOffsetYNum').value = offY;
+  setupOffsetSync('sScreenOffsetX', 'sScreenOffsetXNum');
+  setupOffsetSync('sScreenOffsetY', 'sScreenOffsetYNum');
 
   // Позиции и размеры шрифтов экрана блокировки
-  document.getElementById('sPcNumberPosition').value  = settings.pcNumberPosition   ?? 'MiddleCenter';
+  document.getElementById('sPcNumberPosition').value   = settings.pcNumberPosition   ?? 'MiddleCenter';
   document.getElementById('sLockedTextPosition').value = settings.lockedTextPosition ?? 'MiddleCenter';
   document.getElementById('sTimePosition').value       = settings.timePosition       ?? 'BottomCenter';
 
-  // Порядок стекинга при совпадении позиции
+  // Порядок стекинга — взаимоисключающие значения (своп при совпадении)
   document.getElementById('sPcNumberOrder').value   = settings.pcNumberOrder   ?? 1;
   document.getElementById('sLockedTextOrder').value = settings.lockedTextOrder ?? 2;
   document.getElementById('sTimeOrder').value       = settings.timeOrder       ?? 3;
+  setupOrderSwap();
+
+  // Предпросмотр — wire events и первый рендер
+  ['sPcNumberPosition','sLockedTextPosition','sTimePosition',
+   'sShowPcNumber','sShowPcName','sShowLockedText'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateLockPreview);
+  });
+  updateLockPreview();
 
   const pcFont     = settings.pcNumberFontSize   ?? 52;
   const lockedFont = settings.lockedTextFontSize ?? 16;
@@ -1256,6 +1265,110 @@ function fillSettingsForm() {
   bindSliderLabel('sTimeFontSize',     'sTimeFontSizeVal',    v => Math.round(v));
 
   renderServicesList();
+}
+
+// ── Offset: двунаправленная синхронизация слайдера и числового поля ────────
+function setupOffsetSync(sliderId, numberId) {
+  const slider = document.getElementById(sliderId);
+  const number = document.getElementById(numberId);
+  if (!slider || !number) return;
+  // Удаляем старые обработчики через замену клонами
+  const newSlider = slider.cloneNode(true); slider.parentNode.replaceChild(newSlider, slider);
+  const newNumber = number.cloneNode(true); number.parentNode.replaceChild(newNumber, number);
+  newSlider.addEventListener('input', () => {
+    newNumber.value = newSlider.value;
+    updateLockPreview();
+  });
+  newNumber.addEventListener('input', () => {
+    const v = Math.max(0, Math.min(300, parseInt(newNumber.value) || 0));
+    newSlider.value = v;
+    newNumber.value = v;
+    updateLockPreview();
+  });
+}
+
+// ── Order swap: взаимоисключающий выбор порядка стекинга ────────────────────
+function setupOrderSwap() {
+  const ids = ['sPcNumberOrder', 'sLockedTextOrder', 'sTimeOrder'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.dataset.prev = el.value;
+    // Заменяем клоном чтобы убрать старые обработчики
+    const clone = el.cloneNode(true);
+    clone.dataset.prev = el.value;
+    el.parentNode.replaceChild(clone, el);
+    clone.addEventListener('change', function () {
+      const newVal = this.value;
+      const oldVal = this.dataset.prev;
+      if (newVal === oldVal) return;
+      // Находим другой элемент с таким же значением — меняем местами
+      ids.forEach(otherId => {
+        if (otherId === this.id) return;
+        const other = document.getElementById(otherId);
+        if (other && other.value === newVal) {
+          other.value = oldVal;
+          other.dataset.prev = oldVal;
+        }
+      });
+      this.dataset.prev = newVal;
+      updateLockPreview();
+    });
+  });
+}
+
+// ── Lock screen preview ──────────────────────────────────────────────────────
+function updateLockPreview() {
+  const preview = document.getElementById('lockScreenPreview');
+  if (!preview) return;
+
+  const zones = ['TopLeft','TopCenter','TopRight','MiddleLeft','MiddleCenter',
+                 'MiddleRight','BottomLeft','BottomCenter','BottomRight'];
+  zones.forEach(z => {
+    const cell = document.getElementById('pv-' + z);
+    if (cell) cell.innerHTML = '';
+  });
+
+  const offX = parseInt(document.getElementById('sScreenOffsetX')?.value) || 0;
+  const offY = parseInt(document.getElementById('sScreenOffsetY')?.value) || 0;
+  // Показываем пунктирную рамку отступа (масштаб ~1:6)
+  const scale = 1 / 6;
+  preview.style.setProperty('--pv-ox', Math.round(offX * scale) + 'px');
+  preview.style.setProperty('--pv-oy', Math.round(offY * scale) + 'px');
+
+  const showPc     = document.getElementById('sShowPcNumber')?.checked ||
+                     document.getElementById('sShowPcName')?.checked;
+  const showLocked = document.getElementById('sShowLockedText')?.checked;
+
+  const items = [];
+  if (showPc)
+    items.push({ pos: document.getElementById('sPcNumberPosition')?.value   || 'MiddleCenter',
+                 order: parseInt(document.getElementById('sPcNumberOrder')?.value)   || 1,
+                 cls: 'pv-pc',     label: '# Номер ПК' });
+  if (showLocked)
+    items.push({ pos: document.getElementById('sLockedTextPosition')?.value || 'MiddleCenter',
+                 order: parseInt(document.getElementById('sLockedTextOrder')?.value) || 2,
+                 cls: 'pv-locked', label: '🔒 Заблокировано' });
+  items.push(  { pos: document.getElementById('sTimePosition')?.value       || 'BottomCenter',
+                 order: parseInt(document.getElementById('sTimeOrder')?.value)       || 3,
+                 cls: 'pv-time',   label: '🕐 Время' });
+
+  // Группируем по позиции, сортируем по порядку
+  const groups = {};
+  items.forEach(it => {
+    if (!groups[it.pos]) groups[it.pos] = [];
+    groups[it.pos].push(it);
+  });
+  Object.entries(groups).forEach(([pos, grp]) => {
+    const cell = document.getElementById('pv-' + pos);
+    if (!cell) return;
+    grp.sort((a, b) => a.order - b.order).forEach(it => {
+      const chip = document.createElement('div');
+      chip.className = 'pv-chip ' + it.cls;
+      chip.textContent = it.label;
+      cell.appendChild(chip);
+    });
+  });
 }
 
 function bindSliderLabel(sliderId, labelId, fmt) {
