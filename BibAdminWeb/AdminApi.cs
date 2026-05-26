@@ -413,6 +413,10 @@ namespace BibAdminWeb
                     if (OperatorBroadcaster.Instance != null)
                         await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление из папки");
                     await Task.Delay(1500);
+                    // Сохраняем текущее состояние сессий перед выходом — иначе если сессии
+                    // были завершены незадолго до обновления, active_sessions.json может
+                    // содержать устаревшие данные и после перезапуска появятся «призрачные» сессии.
+                    AdminHub.SaveActiveSessions();
                     // UseShellExecute=true + WindowStyle=Hidden надёжнее скрывает окно для .bat файлов.
                     // UseShellExecute=false + CreateNoWindow иногда не скрывает окно cmd.exe.
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -433,6 +437,7 @@ namespace BibAdminWeb
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(500);
+                    AdminHub.SaveActiveSessions();
                     Environment.Exit(0);
                 });
                 await ctx.Response.WriteAsync("{\"ok\":true}");
