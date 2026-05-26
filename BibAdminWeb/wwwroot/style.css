@@ -69,15 +69,17 @@ main { padding: 20px 24px 100px; }
 .stat-item.stat-amber span { color: #B87A0E; }
 .btn-service-top {
   margin-left: auto;
-  background: #1D3D30;
-  border: 1px solid #2A7A5A;
-  color: #4DC79A;
+  background: #1D9E75;
+  border: none;
+  color: #fff;
   border-radius: 8px;
   padding: 8px 18px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: filter .15s;
 }
-.btn-service-top:hover { background: #1D9E75; color: #fff; }
+.btn-service-top:hover { filter: brightness(1.12); }
 
 /* ── Грид ────────────────────────────────────────────────────── */
 .pc-grid {
