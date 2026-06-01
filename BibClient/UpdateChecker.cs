@@ -24,6 +24,7 @@ namespace BibClient
 
         /// <summary>
         /// Запускает фоновую задачу с периодической проверкой раз в час.
+        /// Проверяет последовательно: локальная папка → zip → exe-установщик.
         /// Возвращается сразу — проверка идёт в фоне.
         /// </summary>
         public static Task StartPeriodicCheckAsync(string serverBaseUrl)
@@ -38,13 +39,21 @@ namespace BibClient
             });
         }
 
+        /// <summary>
+        /// Проверяет наличие обновлений в порядке приоритета:
+        /// 1. Локальная папка updates/ (exe-инсталлятор рядом с exe)
+        /// 2. Zip-пакет на сервере (bibclient-zip-version.json)
+        /// 3. Exe-установщик на сервере (bibclient-version.json)
+        /// </summary>
         public static async Task CheckAsync(string serverBaseUrl)
         {
-            // Локальная папка updates/ рядом с exe имеет приоритет над HTTP.
-            // Достаточно положить bibclient-version.json и инсталлятор в эту папку —
-            // BibClient подхватит их без скачивания.
+            // 1. Локальная папка updates/ — приоритет над сетью
             if (await CheckLocalFolderAsync()) return;
 
+            // 2. Zip-пакет — быстрее exe, не требует инсталлятора
+            if (await CheckServerZipAsync(serverBaseUrl)) return;
+
+            // 3. Exe-установщик с сервера
             VersionInfo? info = null;
             try
             {
@@ -65,9 +74,140 @@ namespace BibClient
                 return;
             }
 
-            Logger.Info($"Доступна версия {info.Version}, текущая {CurrentVersion} — запуск тихого обновления");
+            Logger.Info($"⬆️ Доступна версия {info.Version} (текущая {CurrentVersion}) — скачивание установщика...");
             await DownloadAndRunAsync(serverBaseUrl, info.InstallerFile);
         }
+
+        // ── Zip-обновление (сервер) ───────────────────────────────────────────
+
+        // Имена флаговых файлов, которые читает BibClientService.
+        public static readonly string UpdateFlagFileName       = "BibClientUpdate.flag";
+        public static readonly string FolderUpdateFlagFileName = "BibClientFolderUpdate.flag";
+
+        /// <summary>
+        /// Вызывается по команде UPDATE_FOLDER_NOW от администратора.
+        /// Сначала проверяет bibclient-zip-version.json — если версия уже установлена,
+        /// скачивание не выполняется. Если версия json недоступна — скачивает принудительно
+        /// (администратор знает что делает).
+        /// </summary>
+        public static async Task CheckFolderUpdateAsync(string serverBaseUrl)
+        {
+            if (Interlocked.CompareExchange(ref _downloading, 1, 0) != 0)
+            {
+                Logger.Info("⏳ Загрузка обновления уже идёт, пропускаем");
+                return;
+            }
+
+            // Пробуем получить версию zip-пакета
+            ZipVersionInfo? zipInfo = null;
+            try
+            {
+                var vUrl = serverBaseUrl.TrimEnd('/') + "/updates/bibclient-zip-version.json";
+                var json = await _http.GetStringAsync(vUrl);
+                zipInfo = JsonSerializer.Deserialize<ZipVersionInfo>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch { /* версия недоступна — разрешаем скачать */ }
+
+            if (zipInfo != null && !IsNewer(zipInfo.Version, CurrentVersion))
+            {
+                Logger.Info($"ℹ️ Zip-пакет {zipInfo.Version} — уже установлена актуальная версия {CurrentVersion}, пропускаем");
+                UpdateFailed?.Invoke("no_update");
+                Interlocked.Exchange(ref _downloading, 0);
+                return;
+            }
+
+            if (zipInfo != null)
+                Logger.Info($"📦 Zip-пакет {zipInfo.Version} новее текущей {CurrentVersion} — скачивание...");
+            else
+                Logger.Info("📦 Принудительное zip-обновление по команде администратора — скачивание...");
+
+            await DownloadAndApplyZipAsync(serverBaseUrl);
+            Interlocked.Exchange(ref _downloading, 0);
+        }
+
+        /// <summary>
+        /// Проверяет zip-пакет на сервере в рамках периодического цикла.
+        /// Возвращает true если обновление было инициировано (приложение завершится).
+        /// </summary>
+        private static async Task<bool> CheckServerZipAsync(string serverBaseUrl)
+        {
+            ZipVersionInfo? info = null;
+            try
+            {
+                var url = serverBaseUrl.TrimEnd('/') + "/updates/bibclient-zip-version.json";
+                var json = await _http.GetStringAsync(url);
+                info = JsonSerializer.Deserialize<ZipVersionInfo>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch
+            {
+                // Zip-версия недоступна — нормально, проверяем exe
+                return false;
+            }
+
+            if (info == null || !IsNewer(info.Version, CurrentVersion))
+                return false;
+
+            Logger.Info($"📦 Доступен zip-пакет {info.Version} (текущая {CurrentVersion}) — скачивание...");
+
+            if (Interlocked.CompareExchange(ref _downloading, 1, 0) != 0)
+            {
+                Logger.Info("⏳ Загрузка уже идёт");
+                return false;
+            }
+            await DownloadAndApplyZipAsync(serverBaseUrl);
+            Interlocked.Exchange(ref _downloading, 0);
+            return true;
+        }
+
+        /// <summary>
+        /// Скачивает bibclient-update.zip и инициирует распаковку через BibClientService.
+        /// </summary>
+        private static async Task DownloadAndApplyZipAsync(string serverBaseUrl)
+        {
+            var downloadUrl = serverBaseUrl.TrimEnd('/') + "/updates/bibclient-update.zip";
+            var zipPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bibclient-update.zip");
+
+            try
+            {
+                Logger.Info($"⬇️ Скачиваем zip: {downloadUrl}");
+                var bytes = await _downloadHttp.GetByteArrayAsync(downloadUrl);
+                await File.WriteAllBytesAsync(zipPath, bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка загрузки zip-обновления: {ex.Message}");
+                UpdateFailed?.Invoke("download_failed");
+                return;
+            }
+
+            await TriggerFolderInstallAsync(zipPath);
+        }
+
+        private static async Task TriggerFolderInstallAsync(string zipPath)
+        {
+            try
+            {
+                var flagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, FolderUpdateFlagFileName);
+                await File.WriteAllTextAsync(flagPath, zipPath);
+                Logger.Info($"📋 Флаг папочного обновления записан: {flagPath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка записи флага папочного обновления: {ex.Message}");
+                UpdateFailed?.Invoke("download_failed");
+                return;
+            }
+
+            Watchdog.StopGuardian();
+            ServiceManager.SignalLegalClose();
+            await Task.Delay(1000);
+            Logger.Info("⬆️ Завершаем BibClient — распаковку выполнит BibClientService...");
+            Environment.Exit(0);
+        }
+
+        // ── Exe-обновление (сервер) ───────────────────────────────────────────
 
         private static async Task<bool> CheckLocalFolderAsync()
         {
@@ -96,68 +236,6 @@ namespace BibClient
             Logger.Info($"📦 Локальная версия {info.Version} (текущая {CurrentVersion}) — установка из папки updates/");
             await TriggerInstallAsync(installerPath);
             return true;
-        }
-
-        // Имя флагового файла, который читает BibClientService для запуска инсталлятора от SYSTEM.
-        // Путь к инсталлятору записывается в этот файл; сам файл кладётся рядом с exe.
-        public static readonly string UpdateFlagFileName = "BibClientUpdate.flag";
-
-        // Флаг для обновления из папки (zip): BibClientService распаковывает архив без инсталлятора.
-        public static readonly string FolderUpdateFlagFileName = "BibClientFolderUpdate.flag";
-
-        /// <summary>
-        /// Скачивает bibclient-update.zip с сервера и сигнализирует BibClientService
-        /// распаковать его. Используется для тестового обновления без сборки установщика.
-        /// </summary>
-        public static async Task CheckFolderUpdateAsync(string serverBaseUrl)
-        {
-            if (Interlocked.CompareExchange(ref _downloading, 1, 0) != 0)
-            {
-                Logger.Info("⏳ Загрузка обновления уже идёт, пропускаем");
-                return;
-            }
-
-            var downloadUrl = serverBaseUrl.TrimEnd('/') + "/updates/bibclient-update.zip";
-            var zipPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bibclient-update.zip");
-
-            Logger.Info($"📦 Скачивание zip-обновления: {downloadUrl}");
-            try
-            {
-                var bytes = await _downloadHttp.GetByteArrayAsync(downloadUrl);
-                await File.WriteAllBytesAsync(zipPath, bytes);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Ошибка загрузки zip-обновления: {ex.Message}");
-                UpdateFailed?.Invoke("download_failed");
-                Interlocked.Exchange(ref _downloading, 0);
-                return;
-            }
-
-            await TriggerFolderInstallAsync(zipPath);
-            Interlocked.Exchange(ref _downloading, 0);
-        }
-
-        private static async Task TriggerFolderInstallAsync(string zipPath)
-        {
-            try
-            {
-                var flagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, FolderUpdateFlagFileName);
-                await File.WriteAllTextAsync(flagPath, zipPath);
-                Logger.Info($"📋 Флаг папочного обновления записан: {flagPath}");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Ошибка записи флага папочного обновления: {ex.Message}");
-                UpdateFailed?.Invoke("download_failed");
-                return;
-            }
-
-            Watchdog.StopGuardian();
-            ServiceManager.SignalLegalClose();
-            await Task.Delay(1000);
-            Logger.Info("⬆️ Завершаем BibClient — распаковку выполнит BibClientService...");
-            Environment.Exit(0);
         }
 
         private static async Task DownloadAndRunAsync(string serverBaseUrl, string installerFile)
@@ -226,5 +304,11 @@ namespace BibClient
         public string Version { get; set; } = "";
         public string ReleaseNotes { get; set; } = "";
         public string InstallerFile { get; set; } = "";
+    }
+
+    internal class ZipVersionInfo
+    {
+        public string Version { get; set; } = "";
+        public string ReleaseNotes { get; set; } = "";
     }
 }
