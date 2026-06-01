@@ -629,6 +629,64 @@ async function updateAllClients() {
   }
 }
 
+// ─── Server (BibAdminWeb) zip upload from browser ────────────────────────────
+
+function onServerZipSelected(input) {
+  const nameEl = document.getElementById('serverZipFileName');
+  const btnEl  = document.getElementById('btnUploadServerZip');
+  if (input.files && input.files[0]) {
+    const mb = (input.files[0].size / 1024 / 1024).toFixed(1);
+    nameEl.textContent = `${input.files[0].name} (${mb} MB)`;
+    nameEl.style.color = '#ccc';
+    btnEl.disabled = false;
+  } else {
+    nameEl.textContent = 'файл не выбран';
+    nameEl.style.color = '#aaa';
+    btnEl.disabled = true;
+  }
+}
+
+async function uploadServerZip() {
+  const input = document.getElementById('serverZipFile');
+  const statusEl = document.getElementById('serverZipUploadStatus');
+  if (!input.files || !input.files[0]) { toast('Выберите zip-файл', 'warn'); return; }
+
+  const file = input.files[0];
+  if (!confirm(`Загрузить архив и обновить сервер?\n\nФайл: ${file.name}\n\nСервер перезапустится через несколько секунд. Все подключения временно прервутся.`)) return;
+
+  statusEl.textContent = '⬆️ Загрузка...';
+  statusEl.style.color = '#aaa';
+  document.getElementById('btnUploadServerZip').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('zip', file);
+    const r = await fetch('/api/admin/upload-server-zip', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка загрузки', 'error');
+      document.getElementById('btnUploadServerZip').disabled = false;
+      return;
+    }
+    statusEl.textContent = '✓ Загружено, сервер перезапускается...';
+    statusEl.style.color = '#1d9e75';
+    toast('Архив загружен, сервер перезапускается...', 'good');
+  } catch (e) {
+    // Сервер мог уже упасть — это нормально при самообновлении
+    statusEl.textContent = '✓ Сервер перезапускается...';
+    statusEl.style.color = '#1d9e75';
+    toast('Сервер перезапускается для применения обновления', 'good');
+  }
+
+  // Переподключаемся через 15 секунд
+  setTimeout(() => {
+    statusEl.textContent = '🔄 Переподключение...';
+    window.location.reload();
+  }, 15000);
+}
+
 // ─── Client zip upload from browser ─────────────────────────────────────────
 
 function onClientZipSelected(input) {

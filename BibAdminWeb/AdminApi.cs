@@ -442,6 +442,85 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Upload BibAdminWeb zip from browser and apply self-update ──
+            if (path == "/api/admin/upload-server-zip" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                var form = ctx.Request.Form;
+                var file = form.Files.GetFile("zip");
+                if (file == null || file.Length == 0)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Файл не получен\"}");
+                    return;
+                }
+                if (!file.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Ожидается .zip файл\"}");
+                    return;
+                }
+
+                // Save zip to temp, extract, then apply like folder update
+                var tempZip = Path.Combine(Path.GetTempPath(), $"bib_server_update_{Guid.NewGuid():N}.zip");
+                var tempDir = Path.Combine(Path.GetTempPath(), $"BibAdminWebUpdate_{Guid.NewGuid().ToString("N")[..8]}");
+                try
+                {
+                    await using (var fs = new FileStream(tempZip, FileMode.Create, FileAccess.Write))
+                        await file.CopyToAsync(fs);
+
+                    ZipFile.ExtractToDirectory(tempZip, tempDir, overwriteFiles: true);
+                    File.Delete(tempZip);
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Ошибка распаковки: " + ex.Message }, _json));
+                    try { File.Delete(tempZip); } catch { }
+                    try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }
+                    return;
+                }
+
+                // Reuse the same self-update bat script logic
+                var appDir   = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+                var exePath  = Path.Combine(appDir, "BibAdminWeb.exe");
+                var flagPath = Path.Combine(appDir, "update_restart.flag");
+                var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate_zip.bat");
+                var script = string.Join("\r\n",
+                    "@echo off",
+                    "timeout /t 5 /nobreak >nul",
+                    $"robocopy \"{tempDir}\" \"{appDir}\" /E /IS /IT" +
+                    $" /XF global_settings.json" +
+                    $" /XF *.db /XF settings.json /XF appsettings.json" +
+                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
+                    $" /XD Files" +
+                    $" /NFL /NDL /NJH /NJS /NC /NS /NP",
+                    $"rmdir /s /q \"{tempDir}\"",
+                    $"echo.> \"{flagPath}\"",
+                    $"start \"\" \"{exePath}\""
+                );
+                File.WriteAllText(scriptPath, script, Encoding.Default);
+
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                _ = Task.Run(async () =>
+                {
+                    if (OperatorBroadcaster.Instance != null)
+                        await OperatorBroadcaster.Instance.NotifyServerRestartingAsync("Обновление из zip-архива");
+                    await Task.Delay(1500);
+                    AdminHub.SaveActiveSessions();
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = scriptPath,
+                        WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                        UseShellExecute = true
+                    });
+                    await Task.Delay(300);
+                    Environment.Exit(0);
+                });
+                return;
+            }
+
             // ─── Upload BibClient zip from browser ───────────────────────────
             if (path == "/api/admin/upload-client-zip" && method == "POST")
             {
