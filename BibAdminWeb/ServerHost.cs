@@ -49,6 +49,11 @@ namespace BibAdminWeb
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseUrls($"http://*:{port}");
+                    webBuilder.UseKestrel(k =>
+                    {
+                        // Allow up to 500 MB for zip uploads
+                        k.Limits.MaxRequestBodySize = 500 * 1024 * 1024;
+                    });
                     webBuilder.ConfigureServices(services =>
                     {
                         services.AddSignalR(options =>

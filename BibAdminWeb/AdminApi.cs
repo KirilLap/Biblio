@@ -442,6 +442,41 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Upload BibClient zip from browser ───────────────────────────
+            if (path == "/api/admin/upload-client-zip" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                var form = ctx.Request.Form;
+                var file = form.Files.GetFile("zip");
+                if (file == null || file.Length == 0)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Файл не получен\"}");
+                    return;
+                }
+                if (!file.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Ожидается .zip файл\"}");
+                    return;
+                }
+                var updDir = GetUpdatesPath();
+                Directory.CreateDirectory(updDir);
+                var destPath = Path.Combine(updDir, "bibclient-update.zip");
+                try
+                {
+                    await using var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write);
+                    await file.CopyToAsync(fs);
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
             // ─── Pack BibClient folder update (zip for folder-based client update) ──
             if (path == "/api/admin/pack-client-update" && method == "POST")
             {

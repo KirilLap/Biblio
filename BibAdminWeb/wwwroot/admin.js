@@ -629,6 +629,95 @@ async function updateAllClients() {
   }
 }
 
+// ─── Client zip upload from browser ─────────────────────────────────────────
+
+function onClientZipSelected(input) {
+  const nameEl = document.getElementById('clientZipFileName');
+  const btnEl  = document.getElementById('btnUploadClientZip');
+  if (input.files && input.files[0]) {
+    const mb = (input.files[0].size / 1024 / 1024).toFixed(1);
+    nameEl.textContent = `${input.files[0].name} (${mb} MB)`;
+    nameEl.style.color = '#ccc';
+    btnEl.disabled = false;
+  } else {
+    nameEl.textContent = 'файл не выбран';
+    nameEl.style.color = '#aaa';
+    btnEl.disabled = true;
+  }
+}
+
+async function uploadClientZip() {
+  const input = document.getElementById('clientZipFile');
+  const statusEl = document.getElementById('clientZipUploadStatus');
+  if (!input.files || !input.files[0]) { toast('Выберите zip-файл', 'warn'); return; }
+
+  const file = input.files[0];
+  if (!confirm(`Загрузить на сервер и разослать обновление всем клиентам?\n\nФайл: ${file.name}\n\nКлиенты скачают архив, перезапустятся и продолжат работу.`)) return;
+
+  // Шаг 1: загружаем zip на сервер
+  statusEl.textContent = '⬆️ Загрузка...';
+  statusEl.style.color = '#aaa';
+  document.getElementById('btnUploadClientZip').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('zip', file);
+    const r = await fetch('/api/admin/upload-client-zip', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка загрузки';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка загрузки', 'error');
+      document.getElementById('btnUploadClientZip').disabled = false;
+      return;
+    }
+  } catch (e) {
+    statusEl.textContent = 'Ошибка: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка загрузки: ' + e, 'error');
+    document.getElementById('btnUploadClientZip').disabled = false;
+    return;
+  }
+
+  // Шаг 2: рассылаем команду
+  statusEl.textContent = '📡 Рассылаю команду...';
+  try {
+    updatePanelDismissed = false;
+    await conn.invoke('SendCommandToAll', 'UPDATE_FOLDER_NOW', '');
+    statusEl.textContent = '✓ Загружено и разослано';
+    statusEl.style.color = '#1d9e75';
+    toast('Zip загружен, команда обновления отправлена клиентам', 'good');
+    document.getElementById('btnUploadClientZip').disabled = false;
+    setTimeout(() => { statusEl.textContent = ''; }, 8000);
+  } catch (e) {
+    statusEl.textContent = 'Ошибка рассылки: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Zip загружен, но рассылка не удалась: ' + e, 'error');
+    document.getElementById('btnUploadClientZip').disabled = false;
+  }
+}
+
+// ─── Send UPDATE_FOLDER_NOW when zip is already on the server ────────────────
+
+async function sendClientZipCommand() {
+  const statusEl = document.getElementById('clientZipCmdStatus');
+  if (!confirm('Разослать команду zip-обновления всем клиентам?\n\nКлиенты скачают bibclient-update.zip с сервера и перезапустятся.\n\nУбедитесь, что zip актуален (скопирован deploy-update.cmd).')) return;
+  statusEl.textContent = '📡 Рассылаю...';
+  statusEl.style.color = '#aaa';
+  try {
+    updatePanelDismissed = false;
+    await conn.invoke('SendCommandToAll', 'UPDATE_FOLDER_NOW', '');
+    statusEl.textContent = '✓ Команда отправлена';
+    statusEl.style.color = '#1d9e75';
+    toast('Команда zip-обновления отправлена клиентам', 'good');
+    setTimeout(() => { statusEl.textContent = ''; }, 6000);
+  } catch (e) {
+    statusEl.textContent = 'Ошибка: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка рассылки: ' + e, 'error');
+  }
+}
+
 // ─── Client folder update (zip, no installer) ────────────────────────────────
 async function applyClientFolderUpdate() {
   const pathVal = document.getElementById('clientFolderPath').value.trim();
