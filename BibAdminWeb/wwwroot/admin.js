@@ -629,6 +629,81 @@ async function updateAllClients() {
   }
 }
 
+// ─── Folder picker ───────────────────────────────────────────────────────────
+
+let _fpTarget   = null;   // ID of input to fill
+let _fpCurrent  = '';     // currently shown path
+let _fpParent   = null;   // parent of current path (null = we're at drive list)
+
+function openFolderPicker(targetInputId) {
+  _fpTarget = targetInputId;
+  const initial = document.getElementById(targetInputId)?.value?.trim() || '';
+  document.getElementById('folderPickerModal').style.display = 'flex';
+  _fpBrowseTo(initial || '');
+}
+
+function closeFolderPicker() {
+  document.getElementById('folderPickerModal').style.display = 'none';
+}
+
+function folderPickerSelect() {
+  if (_fpTarget && _fpCurrent) {
+    document.getElementById(_fpTarget).value = _fpCurrent;
+    if (_fpTarget === 'updateFolderPath')  localStorage.setItem('bib_update_folder',        _fpCurrent);
+    if (_fpTarget === 'clientFolderPath')  localStorage.setItem('bib_client_update_folder', _fpCurrent);
+  }
+  closeFolderPicker();
+}
+
+function folderPickerUp() {
+  _fpBrowseTo(_fpParent || '');
+}
+
+async function _fpBrowseTo(path) {
+  const url = '/api/admin/browse' + (path ? '?path=' + encodeURIComponent(path) : '');
+  let data;
+  try {
+    const r = await fetch(url);
+    data = await r.json();
+    if (!r.ok) { toast(data.error || 'Ошибка доступа к папке', 'error'); return; }
+  } catch(e) { toast('Ошибка: ' + e, 'error'); return; }
+
+  _fpCurrent = data.current || '';
+  _fpParent  = data.parent  || null;
+
+  document.getElementById('folderPickerPath').textContent = _fpCurrent || 'Выберите диск:';
+  document.getElementById('btnFolderUp').disabled = !_fpParent;
+
+  const list = document.getElementById('folderPickerList');
+  list.innerHTML = '';
+
+  if (!data.folders || data.folders.length === 0) {
+    list.innerHTML = '<div style="padding:16px;color:#555;font-size:13px;text-align:center">Нет вложенных папок</div>';
+    return;
+  }
+
+  for (const f of data.folders) {
+    const fullPath = f.full;
+    const name     = f.name;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;border-bottom:1px solid #1a1a2e';
+    row.innerHTML = `<span style="font-size:16px">📁</span><span style="font-family:monospace;font-size:13px;color:#ccc">${name}</span>`;
+    row.addEventListener('mouseover', () => { if (!row._selected) row.style.background = '#2a2a4a'; });
+    row.addEventListener('mouseout',  () => { if (!row._selected) row.style.background = ''; });
+    row.addEventListener('click', () => {
+      // Single click → select (highlight + set current)
+      list.querySelectorAll('div[data-fp]').forEach(d => { d._selected = false; d.style.background = ''; });
+      row._selected = true;
+      row.style.background = '#3d3d6b';
+      _fpCurrent = fullPath;
+      document.getElementById('folderPickerPath').textContent = _fpCurrent;
+    });
+    row.addEventListener('dblclick', () => _fpBrowseTo(fullPath));
+    row.setAttribute('data-fp', '1');
+    list.appendChild(row);
+  }
+}
+
 // ─── Update tab switchers ────────────────────────────────────────────────────
 
 function setSrvMode(mode) {

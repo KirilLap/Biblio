@@ -419,11 +419,13 @@
             </div>
 
             <div id="srvPanelFolder" style="display:none">
-              <div class="form-row">
-                <label>Папка с файлами BibAdminWeb</label>
-                <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64"
+                  style="flex:1;font-size:12px;font-family:monospace">
+                <button onclick="openFolderPicker('updateFolderPath')"
+                  style="padding:6px 10px;background:transparent;border:1px solid #3d3d6b;border-radius:4px;color:#aaa;cursor:pointer;white-space:nowrap">📂 Обзор</button>
               </div>
-              <button class="btn btn-primary" onclick="applyFolderUpdate()" style="margin-top:4px">🔄 Применить обновление</button>
+              <button class="btn btn-primary" onclick="applyFolderUpdate()">🔄 Применить обновление</button>
             </div>
 
             <div style="min-height:20px;margin-top:8px">
@@ -469,11 +471,13 @@
             </div>
 
             <div id="cliPanelFolder" style="display:none">
-              <div class="form-row">
-                <label>Папка с файлами BibClient</label>
-                <input type="text" id="clientFolderPath" placeholder="C:\...\BibClient\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                <input type="text" id="clientFolderPath" placeholder="C:\...\BibClient\bin\Publish\win-x64"
+                  style="flex:1;font-size:12px;font-family:monospace">
+                <button onclick="openFolderPicker('clientFolderPath')"
+                  style="padding:6px 10px;background:transparent;border:1px solid #3d3d6b;border-radius:4px;color:#aaa;cursor:pointer;white-space:nowrap">📂 Обзор</button>
               </div>
-              <button class="btn btn-primary" onclick="applyClientFolderUpdate()" style="margin-top:4px">📁 Упаковать и разослать</button>
+              <button class="btn btn-primary" onclick="applyClientFolderUpdate()">📁 Упаковать и разослать</button>
             </div>
 
             <div style="min-height:20px;margin-top:8px">
@@ -875,5 +879,30 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
 <script src="/admin.js"></script>
+
+<!-- Folder picker modal -->
+<div id="folderPickerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;align-items:center;justify-content:center">
+  <div style="background:#1e1e2e;border:1px solid #3d3d6b;border-radius:10px;width:520px;max-height:75vh;display:flex;flex-direction:column;padding:20px;gap:12px">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="btnFolderUp" onclick="folderPickerUp()" title="На уровень выше"
+        style="padding:4px 10px;background:transparent;border:1px solid #3d3d6b;border-radius:4px;color:#aaa;cursor:pointer;font-size:16px;line-height:1">↑</button>
+      <span id="folderPickerPath" style="flex:1;font-size:12px;font-family:monospace;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button onclick="closeFolderPicker()"
+        style="background:transparent;border:none;color:#666;font-size:18px;cursor:pointer;line-height:1;padding:0 4px">✕</button>
+    </div>
+
+    <!-- List -->
+    <div id="folderPickerList"
+      style="flex:1;overflow-y:auto;border:1px solid #2a2a4a;border-radius:6px;min-height:200px;max-height:400px"></div>
+
+    <!-- Footer -->
+    <div style="display:flex;gap:8px">
+      <button onclick="folderPickerSelect()" class="btn btn-primary" style="flex:1">✓ Выбрать эту папку</button>
+      <button onclick="closeFolderPicker()" class="btn btn-outline">Отмена</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

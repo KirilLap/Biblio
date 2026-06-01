@@ -597,6 +597,55 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Browse folders (for folder picker UI) ───────────────────────
+            if (path == "/api/admin/browse" && method == "GET")
+            {
+                var browsePath = ctx.Request.Query["path"].ToString();
+
+                if (string.IsNullOrWhiteSpace(browsePath))
+                {
+                    // Return available drives
+                    var drives = DriveInfo.GetDrives()
+                        .Where(d => d.IsReady)
+                        .Select(d => new { name = d.Name, full = d.Name })
+                        .ToList();
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                        current  = "",
+                        parent   = (string?)null,
+                        folders  = drives
+                    }, _json));
+                    return;
+                }
+
+                if (!Directory.Exists(browsePath))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Папка не найдена\"}");
+                    return;
+                }
+
+                var parentDir = Path.GetDirectoryName(browsePath.TrimEnd('\\', '/'));
+                List<object> subFolders;
+                try
+                {
+                    subFolders = Directory.GetDirectories(browsePath)
+                        .OrderBy(d => d)
+                        .Select(d => (object)new { name = Path.GetFileName(d), full = d })
+                        .ToList();
+                }
+                catch
+                {
+                    subFolders = new List<object>();
+                }
+
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                    current  = browsePath,
+                    parent   = parentDir,
+                    folders  = subFolders
+                }, _json));
+                return;
+            }
+
             // ─── Stop Server ──────────────────────────────────────────────────
             if (path == "/api/admin/stop" && method == "POST")
             {
