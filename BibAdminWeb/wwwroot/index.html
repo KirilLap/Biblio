@@ -384,54 +384,59 @@
 
           <div class="settings-card">
             <h3>🖥️ Обновление сервера (BibAdminWeb)</h3>
-            <p class="settings-hint" style="margin-bottom:10px">Через установщик exe:</p>
-            <p id="updateCurrentVer" class="settings-hint">Нажмите кнопку для проверки</p>
+
+            <!-- exe-установщик -->
+            <p class="settings-hint" style="margin-bottom:6px">Через exe-установщик:</p>
+            <p id="updateCurrentVer" class="settings-hint" style="margin-bottom:6px">Нажмите кнопку для проверки</p>
             <div class="form-row">
               <label>Папка обновлений</label>
               <input type="text" id="sUpdatesPath" placeholder="Пусто = updates\ рядом с сервером">
             </div>
-            <p class="settings-hint">Локальный или сетевой путь, например \\server\updates</p>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <p class="settings-hint" style="margin-bottom:8px">Локальный или сетевой путь, например \\server\updates</p>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">🔄 Проверить обновления</button>
               <span id="updateStatus" style="display:none;font-size:12px"></span>
             </div>
+
             <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
 
-            <!-- zip из браузера -->
-            <p class="settings-hint" style="margin-bottom:8px">Zip-обновление без установщика — выберите файл из браузера:</p>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <label class="btn btn-outline" style="cursor:pointer;border-color:#5b7fa6;color:#5b7fa6">
-                📂 Выбрать zip...
-                <input type="file" id="serverZipFile" accept=".zip" style="display:none" onchange="onServerZipSelected(this)">
-              </label>
-              <span id="serverZipFileName" style="font-size:12px;font-family:monospace;color:#aaa">файл не выбран</span>
-              <button class="btn btn-primary" id="btnUploadServerZip" onclick="uploadServerZip()" disabled>📤 Загрузить и применить</button>
-              <span id="serverZipUploadStatus" style="font-size:13px;color:#666"></span>
+            <!-- Без установщика: вкладки -->
+            <p class="settings-hint" style="margin-bottom:8px">Без установщика:</p>
+            <div style="display:flex;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid #3d3d6b">
+              <button id="srvTabZip"    onclick="setSrvMode('zip')"    style="flex:1;padding:6px 4px;font-size:12px;background:#3d3d6b;color:white;border:none;cursor:pointer">📤 Zip из браузера</button>
+              <button id="srvTabFolder" onclick="setSrvMode('folder')" style="flex:1;padding:6px 4px;font-size:12px;background:transparent;color:#aaa;border:none;border-left:1px solid #3d3d6b;cursor:pointer">📁 Локальная папка</button>
             </div>
 
-            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
-
-            <!-- папка на сервере (legacy) -->
-            <details style="margin-top:2px">
-              <summary style="cursor:pointer;font-size:12px;color:#666;user-select:none">📁 Из локальной папки сервера (если BibAdminWeb запущен рядом с publish)</summary>
-              <div style="margin-top:8px">
-                <div class="form-row">
-                  <label>Папка с обновлением</label>
-                  <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-                  <button class="btn btn-primary" onclick="applyFolderUpdate()">🔄 Применить обновление</button>
-                  <span id="folderUpdateStatus" style="font-size:13px;color:#666"></span>
-                </div>
+            <div id="srvPanelZip">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <label class="btn btn-outline" style="cursor:pointer;border-color:#5b7fa6;color:#5b7fa6">
+                  📂 Выбрать zip...
+                  <input type="file" id="serverZipFile" accept=".zip" style="display:none" onchange="onServerZipSelected(this)">
+                </label>
+                <span id="serverZipFileName" style="font-size:12px;font-family:monospace;color:#aaa">файл не выбран</span>
+                <button class="btn btn-primary" id="btnUploadServerZip" onclick="uploadServerZip()" disabled>📤 Загрузить и применить</button>
               </div>
-            </details>
+            </div>
+
+            <div id="srvPanelFolder" style="display:none">
+              <div class="form-row">
+                <label>Папка с файлами BibAdminWeb</label>
+                <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
+              </div>
+              <button class="btn btn-primary" onclick="applyFolderUpdate()" style="margin-top:4px">🔄 Применить обновление</button>
+            </div>
+
+            <div style="min-height:20px;margin-top:8px">
+              <span id="serverZipUploadStatus" style="font-size:13px;color:#666"></span>
+              <span id="folderUpdateStatus"    style="font-size:13px;color:#666"></span>
+            </div>
           </div>
 
           <div class="settings-card">
             <h3>💻 Обновление клиентов (BibClient)</h3>
 
-            <!-- exe-установщик -->
-            <p class="settings-hint" style="margin-bottom:8px">Через установщик exe — клиенты скачают и установят автоматически:</p>
+            <!-- exe -->
+            <p class="settings-hint" style="margin-bottom:8px">Через exe-установщик — клиенты скачают и установят автоматически:</p>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <button class="btn btn-outline" id="btnUpdateClients" onclick="updateAllClients()" style="border-color:#1d9e75;color:#1d9e75">⬆️ Обновить все клиенты (exe)</button>
               <span id="updateStatusClients" style="display:none;font-size:12px"></span>
@@ -439,43 +444,43 @@
 
             <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
 
-            <!-- zip-обновление: загрузка из браузера -->
-            <p class="settings-hint" style="margin-bottom:8px">Zip-обновление без установщика — выберите файл из браузера:</p>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <label class="btn btn-outline" style="cursor:pointer;border-color:#5b7fa6;color:#5b7fa6">
-                📂 Выбрать zip...
-                <input type="file" id="clientZipFile" accept=".zip" style="display:none" onchange="onClientZipSelected(this)">
-              </label>
-              <span id="clientZipFileName" style="font-size:12px;font-family:monospace;color:#aaa">файл не выбран</span>
-              <button class="btn btn-primary" id="btnUploadClientZip" onclick="uploadClientZip()" disabled>📤 Загрузить и разослать</button>
-              <span id="clientZipUploadStatus" style="font-size:13px;color:#666"></span>
+            <!-- Без установщика: вкладки -->
+            <p class="settings-hint" style="margin-bottom:8px">Без установщика (zip):</p>
+            <div style="display:flex;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid #3d3d6b">
+              <button id="cliTabZip"    onclick="setCliMode('zip')"    style="flex:1;padding:6px 4px;font-size:12px;background:#3d3d6b;color:white;border:none;cursor:pointer">📤 Zip из браузера</button>
+              <button id="cliTabServer" onclick="setCliMode('server')" style="flex:1;padding:6px 4px;font-size:12px;background:transparent;color:#aaa;border:none;border-left:1px solid #3d3d6b;cursor:pointer">📡 Уже на сервере</button>
+              <button id="cliTabFolder" onclick="setCliMode('folder')" style="flex:1;padding:6px 4px;font-size:12px;background:transparent;color:#aaa;border:none;border-left:1px solid #3d3d6b;cursor:pointer">📁 Локальная папка</button>
             </div>
 
-            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
-
-            <!-- zip-обновление: команда когда zip уже на сервере -->
-            <p class="settings-hint" style="margin-bottom:6px">Zip уже на сервере (например, скопирован deploy-update.cmd):</p>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="btn btn-outline" onclick="sendClientZipCommand()" style="border-color:#e09f3e;color:#e09f3e">📡 Разослать zip-обновление клиентам</button>
-              <span id="clientZipCmdStatus" style="font-size:13px;color:#666"></span>
-            </div>
-
-            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
-
-            <!-- zip-обновление: из серверной папки (legacy) -->
-            <details style="margin-top:2px">
-              <summary style="cursor:pointer;font-size:12px;color:#666;user-select:none">📁 Из локальной папки сервера (если BibAdminWeb запущен рядом с publish)</summary>
-              <div style="margin-top:8px">
-                <div class="form-row">
-                  <label>Папка с файлами BibClient</label>
-                  <input type="text" id="clientFolderPath" placeholder="C:\...\BibClient\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-                  <button class="btn btn-primary" onclick="applyClientFolderUpdate()">📁 Упаковать и разослать</button>
-                  <span id="clientFolderUpdateStatus" style="font-size:13px;color:#666"></span>
-                </div>
+            <div id="cliPanelZip">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <label class="btn btn-outline" style="cursor:pointer;border-color:#5b7fa6;color:#5b7fa6">
+                  📂 Выбрать zip...
+                  <input type="file" id="clientZipFile" accept=".zip" style="display:none" onchange="onClientZipSelected(this)">
+                </label>
+                <span id="clientZipFileName" style="font-size:12px;font-family:monospace;color:#aaa">файл не выбран</span>
+                <button class="btn btn-primary" id="btnUploadClientZip" onclick="uploadClientZip()" disabled>📤 Загрузить и разослать</button>
               </div>
-            </details>
+            </div>
+
+            <div id="cliPanelServer" style="display:none">
+              <p class="settings-hint" style="margin-bottom:8px">Zip уже скопирован на сервер (например, через deploy-update.cmd).</p>
+              <button class="btn btn-outline" onclick="sendClientZipCommand()" style="border-color:#e09f3e;color:#e09f3e">📡 Разослать команду клиентам</button>
+            </div>
+
+            <div id="cliPanelFolder" style="display:none">
+              <div class="form-row">
+                <label>Папка с файлами BibClient</label>
+                <input type="text" id="clientFolderPath" placeholder="C:\...\BibClient\bin\Publish\win-x64" style="font-size:12px;font-family:monospace">
+              </div>
+              <button class="btn btn-primary" onclick="applyClientFolderUpdate()" style="margin-top:4px">📁 Упаковать и разослать</button>
+            </div>
+
+            <div style="min-height:20px;margin-top:8px">
+              <span id="clientZipUploadStatus"   style="font-size:13px;color:#666"></span>
+              <span id="clientZipCmdStatus"       style="font-size:13px;color:#666"></span>
+              <span id="clientFolderUpdateStatus" style="font-size:13px;color:#666"></span>
+            </div>
           </div>
 
         </div>
