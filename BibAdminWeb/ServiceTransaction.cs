@@ -19,6 +19,7 @@ namespace BibAdminWeb
         public string ReaderId { get; set; } = "";
         public string ReaderName { get; set; } = "";
         public string PcNumber { get; set; } = "";
+        public string? BatchId { get; set; }           // groups services created together
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? PaidAt { get; set; }
 

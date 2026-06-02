@@ -6,7 +6,8 @@ let finSessions = [];
 let finServices = [];
 let settings = {};
 let finTab = 'sessions';
-let activePc = null;    // selected pc for dialogs
+let activePc = null;         // selected pc for dialogs
+let selectedAdminPc = null;  // pc highlighted in grid → bottom action bar
 let pendingOfflinePc = null;
 let pendingConflict = null;
 let renamePcVal = null;
@@ -14,6 +15,7 @@ let _screenPc = null;
 let _screenInterval = null;
 let latestClientVersion = '';   // Последняя доступная версия BibClient (из /updates/bibclient-version.json)
 let updatePanelDismissed = false;
+let pvBgUrl = null;             // URL фона для предпросмотра (blob: после выбора файла, /files/... после загрузки)
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
@@ -152,6 +154,7 @@ function renderPcGrid() {
   list.forEach(c => grid.appendChild(buildPcCard(c)));
 
   renderUpdatePanel(list);
+  if (selectedAdminPc) renderAdminActionBar();
 }
 
 function renderUpdatePanel(list) {
@@ -197,6 +200,11 @@ function buildPcCard(c) {
   div.className = 'pc-card';
   div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
   div.id = 'pc-' + c.pcNumber.replace(/\s/g, '_');
+  div.dataset.pcnumber = c.pcNumber;
+  if (selectedAdminPc === c.pcNumber) div.classList.add('selected');
+  div.addEventListener('click', e => {
+    if (!e.target.closest('button') && !e.target.closest('.pc-name')) selectAdminPc(c.pcNumber);
+  });
 
   // Оффлайн + сессия: карточка с тёплым красным акцентом
   if (!c.isOnline && c.isSession) {
@@ -255,7 +263,7 @@ function buildPcCard(c) {
     ${badge}
     ${timer}
     ${meta}
-    <div class="pc-actions">${actions}</div>
+    ${actions ? `<div class="pc-actions">${actions}</div>` : ''}
   `;
   return div;
 }
@@ -274,26 +282,63 @@ function statusBadge(c) {
 }
 
 function buildActions(c) {
-  if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑</button>`;
+  // Для оффлайн-ПК — только удаление прямо на карточке
+  if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑 Удалить</button>`;
+  // Для онлайн-ПК все действия в нижней панели (selectAdminPc → renderAdminActionBar)
+  return '';
+}
 
+// ─── Bottom action bar ───────────────────────────────────────────────────────
+function selectAdminPc(pcNumber) {
+  if (!pcNumber || selectedAdminPc === pcNumber) {
+    selectedAdminPc = null;
+    document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+    document.getElementById('adminActionBar').classList.add('hidden');
+    return;
+  }
+  selectedAdminPc = pcNumber;
+  document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`#pcGrid [data-pcnumber="${CSS.escape(pcNumber)}"]`);
+  if (card) card.classList.add('selected');
+  renderAdminActionBar();
+}
+
+function renderAdminActionBar() {
+  const ab = document.getElementById('adminActionBar');
+  const pc = pcs[selectedAdminPc];
+  if (!pc) { ab.classList.add('hidden'); return; }
+
+  document.getElementById('aabPcName').textContent = pc.pcNumber;
+  document.getElementById('aabStatus').textContent = pc.status;
+
+  const p = pc.pcNumber;
   const btns = [];
-  btns.push(`<button class="btn btn-outline" onclick="openScreenView('${esc(c.pcNumber)}')" title="Просмотр экрана">👁</button>`);
-  if (!c.isSession && !c.isFree) {
-    btns.push(`<button class="btn btn-primary" onclick="openStartSession('${esc(c.pcNumber)}')">▶ Старт</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="unlock('${esc(c.pcNumber)}')">🔓</button>`);
+
+  if (!pc.isOnline) {
+    btns.push(`<button class="ab-btn red" onclick="deletePc('${esc(p)}')">🗑 Удалить</button>`);
+  } else {
+    btns.push(`<button class="ab-btn" style="background:#374151;border-color:#4b5563" onclick="openScreenView('${esc(p)}')">👁 Экран</button>`);
+    if (!pc.isSession && !pc.isFree) {
+      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
+      btns.push(`<button class="ab-btn" style="background:#1A3A1A;border-color:#2A5A2A;color:#90E090" onclick="unlock('${esc(p)}')">🔓 Разблокировать</button>`);
+    }
+    if (!pc.isSession && pc.isFree) {
+      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
+      btns.push(`<button class="ab-btn" style="background:#3A1A1A;border-color:#5A2A2A;color:#E09090" onclick="lock('${esc(p)}')">🔒 Заблокировать</button>`);
+    }
+    if (pc.isSession) {
+      const pauseLabel = pc.isPaused ? '▶ Продолжить' : '⏸ Пауза';
+      const pauseCls   = pc.isPaused ? 'green' : 'amber';
+      btns.push(`<button class="ab-btn ${pauseCls}" onclick="togglePause('${esc(p)}')">${pauseLabel}</button>`);
+      btns.push(`<button class="ab-btn blue" onclick="openTransfer('${esc(p)}')">↔ Пересадить</button>`);
+      if (pc.sessionType === 'Лимит')
+        btns.push(`<button class="ab-btn blue" onclick="openExtend('${esc(p)}')">+⏱ Время</button>`);
+      btns.push(`<button class="ab-btn red" onclick="endSession('${esc(p)}')">⏹ Завершить</button>`);
+    }
   }
-  if (!c.isSession && c.isFree) {
-    btns.push(`<button class="btn btn-primary" onclick="openStartSession('${esc(c.pcNumber)}')">▶ Старт</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="lock('${esc(c.pcNumber)}')">🔒</button>`);
-  }
-  if (c.isSession) {
-    btns.push(`<button class="btn btn-danger" onclick="endSession('${esc(c.pcNumber)}')">⏹ Стоп</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="togglePause('${esc(c.pcNumber)}')">${c.isPaused ? '▶' : '⏸'}</button>`);
-    btns.push(`<button class="btn btn-outline" onclick="openTransfer('${esc(c.pcNumber)}')">↔</button>`);
-    if (c.sessionType === 'Лимит')
-      btns.push(`<button class="btn btn-outline" onclick="openExtend('${esc(c.pcNumber)}')">+⏱</button>`);
-  }
-  return btns.join('');
+
+  document.getElementById('aabActions').innerHTML = btns.join('');
+  ab.classList.remove('hidden');
 }
 
 // ─── Timers ──────────────────────────────────────────────────────────────────
@@ -308,30 +353,128 @@ function tickTimers() {
 }
 
 // ─── Session actions ─────────────────────────────────────────────────────────
-let _ssType = 'Лимит'; // текущий тип в диалоге
-let _ssSyncing = false; // защита от рекурсии при синхронизации полей
+let _ssType = 'Лимит';
+let _ssSyncing = false;
+let _ssLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
+let _ssLookedUpId  = '';
+let _ssLookupInFlight = null;  // deduplicate concurrent lookups
+let _ssLookupTimer    = null;  // debounce timer for auto-lookup on input
+
+function _ssParseRegDate(str) {
+  if (!str) return null;
+  const p = str.split('-');
+  if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
+  const d = new Date(str);
+  return isNaN(d) ? null : d;
+}
+
+function ssOnCardTypeChanged() {
+  const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  const prefix = document.getElementById('dlgSsReaderPrefix');
+  if (prefix) prefix.textContent = isTemp ? '№' : (settings.readerCardPrefix || 'FAA');
+  const rowName = document.getElementById('rowSsName');
+  if (rowName) rowName.style.display = (isTemp || !settings.requireUserName) ? 'none' : '';
+  _ssLookupState = null;
+  _ssLookedUpId  = '';
+  document.getElementById('dlgSsReader').value = '';
+  document.getElementById('dlgSsReaderInfo').style.display = 'none';
+  document.getElementById('dlgSsName').value = '';
+  document.getElementById('dlgSsReader').placeholder = isTemp ? '842' : '260500456';
+}
+
+// Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
+function onSsReaderInput() {
+  const el = document.getElementById('dlgSsReader');
+  el.value = el.value.replace(/\D/g, '');
+  _ssLookupState = null;
+  clearTimeout(_ssLookupTimer);
+  const nums = el.value;
+  if (nums.length >= 6) {
+    _ssLookupTimer = setTimeout(ssLookupReader, 500);
+  } else {
+    document.getElementById('dlgSsReaderInfo').style.display = 'none';
+    document.getElementById('dlgSsName').value = '';
+  }
+}
+
+// Deduplication wrapper — prevents two concurrent lookups (blur + button click)
+async function ssLookupReader() {
+  if (_ssLookupInFlight) { await _ssLookupInFlight; return; }
+  _ssLookupInFlight = _ssLookupReaderImpl();
+  try { await _ssLookupInFlight; } finally { _ssLookupInFlight = null; }
+}
+
+async function _ssLookupReaderImpl() {
+  const nums   = document.getElementById('dlgSsReader').value.trim();
+  const infoEl = document.getElementById('dlgSsReaderInfo');
+  if (!nums) { infoEl.style.display = 'none'; _ssLookupState = null; return; }
+
+  const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  if (isTemp) {
+    _ssLookupState = 'valid';
+    _ssLookedUpId  = nums;
+    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A1A2E;color:#AAAACC;border:1px solid #3D3D6B';
+    infoEl.textContent = `✓ Временный билет №${nums} — посещение будет зафиксировано`;
+    return;
+  }
+
+  const prefix = settings.readerCardPrefix || 'FAA';
+  const cardId = prefix + nums;
+  _ssLookedUpId = cardId;
+  try {
+    const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
+    if (!r.ok) {
+      _ssLookupState = 'not_found';
+      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+      infoEl.textContent = `✗ Читатель ${cardId} не найден в базе`;
+      return;
+    }
+    const data = await r.json();
+    const regDate = _ssParseRegDate(data.registeredAt);
+    if (regDate) {
+      const daysSince = (Date.now() - regDate) / 86400000;
+      if (daysSince > 3 * 365 + 1) {
+        const expDate = new Date(regDate);
+        expDate.setFullYear(expDate.getFullYear() + 3);
+        _ssLookupState = 'expired';
+        document.getElementById('dlgSsName').value = data.fullName || '';
+        infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+        infoEl.textContent = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
+        return;
+      }
+    }
+    _ssLookupState = 'valid';
+    document.getElementById('dlgSsName').value = data.fullName || '';
+    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
+    infoEl.textContent = `✓ ${data.fullName}${data.category ? ' · ' + data.category : ''}`;
+  } catch {
+    _ssLookupState = null;
+    infoEl.style.display = 'none';
+  }
+}
 
 function openStartSession(pcNumber) {
   activePc = pcNumber;
   document.getElementById('dlgSsPc').textContent = pcNumber;
   document.getElementById('dlgSsReader').value = '';
+  document.getElementById('dlgSsReader').placeholder = '260500456';
   document.getElementById('dlgSsName').value = '';
   document.getElementById('dlgSsMinutes').value = '';
   document.getElementById('dlgSsMoney').value = '';
   document.getElementById('dlgSsHint').textContent = '';
+  document.getElementById('dlgSsReaderInfo').style.display = 'none';
 
-  // Показываем/скрываем поля согласно настройкам
-  const reqReader = settings.requireReaderId !== false;
-  const reqName   = !!settings.requireUserName;
-  const rowReader = document.getElementById('rowSsReader');
-  const rowName   = document.getElementById('rowSsName');
-  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
-  if (rowName)   rowName.style.display   = reqName   ? '' : 'none';
-  // Обновляем метки
-  const lblReader = document.getElementById('lblSsReader');
-  const lblName   = document.getElementById('lblSsName');
-  if (lblReader) lblReader.textContent = reqReader ? 'ID читателя *' : 'ID читателя';
-  if (lblName)   lblName.textContent   = reqName   ? 'Имя *' : 'Имя';
+  // Reset card type to regular
+  const regularRadio = document.querySelector('[name="ssCardType"][value="regular"]');
+  if (regularRadio) regularRadio.checked = true;
+  const prefixEl = document.getElementById('dlgSsReaderPrefix');
+  if (prefixEl) prefixEl.textContent = settings.readerCardPrefix || 'FAA';
+  _ssLookupState = null;
+  _ssLookedUpId  = '';
+
+  // Show/hide name row
+  const rowName = document.getElementById('rowSsName');
+  if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
 
   ssSelectType('Лимит');
   document.getElementById('dlgStartSession').style.display = 'flex';
@@ -389,12 +532,21 @@ function ssSyncMoney() {
 }
 
 async function confirmStartSession() {
-  const reqReader = settings.requireReaderId !== false;
-  const reqName   = !!settings.requireUserName;
-  const reader = document.getElementById('dlgSsReader').value.trim();
-  const name   = document.getElementById('dlgSsName').value.trim();
-  if (reqReader && !reader) { toast('Введите ID читателя', 'warn'); return; }
-  if (reqName   && !name)   { toast('Введите имя пользователя', 'warn'); return; }
+  const isTemp  = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  const nums    = document.getElementById('dlgSsReader').value.trim();
+  if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
+
+  const prefix = settings.readerCardPrefix || 'FAA';
+  const reader = isTemp ? nums : (prefix + nums);
+
+  if (!isTemp) {
+    if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
+    if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+    if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+    if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+  }
+  const name = document.getElementById('dlgSsName').value.trim();
+  if (settings.requireUserName && !name) { toast('Введите имя пользователя', 'warn'); return; }
 
   let limitSeconds = 0, paidAmount = 0;
   if (_ssType === 'Лимит') {
@@ -455,6 +607,7 @@ async function restartAll() {
 async function updateAllClients() {
   if (!confirm('Отправить команду обновления всем клиентским ПК?\n\nОни автоматически скачают и тихо установят новую версию BibClient. Клиенты перезапустятся сами.')) return;
   const btn = document.getElementById('btnUpdateClients');
+  const statusEl = document.getElementById('updateStatusClients');
   btn.disabled = true;
   btn.textContent = '⏳ Отправка...';
   updatePanelDismissed = false;
@@ -467,11 +620,309 @@ async function updateAllClients() {
     await conn.invoke('SendCommandToAll', 'UPDATE_NOW', '');
     toast('Команда обновления отправлена всем ПК', 'good');
     btn.textContent = '✓ Отправлено';
-    setTimeout(() => { btn.disabled = false; btn.textContent = '⬆️ Обновить все клиенты'; }, 4000);
+    if (statusEl) { statusEl.style.display = 'inline'; statusEl.style.color = '#1d9e75'; statusEl.textContent = '✓ Команда отправлена'; }
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⬆️ Обновить все клиенты (exe)'; if (statusEl) statusEl.style.display = 'none'; }, 5000);
   } catch (e) {
     toast('Ошибка отправки команды', 'error');
     btn.disabled = false;
-    btn.textContent = '⬆️ Обновить все клиенты';
+    btn.textContent = '⬆️ Обновить все клиенты (exe)';
+  }
+}
+
+// ─── Folder picker ───────────────────────────────────────────────────────────
+
+let _fpTarget   = null;   // ID of input to fill
+let _fpCurrent  = '';     // currently shown path
+let _fpParent   = null;   // parent of current path (null = we're at drive list)
+
+function openFolderPicker(targetInputId) {
+  _fpTarget = targetInputId;
+  const initial = document.getElementById(targetInputId)?.value?.trim() || '';
+  document.getElementById('folderPickerModal').style.display = 'flex';
+  _fpBrowseTo(initial || '');
+}
+
+function closeFolderPicker() {
+  document.getElementById('folderPickerModal').style.display = 'none';
+}
+
+function folderPickerSelect() {
+  if (_fpTarget && _fpCurrent) {
+    document.getElementById(_fpTarget).value = _fpCurrent;
+    if (_fpTarget === 'updateFolderPath')  localStorage.setItem('bib_update_folder',        _fpCurrent);
+    if (_fpTarget === 'clientFolderPath')  localStorage.setItem('bib_client_update_folder', _fpCurrent);
+  }
+  closeFolderPicker();
+}
+
+function folderPickerUp() {
+  _fpBrowseTo(_fpParent || '');
+}
+
+async function _fpBrowseTo(path) {
+  const url = '/api/admin/browse' + (path ? '?path=' + encodeURIComponent(path) : '');
+  let data;
+  try {
+    const r = await fetch(url);
+    data = await r.json();
+    if (!r.ok) { toast(data.error || 'Ошибка доступа к папке', 'error'); return; }
+  } catch(e) { toast('Ошибка: ' + e, 'error'); return; }
+
+  _fpCurrent = data.current || '';
+  _fpParent  = data.parent  || null;
+
+  document.getElementById('folderPickerPath').textContent = _fpCurrent || 'Выберите диск:';
+  document.getElementById('btnFolderUp').disabled = !_fpParent;
+
+  const list = document.getElementById('folderPickerList');
+  list.innerHTML = '';
+
+  if (!data.folders || data.folders.length === 0) {
+    list.innerHTML = '<div style="padding:16px;color:#555;font-size:13px;text-align:center">Нет вложенных папок</div>';
+    return;
+  }
+
+  for (const f of data.folders) {
+    const fullPath = f.full;
+    const name     = f.name;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;border-bottom:1px solid #1a1a2e';
+    row.innerHTML = `<span style="font-size:16px">📁</span><span style="font-family:monospace;font-size:13px;color:#ccc">${name}</span>`;
+    row.addEventListener('mouseover', () => { if (!row._selected) row.style.background = '#2a2a4a'; });
+    row.addEventListener('mouseout',  () => { if (!row._selected) row.style.background = ''; });
+    row.addEventListener('click', () => {
+      // Single click → select (highlight + set current)
+      list.querySelectorAll('div[data-fp]').forEach(d => { d._selected = false; d.style.background = ''; });
+      row._selected = true;
+      row.style.background = '#3d3d6b';
+      _fpCurrent = fullPath;
+      document.getElementById('folderPickerPath').textContent = _fpCurrent;
+    });
+    row.addEventListener('dblclick', () => _fpBrowseTo(fullPath));
+    row.setAttribute('data-fp', '1');
+    list.appendChild(row);
+  }
+}
+
+// ─── Update tab switchers ────────────────────────────────────────────────────
+
+function setSrvMode(mode) {
+  ['zip', 'folder'].forEach(m => {
+    const panel = document.getElementById('srvPanel' + m.charAt(0).toUpperCase() + m.slice(1));
+    const tab   = document.getElementById('srvTab'   + m.charAt(0).toUpperCase() + m.slice(1));
+    if (panel) panel.style.display = (m === mode) ? '' : 'none';
+    if (tab)   { tab.style.background = (m === mode) ? '#3d3d6b' : 'transparent'; tab.style.color = (m === mode) ? 'white' : '#aaa'; }
+  });
+  document.getElementById('serverZipUploadStatus').textContent = '';
+  document.getElementById('folderUpdateStatus').textContent = '';
+}
+
+function setCliMode(mode) {
+  ['zip', 'server', 'folder'].forEach(m => {
+    const panel = document.getElementById('cliPanel' + m.charAt(0).toUpperCase() + m.slice(1));
+    const tab   = document.getElementById('cliTab'   + m.charAt(0).toUpperCase() + m.slice(1));
+    if (panel) panel.style.display = (m === mode) ? '' : 'none';
+    if (tab)   { tab.style.background = (m === mode) ? '#3d3d6b' : 'transparent'; tab.style.color = (m === mode) ? 'white' : '#aaa'; }
+  });
+  document.getElementById('clientZipUploadStatus').textContent   = '';
+  document.getElementById('clientZipCmdStatus').textContent      = '';
+  document.getElementById('clientFolderUpdateStatus').textContent = '';
+}
+
+// ─── Server (BibAdminWeb) zip upload from browser ────────────────────────────
+
+function onServerZipSelected(input) {
+  const nameEl = document.getElementById('serverZipFileName');
+  const btnEl  = document.getElementById('btnUploadServerZip');
+  if (input.files && input.files[0]) {
+    const mb = (input.files[0].size / 1024 / 1024).toFixed(1);
+    nameEl.textContent = `${input.files[0].name} (${mb} MB)`;
+    nameEl.style.color = '#ccc';
+    btnEl.disabled = false;
+  } else {
+    nameEl.textContent = 'файл не выбран';
+    nameEl.style.color = '#aaa';
+    btnEl.disabled = true;
+  }
+}
+
+async function uploadServerZip() {
+  const input = document.getElementById('serverZipFile');
+  const statusEl = document.getElementById('serverZipUploadStatus');
+  if (!input.files || !input.files[0]) { toast('Выберите zip-файл', 'warn'); return; }
+
+  const file = input.files[0];
+  if (!confirm(`Загрузить архив и обновить сервер?\n\nФайл: ${file.name}\n\nСервер перезапустится через несколько секунд. Все подключения временно прервутся.`)) return;
+
+  statusEl.textContent = '⬆️ Загрузка...';
+  statusEl.style.color = '#aaa';
+  document.getElementById('btnUploadServerZip').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('zip', file);
+    const r = await fetch('/api/admin/upload-server-zip', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка загрузки', 'error');
+      document.getElementById('btnUploadServerZip').disabled = false;
+      return;
+    }
+    statusEl.textContent = '✓ Загружено, сервер перезапускается...';
+    statusEl.style.color = '#1d9e75';
+    toast('Архив загружен, сервер перезапускается...', 'good');
+  } catch (e) {
+    // Сервер мог уже упасть — это нормально при самообновлении
+    statusEl.textContent = '✓ Сервер перезапускается...';
+    statusEl.style.color = '#1d9e75';
+    toast('Сервер перезапускается для применения обновления', 'good');
+  }
+
+  // Переподключаемся через 15 секунд
+  setTimeout(() => {
+    statusEl.textContent = '🔄 Переподключение...';
+    window.location.reload();
+  }, 15000);
+}
+
+// ─── Client zip upload from browser ─────────────────────────────────────────
+
+function onClientZipSelected(input) {
+  const nameEl = document.getElementById('clientZipFileName');
+  const btnEl  = document.getElementById('btnUploadClientZip');
+  if (input.files && input.files[0]) {
+    const mb = (input.files[0].size / 1024 / 1024).toFixed(1);
+    nameEl.textContent = `${input.files[0].name} (${mb} MB)`;
+    nameEl.style.color = '#ccc';
+    btnEl.disabled = false;
+  } else {
+    nameEl.textContent = 'файл не выбран';
+    nameEl.style.color = '#aaa';
+    btnEl.disabled = true;
+  }
+}
+
+async function uploadClientZip() {
+  const input = document.getElementById('clientZipFile');
+  const statusEl = document.getElementById('clientZipUploadStatus');
+  if (!input.files || !input.files[0]) { toast('Выберите zip-файл', 'warn'); return; }
+
+  const file = input.files[0];
+  if (!confirm(`Загрузить на сервер и разослать обновление всем клиентам?\n\nФайл: ${file.name}\n\nКлиенты скачают архив, перезапустятся и продолжат работу.`)) return;
+
+  // Шаг 1: загружаем zip на сервер
+  statusEl.textContent = '⬆️ Загрузка...';
+  statusEl.style.color = '#aaa';
+  document.getElementById('btnUploadClientZip').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('zip', file);
+    const r = await fetch('/api/admin/upload-client-zip', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка загрузки';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка загрузки', 'error');
+      document.getElementById('btnUploadClientZip').disabled = false;
+      return;
+    }
+  } catch (e) {
+    statusEl.textContent = 'Ошибка: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка загрузки: ' + e, 'error');
+    document.getElementById('btnUploadClientZip').disabled = false;
+    return;
+  }
+
+  // Шаг 2: рассылаем команду
+  statusEl.textContent = '📡 Рассылаю команду...';
+  try {
+    updatePanelDismissed = false;
+    await conn.invoke('SendCommandToAll', 'UPDATE_FOLDER_NOW', '');
+    statusEl.textContent = '✓ Загружено и разослано';
+    statusEl.style.color = '#1d9e75';
+    toast('Zip загружен, команда обновления отправлена клиентам', 'good');
+    document.getElementById('btnUploadClientZip').disabled = false;
+    setTimeout(() => { statusEl.textContent = ''; }, 8000);
+  } catch (e) {
+    statusEl.textContent = 'Ошибка рассылки: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Zip загружен, но рассылка не удалась: ' + e, 'error');
+    document.getElementById('btnUploadClientZip').disabled = false;
+  }
+}
+
+// ─── Send UPDATE_FOLDER_NOW when zip is already on the server ────────────────
+
+async function sendClientZipCommand() {
+  const statusEl = document.getElementById('clientZipCmdStatus');
+  if (!confirm('Разослать команду zip-обновления всем клиентам?\n\nКлиенты скачают bibclient-update.zip с сервера и перезапустятся.\n\nУбедитесь, что zip актуален (скопирован deploy-update.cmd).')) return;
+  statusEl.textContent = '📡 Рассылаю...';
+  statusEl.style.color = '#aaa';
+  try {
+    updatePanelDismissed = false;
+    await conn.invoke('SendCommandToAll', 'UPDATE_FOLDER_NOW', '');
+    statusEl.textContent = '✓ Команда отправлена';
+    statusEl.style.color = '#1d9e75';
+    toast('Команда zip-обновления отправлена клиентам', 'good');
+    setTimeout(() => { statusEl.textContent = ''; }, 6000);
+  } catch (e) {
+    statusEl.textContent = 'Ошибка: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка рассылки: ' + e, 'error');
+  }
+}
+
+// ─── Client folder update (zip, no installer) ────────────────────────────────
+async function applyClientFolderUpdate() {
+  const pathVal = document.getElementById('clientFolderPath').value.trim();
+  if (!pathVal) { toast('Укажите путь к папке с обновлением BibClient', 'warn'); return; }
+
+  localStorage.setItem('bib_client_update_folder', pathVal);
+
+  if (!confirm(`Упаковать папку и разослать обновление всем клиентам?\n\nПапка: ${pathVal}\n\nКлиенты скачают архив, перезапустятся и продолжат работу с новыми файлами.`)) return;
+
+  const statusEl = document.getElementById('clientFolderUpdateStatus');
+  statusEl.textContent = '📦 Упаковка...';
+  statusEl.style.color = '#aaa';
+
+  // Шаг 1: Упаковываем папку в zip на сервере
+  try {
+    const r = await fetch('/api/admin/pack-client-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourcePath: pathVal })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Ошибка упаковки';
+      statusEl.style.color = '#f87171';
+      toast(data.error || 'Ошибка упаковки', 'error');
+      return;
+    }
+  } catch (e) {
+    statusEl.textContent = 'Ошибка: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка упаковки: ' + e, 'error');
+    return;
+  }
+
+  // Шаг 2: Рассылаем команду UPDATE_FOLDER_NOW всем клиентам
+  statusEl.textContent = '📡 Рассылаю команду...';
+  try {
+    updatePanelDismissed = false;
+    await conn.invoke('SendCommandToAll', 'UPDATE_FOLDER_NOW', '');
+    statusEl.textContent = '✓ Команда отправлена. Клиенты обновляются...';
+    statusEl.style.color = '#1d9e75';
+    toast('Команда обновления из папки отправлена клиентам', 'good');
+    setTimeout(() => { statusEl.textContent = ''; }, 8000);
+  } catch (e) {
+    statusEl.textContent = 'Ошибка рассылки: ' + e;
+    statusEl.style.color = '#f87171';
+    toast('Ошибка рассылки: ' + e, 'error');
   }
 }
 
@@ -1051,12 +1502,63 @@ function fillSettingsForm() {
   document.getElementById('sBgOpacity').value = opacityPct;
   document.getElementById('sBgOpacityVal').textContent = opacityPct;
 
+  // Иконка онлайн-статуса
+  document.getElementById('sShowStatusDot').checked = settings.showStatusDot ?? true;
+
+  // Отступы от краёв монитора — синхронизируем слайдер и числовое поле
+  const offX = settings.screenOffsetX ?? 0;
+  const offY = settings.screenOffsetY ?? 0;
+  document.getElementById('sScreenOffsetX').value    = offX;
+  document.getElementById('sScreenOffsetXNum').value = offX;
+  document.getElementById('sScreenOffsetY').value    = offY;
+  document.getElementById('sScreenOffsetYNum').value = offY;
+  setupOffsetSync('sScreenOffsetX', 'sScreenOffsetXNum');
+  setupOffsetSync('sScreenOffsetY', 'sScreenOffsetYNum');
+
   // Позиции и размеры шрифтов экрана блокировки
-  document.getElementById('sPcNumberPosition').value  = settings.pcNumberPosition   ?? 'MiddleCenter';
+  document.getElementById('sPcNumberPosition').value   = settings.pcNumberPosition   ?? 'MiddleCenter';
   document.getElementById('sLockedTextPosition').value = settings.lockedTextPosition ?? 'MiddleCenter';
   document.getElementById('sTimePosition').value       = settings.timePosition       ?? 'BottomCenter';
 
-  const pcFont     = settings.pcNumberFontSize   ?? 52;
+  // Порядок стекинга — взаимоисключающие значения (своп при совпадении)
+  document.getElementById('sPcNumberOrder').value   = settings.pcNumberOrder   ?? 1;
+  document.getElementById('sLockedTextOrder').value = settings.lockedTextOrder ?? 2;
+  document.getElementById('sTimeOrder').value       = settings.timeOrder       ?? 3;
+  setupOrderSwap();
+
+  // Предпросмотр — wire events и первый рендер
+  ['sPcNumberPosition','sLockedTextPosition','sTimePosition',
+   'sShowPcNumber','sShowPcName','sShowLockedText'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateLockPreview);
+  });
+  // Слайдеры шрифтов и прозрачности — обновляем превью в реальном времени
+  ['sPcNumberFontSize','sLockedTextFontSize','sTimeFontSize','sBgOpacity'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateLockPreview);
+  });
+  // Порядок стекинга
+  ['sPcNumberOrder','sLockedTextOrder','sTimeOrder'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateLockPreview);
+  });
+  // Фоновое изображение — предпросмотр сразу при выборе файла (до загрузки)
+  const bgFileInput = document.getElementById('sBgFileInput');
+  if (bgFileInput) bgFileInput.onchange = () => {
+    if (bgFileInput.files?.[0]) {
+      if (pvBgUrl?.startsWith('blob:')) URL.revokeObjectURL(pvBgUrl);
+      pvBgUrl = URL.createObjectURL(bgFileInput.files[0]);
+    }
+    updateLockPreview();
+  };
+  // Если фон уже задан в настройках — загружаем с сервера (если blob не выбран)
+  if (!pvBgUrl?.startsWith('blob:')) {
+    const bgName = settings.backgroundFileName ?? '';
+    pvBgUrl = bgName ? `/files/${encodeURIComponent(bgName)}` : null;
+  }
+  updateLockPreview();
+
+  const pcFont     = settings.pcNumberFontSize   ?? 150;
   const lockedFont = settings.lockedTextFontSize ?? 16;
   const timeFont   = settings.timeFontSize       ?? 36;
   document.getElementById('sPcNumberFontSize').value  = pcFont;
@@ -1089,6 +1591,129 @@ function fillSettingsForm() {
   renderServicesList();
 }
 
+// ── Offset: двунаправленная синхронизация слайдера и числового поля ────────
+function setupOffsetSync(sliderId, numberId) {
+  const slider = document.getElementById(sliderId);
+  const number = document.getElementById(numberId);
+  if (!slider || !number) return;
+  // Удаляем старые обработчики через замену клонами
+  const newSlider = slider.cloneNode(true); slider.parentNode.replaceChild(newSlider, slider);
+  const newNumber = number.cloneNode(true); number.parentNode.replaceChild(newNumber, number);
+  newSlider.addEventListener('input', () => {
+    newNumber.value = newSlider.value;
+    updateLockPreview();
+  });
+  newNumber.addEventListener('input', () => {
+    const v = Math.max(0, Math.min(300, parseInt(newNumber.value) || 0));
+    newSlider.value = v;
+    newNumber.value = v;
+    updateLockPreview();
+  });
+}
+
+// ── Order swap: взаимоисключающий выбор порядка стекинга ────────────────────
+function setupOrderSwap() {
+  const ids = ['sPcNumberOrder', 'sLockedTextOrder', 'sTimeOrder'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.dataset.prev = el.value;
+    // Заменяем клоном чтобы убрать старые обработчики
+    const clone = el.cloneNode(true);
+    clone.dataset.prev = el.value;
+    el.parentNode.replaceChild(clone, el);
+    clone.addEventListener('change', function () {
+      const newVal = this.value;
+      const oldVal = this.dataset.prev;
+      if (newVal === oldVal) return;
+      // Находим другой элемент с таким же значением — меняем местами
+      ids.forEach(otherId => {
+        if (otherId === this.id) return;
+        const other = document.getElementById(otherId);
+        if (other && other.value === newVal) {
+          other.value = oldVal;
+          other.dataset.prev = oldVal;
+        }
+      });
+      this.dataset.prev = newVal;
+      updateLockPreview();
+    });
+  });
+}
+
+// ── Lock screen preview ──────────────────────────────────────────────────────
+function updateLockPreview() {
+  const preview = document.getElementById('lockScreenPreview');
+  if (!preview) return;
+
+  const zones = ['TopLeft','TopCenter','TopRight','MiddleLeft','MiddleCenter',
+                 'MiddleRight','BottomLeft','BottomCenter','BottomRight'];
+  zones.forEach(z => {
+    const cell = document.getElementById('pv-' + z);
+    if (cell) cell.innerHTML = '';
+  });
+
+  // ── Фоновое изображение ───────────────────────────────────────────────────
+  preview.style.backgroundImage = pvBgUrl ? `url('${pvBgUrl}')` : 'none';
+
+  // ── Затемнение (слайдер 0..100 → CSS-переменная 0..1) ────────────────────
+  const opacityPct = parseInt(document.getElementById('sBgOpacity')?.value) || 30;
+  preview.style.setProperty('--pv-dim', (opacityPct / 100).toFixed(2));
+
+  // ── Пунктирная рамка отступа (масштаб ~1:6) ───────────────────────────────
+  const offX = parseInt(document.getElementById('sScreenOffsetX')?.value) || 0;
+  const offY = parseInt(document.getElementById('sScreenOffsetY')?.value) || 0;
+  const offsetScale = 1 / 6;
+  preview.style.setProperty('--pv-ox', Math.round(offX * offsetScale) + 'px');
+  preview.style.setProperty('--pv-oy', Math.round(offY * offsetScale) + 'px');
+
+  // ── Масштаб шрифтов: preview_height / 1080 ───────────────────────────────
+  // Размеры берём из слайдеров и масштабируем пропорционально высоте превью
+  const pvH = preview.offsetHeight || 195;
+  const fontScale = pvH / 1080;
+  const pcFontPx = Math.max(7, Math.min(36,
+    Math.round((parseInt(document.getElementById('sPcNumberFontSize')?.value)   || 150) * fontScale)));
+  const lockedFontPx = Math.max(5, Math.min(16,
+    Math.round((parseInt(document.getElementById('sLockedTextFontSize')?.value) || 16)  * fontScale)));
+  const timeFontPx = Math.max(6, Math.min(18,
+    Math.round((parseInt(document.getElementById('sTimeFontSize')?.value)       || 36)  * fontScale)));
+
+  const showPc     = document.getElementById('sShowPcNumber')?.checked ||
+                     document.getElementById('sShowPcName')?.checked;
+  const showLocked = document.getElementById('sShowLockedText')?.checked;
+
+  const items = [];
+  if (showPc)
+    items.push({ pos: document.getElementById('sPcNumberPosition')?.value   || 'MiddleCenter',
+                 order: parseInt(document.getElementById('sPcNumberOrder')?.value)   || 1,
+                 cls: 'pv-pc',     label: '42',            fontPx: pcFontPx });
+  if (showLocked)
+    items.push({ pos: document.getElementById('sLockedTextPosition')?.value || 'MiddleCenter',
+                 order: parseInt(document.getElementById('sLockedTextOrder')?.value) || 2,
+                 cls: 'pv-locked', label: 'Заблокировано', fontPx: lockedFontPx });
+  items.push(  { pos: document.getElementById('sTimePosition')?.value       || 'BottomCenter',
+                 order: parseInt(document.getElementById('sTimeOrder')?.value)       || 3,
+                 cls: 'pv-time',   label: '14:23',         fontPx: timeFontPx });
+
+  // Группируем по позиции, сортируем по порядку
+  const groups = {};
+  items.forEach(it => {
+    if (!groups[it.pos]) groups[it.pos] = [];
+    groups[it.pos].push(it);
+  });
+  Object.entries(groups).forEach(([pos, grp]) => {
+    const cell = document.getElementById('pv-' + pos);
+    if (!cell) return;
+    grp.sort((a, b) => a.order - b.order).forEach(it => {
+      const chip = document.createElement('div');
+      chip.className = 'pv-chip ' + it.cls;
+      chip.textContent = it.label;
+      chip.style.fontSize = it.fontPx + 'px';
+      cell.appendChild(chip);
+    });
+  });
+}
+
 function bindSliderLabel(sliderId, labelId, fmt) {
   const slider = document.getElementById(sliderId);
   const label  = document.getElementById(labelId);
@@ -1119,13 +1744,19 @@ function readSettingsForm() {
     showPcNumber: document.getElementById('sShowPcNumber').checked,
     showLockedText: document.getElementById('sShowLockedText').checked,
     backgroundOpacity: opacityPct / 100,
-    // Экран блокировки — позиции и размеры шрифтов
+    // Экран блокировки — позиции, размеры шрифтов, отступы, порядок, иконка
+    showStatusDot:      document.getElementById('sShowStatusDot').checked,
+    screenOffsetX:      parseInt(document.getElementById('sScreenOffsetX').value) || 0,
+    screenOffsetY:      parseInt(document.getElementById('sScreenOffsetY').value) || 0,
     pcNumberPosition:   document.getElementById('sPcNumberPosition').value,
-    pcNumberFontSize:   parseInt(document.getElementById('sPcNumberFontSize').value) || 52,
+    pcNumberFontSize:   parseInt(document.getElementById('sPcNumberFontSize').value) || 150,
+    pcNumberOrder:      parseInt(document.getElementById('sPcNumberOrder').value) || 1,
     lockedTextPosition: document.getElementById('sLockedTextPosition').value,
     lockedTextFontSize: parseInt(document.getElementById('sLockedTextFontSize').value) || 16,
+    lockedTextOrder:    parseInt(document.getElementById('sLockedTextOrder').value) || 2,
     timePosition:       document.getElementById('sTimePosition').value,
     timeFontSize:       parseInt(document.getElementById('sTimeFontSize').value) || 36,
+    timeOrder:          parseInt(document.getElementById('sTimeOrder').value) || 3,
     // Фон — имя файла берём из поля (uploadBgFile() обновляет его отдельно)
     backgroundFileName: document.getElementById('sBgFileName').value,
     services: readServicesForm(),
@@ -1228,10 +1859,25 @@ function renderOperators(list) {
   const el = document.getElementById('operatorsList');
   if (!list.length) { el.innerHTML = '<div style="color:#555;padding:12px">Нет операторов</div>'; return; }
   el.innerHTML = list.map(op => `
-    <div class="op-row">
+    <div class="op-row" style="flex-wrap:wrap;gap:8px">
       <div class="op-info">
         <div class="op-name">${esc(op.displayName)}</div>
         <div class="op-login">${esc(op.login)}</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#aaa">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр списка читателей">
+          <input type="checkbox" id="opChkReaders_${op.id}" ${op.canViewReaders ? 'checked' : ''}
+            style="width:13px;height:13px">
+          👁 Читатели
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр истории финансов">
+          <input type="checkbox" id="opChkFinance_${op.id}" ${op.canViewFinance ? 'checked' : ''}
+            style="width:13px;height:13px">
+          💰 Финансы
+        </label>
+        <button class="btn btn-outline" onclick="applyOpPermissions('${op.id}')"
+          style="font-size:11px;padding:3px 10px">Применить</button>
+        <span id="opPermSaved_${op.id}" style="display:none;color:#1D9E75;font-size:11px">✓ Сохранено</span>
       </div>
       <span class="op-active-badge ${op.isActive ? 'active' : 'inactive'}">${op.isActive ? 'Активен' : 'Отключён'}</span>
       <div class="op-actions">
@@ -1248,18 +1894,38 @@ async function addOperator() {
   const login = document.getElementById('newOpLogin').value.trim();
   const pwd = document.getElementById('newOpPwd').value;
   if (!name || !login || !pwd) { toast('Заполните все поля', 'warn'); return; }
+  const canViewReaders = document.getElementById('newOpReaders').checked;
+  const canViewFinance = document.getElementById('newOpFinance').checked;
   const r = await fetch('/api/admin/operators', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ displayName: name, login, password: pwd })
+    body: JSON.stringify({ displayName: name, login, password: pwd, canViewReaders, canViewFinance })
   });
   if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка', 'warn'); return; }
   document.getElementById('newOpName').value = '';
   document.getElementById('newOpLogin').value = '';
   document.getElementById('newOpPwd').value = '';
+  document.getElementById('newOpReaders').checked = false;
+  document.getElementById('newOpFinance').checked = false;
   const badge = document.getElementById('opSaved');
   badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2000);
   await loadOperators();
+}
+
+async function applyOpPermissions(id) {
+  const canViewReaders = document.getElementById(`opChkReaders_${id}`)?.checked ?? false;
+  const canViewFinance = document.getElementById(`opChkFinance_${id}`)?.checked ?? false;
+  const r = await fetch(`/api/admin/operators/${id}/permissions`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ canViewReaders, canViewFinance })
+  });
+  if (r.ok) {
+    const badge = document.getElementById(`opPermSaved_${id}`);
+    if (badge) { badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2500); }
+  } else {
+    toast('Ошибка сохранения прав', 'warn');
+  }
 }
 
 async function toggleOpActive(id, isActive) {
@@ -1670,17 +2336,17 @@ async function loadReport() {
 }
 
 function renderReport(data) {
-  const { items, summary } = data;
+  const { items, serviceColumns = [], summary } = data;
 
   const sumEl = document.getElementById('reportSummary');
   sumEl.style.display = 'flex';
   const hrs = (summary.totalDurationMin / 60).toFixed(1);
   sumEl.innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Посещений</div><div class="stat-val">${items.length}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Сессий</div><div class="stat-val">${summary.totalSessions}</div></div>
-    <div class="stat-card" style="flex:1"><div class="stat-label">Услуг</div><div class="stat-val">${summary.totalServiceOps}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Читателей</div><div class="stat-val">${summary.totalUniqueReaders}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Времени (ч)</div><div class="stat-val green">${hrs}</div></div>
-    <div class="stat-card" style="flex:1"><div class="stat-label">Оплачено (сум)</div><div class="stat-val blue">${summary.totalAmount.toLocaleString('ru-RU')}</div></div>`;
+    <div class="stat-card" style="flex:1"><div class="stat-label">Итого (сум)</div><div class="stat-val blue">${summary.totalAmount.toLocaleString('ru-RU')}</div></div>`;
 
   const el = document.getElementById('reportTable');
   if (!items.length) {
@@ -1688,10 +2354,16 @@ function renderReport(data) {
     return;
   }
 
-  const cols = '130px 1fr 100px 75px 85px 55px 1fr 90px';
-  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    <span>Дата/Время</span><span>Читатель</span><span>Категория</span><span>ПК</span><span>Тип</span><span>Мин</span><span>Детали</span><span>Оплачено</span>
-  </div>`;
+  // serviceColumns is [{id, name}, ...]; row.services is keyed by id
+  const th  = s => `<th style="text-align:left;padding:6px 8px;white-space:nowrap;color:#666;font-weight:500;border-bottom:1px solid #2A2A4A">${s}</th>`;
+  const thc = s => `<th style="text-align:center;padding:6px 8px;white-space:nowrap;color:#666;font-weight:500;border-bottom:1px solid #2A2A4A">${s}</th>`;
+
+  let html = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr>
+      ${th('Дата/Время')}${th('Читатель')}${th('Категория')}${th('ПК')}${thc('Мин')}
+      ${serviceColumns.map(sc => thc(esc(sc.name))).join('')}
+      ${th('Итого')}
+    </tr></thead><tbody>`;
 
   items.forEach(row => {
     const dt = new Date(row.timestamp);
@@ -1700,22 +2372,31 @@ function renderReport(data) {
     const nameColor = row.readerStatus === 'registered' ? '#e0e0f0'
                     : row.readerStatus === 'temp'        ? '#AAAACC'
                     : row.readerStatus === 'anonymous'   ? '#666' : '#f59e0b';
-    const typeBadge = row.operationType === 'session'
-      ? '<span class="fin-badge fin-badge-session">Сессия</span>'
-      : '<span class="fin-badge fin-badge-service">Услуга</span>';
 
-    html += `<div class="fin-row" style="grid-template-columns:${cols}">
-      <span style="color:#666;font-size:12px">${dtStr}</span>
-      <span style="color:${nameColor}">${esc(row.readerName)}</span>
-      <span style="color:#666;font-size:12px">${esc(row.readerCategory || '—')}</span>
-      <span style="font-family:monospace;font-size:12px">${esc(row.pcNumber || '—')}</span>
-      <span>${typeBadge}</span>
-      <span style="color:#888">${row.operationType === 'session' ? row.durationMin : '—'}</span>
-      <span style="color:#888;font-size:12px">${esc(row.detail || '—')}</span>
-      <span style="color:#1d9e75;font-weight:600">${row.amount.toLocaleString('ru-RU')}</span>
-    </div>`;
+    const td = (content, style = '') =>
+      `<td style="padding:6px 8px;border-bottom:1px solid #1A1A2E${style ? ';' + style : ''}">${content}</td>`;
+
+    let tds = '';
+    tds += td(`<span style="color:#666;font-size:12px">${dtStr}</span>`);
+    tds += td(`<span style="color:${nameColor}">${esc(row.readerName || row.readerId || '—')}</span>`);
+    tds += td(`<span style="color:#666;font-size:12px">${esc(row.readerCategory || '—')}</span>`);
+    tds += td(`<span style="font-family:monospace;font-size:12px">${esc(row.pcNumber || '—')}</span>`);
+    tds += td(row.hasSession ? `<span style="color:#888">${row.durationMin}</span>` : `<span style="color:#333">—</span>`, 'text-align:center');
+
+    serviceColumns.forEach(sc => {
+      const s = row.services?.[sc.id];
+      if (s) {
+        tds += td(`<b style="color:#1d9e75">${s.qty}</b><br><span style="color:#555;font-size:11px">${s.amount.toLocaleString('ru-RU')}</span>`, 'text-align:center');
+      } else {
+        tds += td(`<span style="color:#333">—</span>`, 'text-align:center');
+      }
+    });
+
+    tds += td(`<b style="color:#1d9e75">${row.totalAmount.toLocaleString('ru-RU')}</b>`);
+    html += `<tr>${tds}</tr>`;
   });
 
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -1725,6 +2406,182 @@ function exportReport() {
     : document.getElementById('rptDateMonth').value;
   if (!dateVal) { toast('Выберите дату', 'warn'); return; }
   window.open(`/api/admin/readers/report/export?period=${reportPeriod}&date=${encodeURIComponent(dateVal)}`, '_blank');
+}
+
+// ─── Admin Service Dialog ─────────────────────────────────────────────────────
+let _adminSvcRows = [];
+let _adminSvcTargetPc = '';
+
+function openAdminServiceDlg(pcNumber) {
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  if (!svcTypes.length) { toast('Нет доступных услуг. Добавьте услуги в Настройках → Услуги.', 'warn'); return; }
+
+  _adminSvcTargetPc = pcNumber || '';
+
+  // Fill PC selector
+  const pcSel = document.getElementById('dlgAdminSvcPc');
+  pcSel.innerHTML = '<option value="">— Без привязки —</option>';
+  Object.values(pcs)
+    .filter(c => c.isSession)
+    .sort((a, b) => a.pcNumberValue - b.pcNumberValue)
+    .forEach(c => {
+      const reader = c.userName || c.readerId || '(анонимный)';
+      pcSel.innerHTML += `<option value="${esc(c.pcNumber)}">${esc(c.pcNumber)} — ${esc(reader)}</option>`;
+    });
+
+  // Pre-select if PC has session
+  if (_adminSvcTargetPc && pcs[_adminSvcTargetPc]?.isSession) pcSel.value = _adminSvcTargetPc;
+  else pcSel.value = '';
+
+  // Init rows
+  _adminSvcRows = [{ id: Date.now(), typeId: svcTypes[0]?.id || '', qty: 1 }];
+
+  // Reset reader input and payment
+  const readerInput = document.getElementById('dlgAdminSvcReaderId');
+  if (readerInput) readerInput.value = '';
+  const payNowRadio = document.querySelector('[name="svcAdminPay"][value="now"]');
+  if (payNowRadio) payNowRadio.checked = true;
+
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+  onAdminSvcPcChanged();
+  document.getElementById('dlgAdminService').style.display = 'flex';
+}
+
+function addAdminSvcRow() {
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  const usedTypes = new Set(_adminSvcRows.map(r => r.typeId));
+  const nextType = svcTypes.find(s => !usedTypes.has(s.id));
+  if (!nextType) { toast('Все доступные услуги уже добавлены', 'warn'); return; }
+  _adminSvcRows.push({ id: Date.now(), typeId: nextType.id, qty: 1 });
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+}
+
+function removeAdminSvcRow(rowId) {
+  _adminSvcRows = _adminSvcRows.filter(r => r.id !== rowId);
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  if (_adminSvcRows.length === 0)
+    _adminSvcRows = [{ id: Date.now(), typeId: svcTypes[0]?.id || '', qty: 1 }];
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+}
+
+function onAdminSvcRowTypeChange(rowId, typeId) {
+  const row = _adminSvcRows.find(r => r.id === rowId);
+  if (row) row.typeId = typeId;
+  renderAdminSvcRows();
+  updateAdminSvcTotal();
+}
+
+function onAdminSvcRowQtyChange(rowId, qty) {
+  const row = _adminSvcRows.find(r => r.id === rowId);
+  if (row) row.qty = Math.max(1, parseInt(qty) || 1);
+  updateAdminSvcTotal();
+}
+
+function renderAdminSvcRows() {
+  const container = document.getElementById('dlgAdminSvcList');
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  const usedTypes = new Set(_adminSvcRows.map(r => r.typeId));
+
+  container.innerHTML = _adminSvcRows.map(row => {
+    const opts = svcTypes.map(s => {
+      const disabled = s.id !== row.typeId && usedTypes.has(s.id) ? 'disabled' : '';
+      const selected = s.id === row.typeId ? 'selected' : '';
+      return `<option value="${esc(s.id)}" ${disabled} ${selected}>${esc(s.name)} — ${s.price.toLocaleString('ru-RU')} сум/${esc(s.unit)}</option>`;
+    }).join('');
+    const canRemove = _adminSvcRows.length > 1;
+    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;min-width:0">
+      <select style="flex:1;min-width:0;padding:7px 8px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:12px"
+        onchange="onAdminSvcRowTypeChange(${row.id}, this.value)">${opts}</select>
+      <input type="number" min="1" max="999" value="${row.qty}"
+        style="width:60px;flex-shrink:0;padding:7px 6px;border:1px solid #3D3D6B;border-radius:8px;background:#1A1A2E;color:#fff;font-size:13px;text-align:center"
+        oninput="onAdminSvcRowQtyChange(${row.id}, this.value)">
+      ${canRemove
+        ? `<button onclick="removeAdminSvcRow(${row.id})" style="flex-shrink:0;width:28px;height:28px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;padding:0">✕</button>`
+        : '<div style="width:28px;flex-shrink:0"></div>'}
+    </div>`;
+  }).join('');
+
+  const btnAdd = document.getElementById('btnAdminAddSvcRow');
+  if (btnAdd) btnAdd.style.display = usedTypes.size >= svcTypes.length ? 'none' : '';
+}
+
+function updateAdminSvcTotal() {
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  let total = 0;
+  _adminSvcRows.forEach(row => {
+    const svc = svcTypes.find(s => s.id === row.typeId);
+    if (svc) total += svc.price * row.qty;
+  });
+  document.getElementById('dlgAdminSvcTotal').textContent = total > 0 ? total.toLocaleString('ru-RU') + ' сум' : '—';
+}
+
+function onAdminSvcPcChanged() {
+  const pcVal = document.getElementById('dlgAdminSvcPc').value;
+  const info = document.getElementById('dlgAdminSvcSessionInfo');
+  const readerRow = document.getElementById('dlgAdminSvcReaderRow');
+
+  if (pcVal && pcs[pcVal]) {
+    const c = pcs[pcVal];
+    const reader = c.userName || c.readerId || '';
+    info.textContent = reader ? `✓ Сессия на ${pcVal}: ${reader}` : `✓ Сессия на ${pcVal} (анонимный)`;
+    info.style.display = 'block';
+    if (readerRow) readerRow.style.display = 'none';
+  } else {
+    info.style.display = 'none';
+    if (readerRow) readerRow.style.display = '';
+  }
+  onAdminSvcPayChanged();
+}
+
+function onAdminSvcPayChanged() {
+  const pcVal = document.getElementById('dlgAdminSvcPc').value;
+  const wantLater = document.getElementById('rbAdminSvcLater')?.checked;
+  document.getElementById('dlgAdminSvcDeferNote').style.display =
+    (wantLater && !pcVal) ? 'block' : 'none';
+}
+
+async function confirmAdminService() {
+  if (_adminSvcRows.length === 0) { toast('Добавьте хотя бы одну услугу', 'warn'); return; }
+
+  const svcTypes = (settings.services || []).filter(s => s.isActive);
+  const validRows = _adminSvcRows.filter(r => r.typeId);
+  if (!validRows.length) { toast('Выберите услугу', 'warn'); return; }
+
+  // Compute total for toast
+  let total = 0;
+  validRows.forEach(row => {
+    const svc = svcTypes.find(s => s.id === row.typeId);
+    if (svc) total += svc.price * row.qty;
+  });
+
+  const pcNumber = document.getElementById('dlgAdminSvcPc').value;
+  const payNow   = document.querySelector('[name="svcAdminPay"]:checked')?.value === 'now';
+
+  let readerId = '', readerName = '';
+  const c = pcNumber ? pcs[pcNumber] : null;
+  if (c) {
+    readerId   = c.readerId || '';
+    readerName = c.userName || '';
+  } else {
+    readerId = (document.getElementById('dlgAdminSvcReaderId')?.value || '').trim();
+  }
+
+  const items = validRows.map(r => ({ serviceTypeId: r.typeId, quantity: r.qty }));
+
+  closeDlg('dlgAdminService');
+  try {
+    const r = await fetch('/api/admin/finance/services/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, pcNumber, readerId, readerName, payNow })
+    });
+    if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка', 'warn'); return; }
+    toast(`Услуги созданы. Итого: ${total.toLocaleString('ru-RU')} сум${payNow ? '' : ' (отложено)'}`, 'success');
+    loadFinance();
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
 // ─── Self-update from publish folder ─────────────────────────────────────────
@@ -1737,7 +2594,7 @@ async function applyFolderUpdate() {
 
   if (!confirm(`Сервер перезапустится для применения обновления.\n\nПапка: ${pathVal}\n\nПродолжить?`)) return;
 
-  const statusEl = document.getElementById('updateStatus');
+  const statusEl = document.getElementById('folderUpdateStatus');
   statusEl.textContent = 'Применяется…';
   statusEl.style.color = '#aaa';
 
@@ -1767,8 +2624,10 @@ async function applyFolderUpdate() {
   }
 }
 
-// Restore saved update folder path on page load
+// Restore saved update folder paths on page load
 document.addEventListener('DOMContentLoaded', () => {
   const saved = localStorage.getItem('bib_update_folder');
   if (saved) { const el = document.getElementById('updateFolderPath'); if (el) el.value = saved; }
+  const savedClient = localStorage.getItem('bib_client_update_folder');
+  if (savedClient) { const el = document.getElementById('clientFolderPath'); if (el) el.value = savedClient; }
 });

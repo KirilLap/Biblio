@@ -48,7 +48,10 @@ namespace BibAdminWeb
                 {
                     HttpOnly = true, SameSite = SameSiteMode.Lax, Expires = DateTimeOffset.UtcNow.AddHours(12)
                 });
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { id = op.Id, displayName = op.DisplayName, login = op.Login }));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                    id = op.Id, displayName = op.DisplayName, login = op.Login,
+                    canViewReaders = op.CanViewReaders, canViewFinance = op.CanViewFinance
+                }));
             }
             catch (Exception ex)
             {
@@ -79,7 +82,10 @@ namespace BibAdminWeb
             var settings = GlobalSettings.Load();
             var op = settings.Operators.Find(o => o.Id == operatorId);
             if (op == null) { ctx.Response.StatusCode = 401; await ctx.Response.WriteAsync("{}"); return; }
-            await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { id = op.Id, displayName = op.DisplayName, login = op.Login }));
+            await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
+                id = op.Id, displayName = op.DisplayName, login = op.Login,
+                canViewReaders = op.CanViewReaders, canViewFinance = op.CanViewFinance
+            }));
         }
 
         public static string HashPassword(string password)

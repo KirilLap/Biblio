@@ -57,6 +57,8 @@ namespace BibAdmin
                 ChkLockOnOffline.IsChecked = _global.LockOnOffline;
                 ChkPreventClose.IsChecked = _global.PreventClose;
                 ChkAutoStartWithUser.IsChecked = _global.AutoStartWithUser;
+                ChkRequireReaderId.IsChecked = _global.RequireReaderId;
+                ChkRequireUserName.IsChecked = _global.RequireUserName;
 
                 SelectComboByTag(CmbPcNumberPosition, _global.PcNumberPosition);
                 SelectComboByTag(CmbLockedTextPosition, _global.LockedTextPosition);
@@ -74,6 +76,8 @@ namespace BibAdmin
                     }
                 }
 
+                TxtCurrentVersion.Text = $"Текущая версия: {UpdateChecker.CurrentVersion}";
+                TxtUpdatesPath.Text = _global.UpdatesPath ?? "";
                 RenderServicesPanel();
                 Logger.Info("Настройки загружены в UI");
             }
@@ -241,7 +245,7 @@ namespace BibAdmin
             try
             {
                 _hub = new HubConnectionBuilder()
-                    .WithUrl("http://localhost:8080/hub")
+                    .WithUrl($"http://localhost:{GlobalSettings.Load().ServerPort}/hub")
                     .WithAutomaticReconnect()
                     .Build();
                 await _hub.StartAsync();
@@ -288,10 +292,10 @@ namespace BibAdmin
                 "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r != MessageBoxResult.Yes) return;
 
-            _global.AdminPassword = password;
+            _global.SetPassword(password);
             _global.Save();
 
-            await ApplyCommandToAll("ADMIN_PASSWORD", password);
+            await ApplyCommandToAll("ADMIN_PASSWORD", _global.AdminPasswordHash);
             ShowSaved(TxtPasswordSaved);
             TxtNewPassword.Clear();
         }
@@ -356,6 +360,17 @@ namespace BibAdmin
             }
 
             ShowSaved(TxtRestrictionsSaved);
+        }
+
+        // =====================
+        // Поля сессии
+        // =====================
+        private void SaveSessionFields_Click(object sender, RoutedEventArgs e)
+        {
+            _global.RequireReaderId = ChkRequireReaderId.IsChecked == true;
+            _global.RequireUserName = ChkRequireUserName.IsChecked == true;
+            _global.Save();
+            ShowSaved(TxtSessionFieldsSaved);
         }
 
         // =====================
@@ -628,6 +643,49 @@ namespace BibAdmin
             {
                 Logger.Error($"Ошибка команды: {ex.Message}");
                 AdminHub.AddPendingCommand(pcNumber, type, value);
+            }
+        }
+
+        private void SaveUpdatesPath_Click(object sender, RoutedEventArgs e)
+        {
+            _global.UpdatesPath = TxtUpdatesPath.Text.Trim();
+            _global.Save();
+            MessageBox.Show("Путь сохранён.", "Обновления", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            await UpdateChecker.CheckAsync();
+        }
+
+        private async void UpdateAllClients_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Отправить команду обновления всем клиентским ПК?\n\nОни автоматически скачают и тихо установят новую версию BibClient. Клиенты перезапустятся сами.",
+                "Обновить все клиенты",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+
+            BtnUpdateClients.IsEnabled = false;
+            BtnUpdateClients.Content = "⏳ Отправка...";
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(new { Type = "UPDATE_NOW", Value = "" });
+                await _hub!.InvokeAsync("SendCommandToAll", json);
+                TxtUpdateClientsStatus.Text = "✓ Команда обновления отправлена всем ПК";
+                TxtUpdateClientsStatus.Visibility = Visibility.Visible;
+                BtnUpdateClients.Content = "✓ Отправлено";
+                await Task.Delay(4000);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                BtnUpdateClients.IsEnabled = true;
+                BtnUpdateClients.Content = "⬆️ Обновить все клиенты";
+                TxtUpdateClientsStatus.Visibility = Visibility.Collapsed;
             }
         }
 

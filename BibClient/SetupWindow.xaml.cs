@@ -53,8 +53,8 @@ namespace BibClient
                 PcNumberValue = pcNum,
                 CustomName = "", // По умолчанию пустое, будет "ПК {номер}"
 
-                // ✅ Теперь это работает: пароль хешируется автоматически
-                AdminPassword = "1234",
+                // SHA256 от "1234" — дефолтный пароль до первой смены через админку
+                AdminPasswordHash = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
 
                 ShowPcName = true,
                 ShowPcNumber = true

@@ -80,8 +80,11 @@ namespace BibAdmin
             _server = new ServerHost();
             try
             {
-                await _server.StartAsync(8080);
+                var port = GlobalSettings.Load().ServerPort;
 
+                // Загружаем данные ДО старта сервера, чтобы исключить гонку:
+                // при быстром реконнекте BibClient может успеть обратиться к RegisterClient
+                // ещё до того, как KnownClients будет заполнен сессиями из файла.
                 AdminHub.LoadRegistry();
                 Logger.Info("✅ Реестр клиентов загружен");
 
@@ -97,12 +100,14 @@ namespace BibAdmin
                 ServiceTransaction.LoadHistory();
                 Logger.Info("✅ История услуг загружена");
 
+                await _server.StartAsync(port);
+
                 if (MainFrame.Content is FinancePage financePage)
                     financePage.RefreshUI();
 
                 Dispatcher.Invoke(() =>
                 {
-                    TxtServerStatus.Text = "Сервер запущен :8080";
+                    TxtServerStatus.Text = $"Сервер запущен :{port}";
                     DotServer.Fill = new SolidColorBrush(Color.FromRgb(29, 158, 117));
                 });
 

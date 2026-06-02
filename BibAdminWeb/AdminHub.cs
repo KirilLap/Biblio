@@ -21,6 +21,8 @@ namespace BibAdminWeb
         public static event Action<ClientState>? ClientUpdated;
         public static event Action? ClientsChanged;
         public static event Action<ClientState>? ClientOfflineWithSession;
+        // pcNumber, logContent
+        public static event Action<string, string>? ClientLogsReceived;
 
         // Вызов событий из внешних классов (OperatorHub и т.п.)
         public static void RaiseClientUpdated(ClientState cs) => ClientUpdated?.Invoke(cs);
@@ -30,6 +32,11 @@ namespace BibAdminWeb
         private const double ClockDriftThreshold = 30.0;
         // registeredAs, requestedAs, mac, requestedPcNumberValue, requestedCustomName
         public static event Action<string, string, string, int, string>? ClientNameConflict;
+        // mac, takenPcName, requestedPcNumberValue, requestedCustomName
+        public static event Action<string, string, int, string>? ClientNumberConflict;
+
+        // Блокировка записи сессий — защита от race condition при одновременных вызовах
+        private static readonly object _sessionsLock = new();
 
         // ✅ ДЛЯ ЗАЩИТЫ ОТ ДУБЛЕЙ УВЕДОМЛЕНИЙ
         private static readonly ConcurrentDictionary<string, DateTime> _lastOfflineAlert = new();
@@ -37,8 +44,10 @@ namespace BibAdminWeb
         // MACs для которых конфликт уже показан в этой сессии (не показывать повторно)
         private static readonly HashSet<string> _shownConflicts = new();
 
-        // Ожидание решения администратора по конфликту имён
+        // Ожидание решения администратора по конфликту имён (переименование)
         private static readonly ConcurrentDictionary<string, TaskCompletionSource<(int PcNumberValue, string CustomName)?>> _conflictDecisions = new();
+        // Ожидание решения администратора по конфликту номера (новый ПК)
+        private static readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _numberConflictDecisions = new();
 
         // Лог удалённых ПК
         private static readonly string _deletedPcsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "deleted_pcs.json");
@@ -72,6 +81,12 @@ namespace BibAdminWeb
                 else
                     tcs.TrySetResult(null);
             }
+        }
+
+        public static void ResolveNumberConflict(string mac, bool accept)
+        {
+            if (_numberConflictDecisions.TryRemove(mac, out var tcs))
+                tcs.TrySetResult(accept);
         }
 
         public static bool DeleteClientStatic(string pcNumber)
@@ -122,8 +137,30 @@ namespace BibAdminWeb
                                 if (c.CustomName == "ПК") c.CustomName = "";
                             }
                             c.IsOnline = false;
-                            c.Status = c.IsPaused ? "Пауза" : "Оффлайн";
                             c.LastSeen = DateTime.MinValue;
+
+                            // Очищаем все поля сессии при загрузке реестра.
+                            // Авторитетный источник сессий — active_sessions.json, который загружается
+                            // следом через LoadActiveSessions(). Если оставлять эти поля из registry.json,
+                            // то после перезапуска сервера RegisterClient видит устаревшую сессию
+                            // (сохранённую в реестре при последнем подключении ПК) и восстанавливает
+                            // «призрак» даже если сессия давно завершилась.
+                            c.SessionType = "";
+                            c.SessionStart = null;
+                            c.SessionId = "";
+                            c.IsPaused = false;
+                            c.ElapsedSeconds = 0;
+                            c.AccumulatedSeconds = 0;
+                            c.LimitSeconds = 0;
+                            c.PaidAmount = 0;
+                            c.DisconnectedAt = null;
+                            c.ElapsedAtDisconnect = 0;
+                            c.OfflineDecision = OfflineDecision.None;
+                            c.PendingStartSessionSentAt = null;
+                            c.ReaderId = null;
+                            c.UserName = null;
+                            c.StartedByOperatorName = "";
+                            c.Status = "Оффлайн";
                             KnownClients[c.PcNumber] = c;
                         }
                         Logger.Info($"✅ Загружено {list.Count} клиентов");
@@ -167,45 +204,59 @@ namespace BibAdminWeb
 
         public static void SaveActiveSessions()
         {
-            try
+            lock (_sessionsLock)
             {
-                var active = KnownClients.Values
-                    .Where(c => !string.IsNullOrEmpty(c.SessionType) && c.SessionStart.HasValue)
-                    .Select(c => new
-                    {
-                        PcNumber = c.PcNumber,
-                        SessionType = c.SessionType,
-                        SessionStartUtc = c.SessionStart,
-                        LimitSeconds = c.LimitSeconds,
-                        ElapsedSeconds = c.ElapsedSeconds,
-                        IsPaused = c.IsPaused,
-                        AccumulatedSeconds = c.AccumulatedSeconds,
-                        PaidAmount = c.PaidAmount,
-                        SessionId = c.SessionId,
-                        DisconnectedAtUtc = c.DisconnectedAt?.ToString("o"),
-                        ElapsedAtDisconnect = c.ElapsedAtDisconnect,
-                        OfflineDecision = c.OfflineDecision.ToString(),
-                        SavedAtUtc = DateTime.UtcNow
-                    })
-                    .ToList();
+                try
+                {
+                    var active = KnownClients.Values
+                        .Where(c => !string.IsNullOrEmpty(c.SessionType) && c.SessionStart.HasValue)
+                        .Select(c => new
+                        {
+                            PcNumber = c.PcNumber,
+                            SessionType = c.SessionType,
+                            SessionStartUtc = c.SessionStart,
+                            LimitSeconds = c.LimitSeconds,
+                            ElapsedSeconds = c.ElapsedSeconds,
+                            IsPaused = c.IsPaused,
+                            AccumulatedSeconds = c.AccumulatedSeconds,
+                            PaidAmount = c.PaidAmount,
+                            SessionId = c.SessionId,
+                            DisconnectedAtUtc = c.DisconnectedAt?.ToString("o"),
+                            ElapsedAtDisconnect = c.ElapsedAtDisconnect,
+                            OfflineDecision = c.OfflineDecision.ToString(),
+                            ReaderId = c.ReaderId ?? "",
+                            UserName = c.UserName ?? "",
+                            StartedByOperatorName = c.StartedByOperatorName ?? "",
+                            SavedAtUtc = DateTime.UtcNow
+                        })
+                        .ToList();
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var json = JsonSerializer.Serialize(active, options);
+                    var options = new JsonSerializerOptions { WriteIndented = true };
+                    var json = JsonSerializer.Serialize(active, options);
 
-                var tempPath = SessionsFilePath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                if (File.Exists(SessionsFilePath))
-                    File.Replace(tempPath, SessionsFilePath, null);
-                else
-                    File.Move(tempPath, SessionsFilePath);
+                    var tempPath = SessionsFilePath + ".tmp";
+                    File.WriteAllText(tempPath, json);
+                    if (File.Exists(SessionsFilePath))
+                        File.Replace(tempPath, SessionsFilePath, null);
+                    else
+                        File.Move(tempPath, SessionsFilePath);
+                }
+                catch (Exception ex) { Logger.Error($"❌ SaveActiveSessions: {ex.Message}"); }
             }
-            catch (Exception ex) { Logger.Error($"❌ SaveActiveSessions: {ex.Message}"); }
         }
 
         /// <summary>
         /// Нормализует тип сессии: "По времени" и "По деньгам" → "Лимит".
         /// Обеспечивает совместимость со старыми сохранёнными данными.
         /// </summary>
+        private static string ResolveUpdateStatus(ClientState? prev, string newVersion)
+        {
+            if (prev == null) return "";
+            if (prev.UpdateStatus != "updating" && prev.UpdateStatus != "pending") return "";
+            return !string.IsNullOrEmpty(newVersion) && !string.IsNullOrEmpty(prev.PreUpdateVersion)
+                   && newVersion != prev.PreUpdateVersion ? "done" : "failed";
+        }
+
         private static string NormalizeSessionType(string sessionType) =>
             sessionType is "По времени" or "По деньгам" ? "Лимит" : sessionType;
 
@@ -235,6 +286,15 @@ namespace BibAdminWeb
                     var sessionType = NormalizeSessionType(s.GetProperty("SessionType").GetString() ?? "");
                     if (string.IsNullOrEmpty(sessionType) || sessionType == "Заблокирован" || sessionType == "Свободный")
                         continue;
+
+                    // Пропускаем сессии старше 8 часов (защита от "фантомных" сессий после ночного выключения)
+                    if (s.TryGetProperty("SavedAtUtc", out var savedAtProp) && savedAtProp.GetString() is string savedAtStr &&
+                        DateTime.TryParse(savedAtStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var savedAt) &&
+                        (DateTime.UtcNow - savedAt).TotalHours > 8)
+                    {
+                        Logger.Warn($"⚠️ Сессия {pcNumber} пропущена: устарела (сохранена {savedAt:HH:mm} UTC)");
+                        continue;
+                    }
 
                     DateTime? sessionStart = null;
                     if (s.TryGetProperty("SessionStartUtc", out var startProp))
@@ -285,9 +345,31 @@ namespace BibAdminWeb
                         Enum.TryParse<OfflineDecision>(odProp.GetString(), out var parsedDecision))
                         offlineDecision = parsedDecision;
 
+                    // Вычисляем актуальный elapsed (сколько прошло с учётом времени пока сервер был выключен)
+                    int currentElapsed;
+                    if (isPaused)
+                    {
+                        currentElapsed = accumulatedSeconds;
+                    }
+                    else if (sessionStart.HasValue)
+                    {
+                        currentElapsed = accumulatedSeconds + Math.Max(0, (int)(DateTime.UtcNow - sessionStart.Value).TotalSeconds);
+                    }
+                    else
+                    {
+                        currentElapsed = elapsedSeconds; // fallback: используем сохранённое значение
+                    }
+
+                    // Пропускаем сессии, у которых истёк лимит времени (лимит > 0 и elapsed >= limit)
+                    if (limitSeconds > 0 && currentElapsed >= limitSeconds)
+                    {
+                        Logger.Warn($"⚠️ Сессия {pcNumber} пропущена: лимит истёк ({currentElapsed}с / {limitSeconds}с) — возможно, сессия завершилась пока сервер был выключен");
+                        continue;
+                    }
+
                     client.SessionType = sessionType;
                     client.SessionStart = sessionStart;
-                    client.ElapsedSeconds = elapsedSeconds;
+                    client.ElapsedSeconds = currentElapsed;
                     client.IsPaused = isPaused;
                     client.AccumulatedSeconds = accumulatedSeconds;
                     client.PaidAmount = paidAmount;
@@ -300,12 +382,21 @@ namespace BibAdminWeb
 
                     client.SessionId = sessionIdVal;
                     client.DisconnectedAt = disconnectedAt;
-                    client.ElapsedAtDisconnect = elapsedAtDisconnect; // ✅ СОХРАНЯЕМ!
+                    client.ElapsedAtDisconnect = elapsedAtDisconnect;
                     client.OfflineDecision = offlineDecision;
+
+                    // Восстанавливаем данные читателя и оператора (чтобы после перезапуска сессия
+                    // не становилась «анонимной»)
+                    if (s.TryGetProperty("ReaderId", out var ridProp) && ridProp.GetString() is string rid && !string.IsNullOrEmpty(rid))
+                        client.ReaderId = rid;
+                    if (s.TryGetProperty("UserName", out var unProp) && unProp.GetString() is string un && !string.IsNullOrEmpty(un))
+                        client.UserName = un;
+                    if (s.TryGetProperty("StartedByOperatorName", out var opProp) && opProp.GetString() is string op && !string.IsNullOrEmpty(op))
+                        client.StartedByOperatorName = op;
 
                     KnownClients[pcNumber] = client;
                     restoredCount++;
-                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | {elapsedSeconds}с");
+                    Logger.Info($"🔄 Восстановлена сессия: {pcNumber} | {sessionType} | elapsed={currentElapsed}с (сохранено было {elapsedSeconds}с) | читатель: {client.ReaderId}");
                 }
                 Logger.Info($"✅ Загружено {restoredCount} сессий из файла");
             }
@@ -330,6 +421,8 @@ namespace BibAdminWeb
                 client.IsOnline = false;
                 client.Status = "Оффлайн";
                 client.LastSeen = DateTime.UtcNow;
+                if (client.UpdateStatus == "pending")
+                    client.UpdateStatus = "updating";
 
                 if (client.IsSession)
                 {
@@ -459,12 +552,46 @@ namespace BibAdminWeb
 
             if (existingByMac == null)
             {
-                // Новый клиент - проверяем нет ли конфликта по имени
+                // Новый клиент — если номер занят другим ПК, спрашиваем администратора
+                if (KnownClients.ContainsKey(finalName) && !_shownConflicts.Contains(macAddress))
+                {
+                    _shownConflicts.Add(macAddress);
+                    var takenName = finalName;
+                    Logger.Warn($"⚠️ Новый ПК (MAC {macAddress}) хочет номер уже занятый: '{takenName}'");
+
+                    var tcs = new TaskCompletionSource<bool>();
+                    _numberConflictDecisions[macAddress] = tcs;
+                    ClientNumberConflict?.Invoke(macAddress, takenName, finalPcNumberValue, finalCustomName);
+
+                    bool accepted = false;
+                    try
+                    {
+                        accepted = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                    }
+                    catch (TimeoutException)
+                    {
+                        Logger.Warn($"⏰ Тайм-аут по конфликту номера {macAddress}, авторегистрация");
+                        _numberConflictDecisions.TryRemove(macAddress, out _);
+                        accepted = true;
+                    }
+
+                    if (!accepted)
+                    {
+                        _shownConflicts.Remove(macAddress);
+                        Logger.Info($"🚫 Администратор отклонил регистрацию нового ПК MAC {macAddress}");
+                        return "REJECTED";
+                    }
+                }
+
+                // Найти первый свободный номер, сохраняя CustomName
                 while (KnownClients.ContainsKey(finalName))
                 {
                     finalPcNumberValue++;
-                    finalName = $"ПК {finalPcNumberValue}";
+                    finalName = string.IsNullOrEmpty(finalCustomName)
+                        ? $"ПК {finalPcNumberValue}"
+                        : $"{finalCustomName} {finalPcNumberValue}";
                 }
+                _shownConflicts.Remove(macAddress);
             }
 
             if (existingByMac != null && existingByMac.PcNumber != finalName)
@@ -511,7 +638,17 @@ namespace BibAdminWeb
                 SessionId = !string.IsNullOrEmpty(sessionId) ? sessionId : existingByMac?.SessionId ?? "",
                 DisconnectedAt = null,
                 OfflineDecision = existingByMac?.OfflineDecision ?? OfflineDecision.None,
-                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0, // ✅ КОПИРУЕМ!
+                ElapsedAtDisconnect = existingByMac?.ElapsedAtDisconnect ?? 0,
+                ClientVersion = !string.IsNullOrEmpty(info.ClientVersion) ? info.ClientVersion : (existingByMac?.ClientVersion ?? ""),
+                PreUpdateVersion = existingByMac?.PreUpdateVersion ?? "",
+                UpdateStatus = ResolveUpdateStatus(existingByMac, info.ClientVersion),
+                // Сохраняем данные читателя и оператора — без этого сессия после
+                // перезапуска сервера теряет ReaderId/UserName и записывается анонимной
+                ReaderId = existingByMac?.ReaderId,
+                UserName = existingByMac?.UserName,
+                StartedByOperatorName = existingByMac?.StartedByOperatorName ?? "",
+                // Сохраняем индивидуальный фон (иначе он сбрасывается при реконнекте)
+                BackgroundFileName = existingByMac?.BackgroundFileName ?? "",
             };
 
             KnownClients.AddOrUpdate(finalName, state, (_, _) => state);
@@ -624,6 +761,11 @@ namespace BibAdminWeb
                     ElapsedSeconds = elapsedToSend
                 };
                 await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(restoreCmd));
+
+                // Grace period: клиент пришлёт «Заблокирован» сразу после RegisterClient,
+                // до того как обработает START_SESSION. Ставим метку чтобы UpdateStatus его проигнорировал.
+                client.PendingStartSessionSentAt = DateTime.UtcNow;
+                KnownClients[finalName] = client;
 
                 if (sendPause)
                 {
@@ -757,6 +899,30 @@ namespace BibAdminWeb
             }
         }
 
+        /// <summary>Клиент отправляет содержимое своего лог-файла по запросу GET_LOGS.</summary>
+        public Task ReportLogs(string pcNumber, string logContent)
+        {
+            Logger.Info($"📋 {pcNumber}: получены логи ({logContent.Length} символов)");
+            ClientLogsReceived?.Invoke(pcNumber, logContent);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Клиент сообщает что обновление не состоялось: "no_update" — версия та же, "download_failed" — ошибка загрузки.
+        /// </summary>
+        public Task ReportUpdateResult(string pcNumber, string reason)
+        {
+            if (KnownClients.TryGetValue(pcNumber, out var client) &&
+                (client.UpdateStatus == "pending" || client.UpdateStatus == "updating"))
+            {
+                client.UpdateStatus = reason == "no_update" ? "" : "failed";
+                KnownClients[pcNumber] = client;
+                ClientUpdated?.Invoke(client);
+                Logger.Info($"⬆️ {pcNumber}: ReportUpdateResult={reason} → UpdateStatus='{client.UpdateStatus}'");
+            }
+            return Task.CompletedTask;
+        }
+
         public async Task UpdateStatus(string pcNumber, string status, string sessionType, int elapsedSeconds)
         {
             if (!KnownClients.TryGetValue(pcNumber, out var client)) return;
@@ -764,8 +930,46 @@ namespace BibAdminWeb
             client.LastSeen = DateTime.UtcNow;
             client.IsOnline = true;
 
+            // Клиент явно сообщает что заблокирован — очищаем сессию немедленно.
+            // Guard 2 ниже некорректно глотает этот статус (elapsed==0), поэтому обрабатываем первым.
+            if (status == "Заблокирован")
+            {
+                // Grace period: после реконнекта клиент всегда шлёт «Заблокирован» сразу после RegisterClient,
+                // до того как получает и обрабатывает START_SESSION. Игнорируем в течение 15 секунд.
+                if (client.PendingStartSessionSentAt.HasValue &&
+                    (DateTime.UtcNow - client.PendingStartSessionSentAt.Value).TotalSeconds < 15)
+                {
+                    Logger.Info($"⏭️ {pcNumber}: Заблокирован проигнорирован (grace period, ожидается старт восстановленной сессии)");
+                    client.LastSeen = DateTime.UtcNow;
+                    KnownClients[pcNumber] = client;
+                    return;
+                }
+                bool hadSession = !string.IsNullOrEmpty(client.SessionType) && client.SessionStart.HasValue;
+                bool deferredUpdate = client.UpdateStatus == "deferred";
+                client.Status = "Заблокирован";
+                client.SessionType = "";
+                client.SessionStart = null;
+                client.ElapsedSeconds = 0;
+                client.LimitSeconds = 0;
+                client.IsPaused = false;
+                client.AccumulatedSeconds = 0;
+                client.PendingStartSessionSentAt = null;
+                if (deferredUpdate) client.UpdateStatus = "pending";
+                KnownClients[pcNumber] = client;
+                ClientUpdated?.Invoke(client);
+                if (hadSession) SaveActiveSessions();
+                Logger.Info($"🔒 {pcNumber}: клиент заблокирован{(hadSession ? " — сессия очищена" : "")}");
+                if (deferredUpdate)
+                {
+                    var updateJson = JsonSerializer.Serialize(new { Type = "UPDATE_NOW", Value = "" });
+                    await Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", updateJson);
+                    Logger.Info($"⬆️ {pcNumber}: отправлена отложенная команда UPDATE_NOW");
+                }
+                return;
+            }
+
             if (string.IsNullOrEmpty(client.SessionType) && !client.SessionStart.HasValue &&
-                status != "Заблокирован" && status != "Свободный")
+                status != "Свободный")
             {
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
@@ -776,7 +980,7 @@ namespace BibAdminWeb
             {
                 // Применяем IsPaused как приоритет — клиент ещё не прислал elapsed,
                 // но пауза уже стоит на сервере (например, решение администратора).
-                if (status != "Заблокирован" && status != "Свободный")
+                if (status != "Свободный")
                     client.Status = client.IsPaused ? "Пауза" : status;
                 KnownClients[pcNumber] = client;
                 ClientUpdated?.Invoke(client);
@@ -785,6 +989,7 @@ namespace BibAdminWeb
 
             if (elapsedSeconds > 0)
             {
+                client.PendingStartSessionSentAt = null; // сессия запущена — grace period больше не нужен
                 client.ElapsedSeconds = elapsedSeconds;
                 client.SessionStart = DateTime.UtcNow.AddSeconds(-elapsedSeconds);
                 if (!client.IsPaused)
@@ -1273,6 +1478,7 @@ namespace BibAdminWeb
         public double DiskFreeGb { get; set; }
         public double UptimeHours { get; set; }
         public string ClientTimeUtc { get; set; } = "";
+        public string ClientVersion { get; set; } = "";
         // ✅ Новые поля для разделения имени и номера
         public int PcNumberValue { get; set; }
         public string CustomName { get; set; } = "";

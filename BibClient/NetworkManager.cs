@@ -20,7 +20,21 @@ namespace BibClient
         // Срабатывает после успешной регистрации на сервере
         public event Action? OnRegistered;
 
-        public NetworkManager(string serverUrl) { _serverUrl = serverUrl; }
+        public NetworkManager(string serverUrl)
+        {
+            _serverUrl = serverUrl;
+            UpdateChecker.UpdateFailed += async reason =>
+            {
+                Logger.Info($"⬆️ Обновление не состоялось ({reason}) — сообщаем серверу");
+                await ReportUpdateResultAsync(reason);
+            };
+            PolicyEngine.LogsReady += async logContent =>
+            {
+                if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
+                try { await _hub.InvokeAsync("ReportLogs", _pcNumber, logContent); }
+                catch (Exception ex) { Logger.Error($"❌ Ошибка отправки логов: {ex.Message}"); }
+            };
+        }
 
         // Бесконечная политика реконнекта: 2s, 5s, 10s, 30s, 30s, ...
         private sealed class InfiniteRetryPolicy : IRetryPolicy
@@ -109,26 +123,35 @@ namespace BibClient
                     DiskFreeGb = GetDiskFreeGb(),
                     UptimeHours = GetUptimeHours(),
                     PcNumberValue = SettingsManager.Current.PcNumberValue,
-                    CustomName = SettingsManager.Current.CustomName
+                    CustomName = SettingsManager.Current.CustomName,
+                    ClientVersion = UpdateChecker.CurrentVersion
                 };
 
                 // Читаем heartbeat-файл: SessionId и время последнего пульса → offline duration
                 var heartbeat = SessionManager.ReadHeartbeat();
                 string sessionId = heartbeat?.sessionId ?? "";
                 int offlineSeconds = 0;
-                if (heartbeat.HasValue && IsRestoring)
+
+                // Если heartbeat существует — значит на клиенте была активная сессия.
+                // Даже если IsRestoring уже сброшен (например, сервер перезапустился пока
+                // клиент работал), мы всё равно восстанавливаем режим, чтобы:
+                //   1) Не слать «Заблокирован» после регистрации (иначе сервер сбросит сессию)
+                //   2) Корректно передать время оффлайна для верификации тайминга
+                bool effectivelyRestoring = IsRestoring || heartbeat.HasValue;
+
+                if (heartbeat.HasValue)
                 {
                     offlineSeconds = Math.Max(0, (int)(DateTime.UtcNow - heartbeat.Value.lastSync).TotalSeconds);
-                    Logger.Info($"🕐 Heartbeat: lastSync={heartbeat.Value.lastSync:HH:mm:ss}, offline={offlineSeconds}с, sessionId={sessionId[..Math.Min(8, sessionId.Length)]}…");
+                    Logger.Info($"🕐 Heartbeat: lastSync={heartbeat.Value.lastSync:HH:mm:ss}, offline={offlineSeconds}с, sessionId={sessionId[..Math.Min(8, sessionId.Length)]}… (effectivelyRestoring={effectivelyRestoring})");
                 }
 
-                _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", info, info.MacAddress, IsRestoring, sessionId, offlineSeconds);
+                _pcNumber = await _hub.InvokeAsync<string>("RegisterClient", info, info.MacAddress, effectivelyRestoring, sessionId, offlineSeconds);
 
                 // При регистрации сервер возвращает полное имя (например, "Комп 10" или "ПК 10")
                 // Но нам НЕ нужно парсить его через сеттер PcNumber, чтобы избежать дублирования номера
                 // Вместо этого просто сохраняем для отображения, но не трогаем CustomName/PcNumberValue
                 Logger.Info($"✅ Зарегистрирован как: {_pcNumber}");
-                if (!IsRestoring) await SendStatusAsync("Заблокирован");
+                if (!effectivelyRestoring) await SendStatusAsync("Заблокирован");
                 OnRegistered?.Invoke();
             }
             catch (Exception ex) { Logger.Error($"❌ Ошибка регистрации: {ex.Message}"); }
@@ -137,7 +160,9 @@ namespace BibClient
         public async Task SendStatusAsync(string status)
         {
             if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
-            if (IsRestoring && status == "Заблокирован") return;
+            // Защита: не посылаем «Заблокирован» пока идёт восстановление сессии.
+            // Проверяем и IsRestoring (начальная загрузка), и наличие heartbeat (реконнект при перезапуске сервера).
+            if (status == "Заблокирован" && (IsRestoring || SessionManager.ReadHeartbeat().HasValue)) return;
             try
             {
                 var sessionType = PolicyEngine.ActiveSessionType;
@@ -149,6 +174,17 @@ namespace BibClient
                 Logger.Info($"✅ Статус отправлен: {status}");
             }
             catch (Exception ex) { Logger.Error($"❌ Ошибка отправки статуса: {ex.Message}"); }
+        }
+
+        private async Task ReportUpdateResultAsync(string reason)
+        {
+            if (!_isConnected || _hub == null || string.IsNullOrEmpty(_pcNumber)) return;
+            try
+            {
+                await _hub.InvokeAsync("ReportUpdateResult", _pcNumber, reason);
+                Logger.Info($"✅ Результат обновления отправлен: {reason}");
+            }
+            catch (Exception ex) { Logger.Error($"❌ Ошибка отправки результата обновления: {ex.Message}"); }
         }
 
         public async Task SendStatusUpdateAsync(string sessionType, int elapsedSeconds)

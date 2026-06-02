@@ -58,18 +58,12 @@ namespace BibClient
         public string ServerIp { get; set; } = "127.0.0.1";
         public int ServerPort { get; set; } = 8080;
 
-        // ✅ Хеш пароля (хранится, читается)
-        public string AdminPasswordHash { get; set; } = "81DC9BDB52D04DC20036DBD8313ED055"; // MD5 от "1234"
-
-        // ✅ Пароль (только запись — при установке сразу хешируется)
-        public string AdminPassword
-        {
-            set { AdminPasswordHash = HashPassword(value); }
-        }
+        // SHA256-хеш пароля (хранится, читается)
+        public string AdminPasswordHash { get; set; } = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 от "1234"
 
         public bool ShowPcName { get; set; } = true;       // Показывать имя (например, "ПК" или "Комп")
         public bool ShowPcNumber { get; set; } = true;      // Показывать цифровой номер (например, "1")
-        public double PcNumberFontSize { get; set; } = 52;
+        public double PcNumberFontSize { get; set; } = 150;
         public string PcNumberPosition { get; set; } = "MiddleCenter";
         public bool ShowLockedText { get; set; } = true;
         public double LockedTextFontSize { get; set; } = 16;
@@ -77,6 +71,18 @@ namespace BibClient
         public string TimePosition { get; set; } = "BottomCenter";
         public double TimeFontSize { get; set; } = 36;
         public double BackgroundOpacity { get; set; } = 0.3;
+
+        // Общий отступ от краёв монитора (пиксели) для всех панелей
+        public int ScreenOffsetX { get; set; } = 0;
+        public int ScreenOffsetY { get; set; } = 0;
+
+        // Показывать иконку онлайн/офлайн (красный/зелёный кружок)
+        public bool ShowStatusDot { get; set; } = true;
+
+        // Порядок стекинга когда несколько элементов на одной позиции (меньше = выше)
+        public int PcNumberOrder { get; set; } = 1;
+        public int LockedTextOrder { get; set; } = 2;
+        public int TimeOrder { get; set; } = 3;
         public string BackgroundImagePath { get; set; } = "";
         public int Tariff { get; set; } = 3000;
 
@@ -100,12 +106,11 @@ namespace BibClient
 
         public static string HashPassword(string password)
         {
-            using var md5 = MD5.Create();
-            var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(password));
-            var sb = new StringBuilder();
-            foreach (var b in bytes) sb.Append(b.ToString("x2"));
-            return sb.ToString();
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
+            return Convert.ToHexString(bytes).ToLowerInvariant();
         }
+
+        public static bool IsHash(string value) => value.Length == 64 && value.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
 
         public static bool VerifyPassword(string password, string hash) => HashPassword(password) == hash;
     }
@@ -153,6 +158,12 @@ namespace BibClient
                         Current.BlockInstall = loaded.BlockInstall;
                         Current.PreventClose = loaded.PreventClose;
                         Current.AutoStartWithUser = loaded.AutoStartWithUser;
+                        Current.ScreenOffsetX = loaded.ScreenOffsetX;
+                        Current.ScreenOffsetY = loaded.ScreenOffsetY;
+                        Current.ShowStatusDot = loaded.ShowStatusDot;
+                        Current.PcNumberOrder = loaded.PcNumberOrder;
+                        Current.LockedTextOrder = loaded.LockedTextOrder;
+                        Current.TimeOrder = loaded.TimeOrder;
                     }
                 }
             }

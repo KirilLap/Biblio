@@ -192,6 +192,8 @@ body {
 
 .pc-meta { font-size: 11px; color: #555; margin-bottom: 12px; line-height: 1.6; }
 .pc-meta span { display: block; }
+.pc-ver        { font-size: 10px; color: #888; }
+.pc-ver.pc-ver-old { color: #f59e0b; font-weight: 600; }
 
 .pc-actions {
   display: flex;
@@ -317,6 +319,50 @@ body {
   border: 1px solid #222240;
 }
 .settings-card.full-width { grid-column: 1 / -1; }
+
+/* ── Settings tabs ────────────────────────────────────────── */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #222240;
+}
+.stab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 18px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: 0;
+}
+.stab:hover { color: #ccc; }
+.stab.active { color: #1d9e75; border-bottom-color: #1d9e75; }
+
+.stab-panel { display: none; }
+.stab-panel.active { display: block; }
+
+.settings-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-hint {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
 .settings-card h3 {
   font-size: 14px;
   font-weight: 600;
@@ -399,6 +445,7 @@ body {
   box-shadow: 0 20px 60px rgba(0,0,0,.6);
 }
 .dlg-warn { border-color: #5a3010; }
+.dlg-wide { width: min(900px, 92vw); }
 .dlg-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; color: #e0e0f0; }
 .dlg .form-row input, .dlg .form-row select {
   background: #111128; border: 1px solid #333355; border-radius: 7px;
@@ -436,6 +483,79 @@ body {
 #ssBtnVip.active .ss-type-label { color: #f59e0b; }
 .ss-type-icon { font-size: 20px; margin-bottom: 4px; }
 .ss-type-label { font-size: 12px; font-weight: 600; color: #666; }
+
+/* ── Offset row: slider + number input ─────────────────── */
+.offset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.offset-row input[type="range"]  { flex: 1; min-width: 0; }
+.offset-row input[type="number"] { width: 62px; text-align: right; padding: 4px 6px; background: #1a1a2e; border: 1px solid #3a3a5c; border-radius: 4px; color: #eee; font-size: 13px; }
+.offset-row .unit { color: #888; font-size: 12px; white-space: nowrap; }
+
+/* ── Lock screen preview (9-zone grid) ──────────────────── */
+#lockScreenPreview {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  background: #12121f;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 2px solid #2a2a4a;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+/* Слой затемнения поверх фона (opacity управляется через --pv-dim) */
+#lockScreenPreview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--pv-dim, 0.3));
+  z-index: 1;
+  pointer-events: none;
+}
+/* Пунктирная рамка отступа — поверх чипов */
+#lockScreenPreview::after {
+  content: '';
+  position: absolute;
+  inset: var(--pv-oy, 0px) var(--pv-ox, 0px);
+  border: 1px dashed rgba(255,255,255,0.35);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 3;
+}
+/* Ячейки сетки — поверх затемнения, но под рамкой */
+.pv-cell { display: flex; flex-direction: column; gap: 2px; padding: 4px; overflow: hidden; position: relative; z-index: 2; }
+.pv-tl { align-items: flex-start; justify-content: flex-start; }
+.pv-tc { align-items: center;     justify-content: flex-start; }
+.pv-tr { align-items: flex-end;   justify-content: flex-start; }
+.pv-ml { align-items: flex-start; justify-content: center; }
+.pv-mc { align-items: center;     justify-content: center; }
+.pv-mr { align-items: flex-end;   justify-content: center; }
+.pv-bl { align-items: flex-start; justify-content: flex-end; }
+.pv-bc { align-items: center;     justify-content: flex-end; }
+.pv-br { align-items: flex-end;   justify-content: flex-end; }
+/* font-size задаётся динамически через JS в зависимости от слайдера */
+.pv-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pv-pc     { background: rgba(58, 111, 216, 0.85); }
+.pv-locked { background: rgba(192,  57,  43, 0.85); }
+.pv-time   { background: rgba( 26, 122,  90, 0.85); }
 
 /* ── Lock screen section dividers in settings ──────────── */
 .lock-section-sep {
@@ -562,3 +682,45 @@ body {
   z-index: 10000;
 }
 .ctx-sub:hover > .ctx-sub-panel { display: block; }
+
+/* ── Radio buttons (session dialog) ── */
+.radio-group { display: flex; gap: 16px; margin-top: 4px; }
+.radio-opt { color: #AAAACC; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+
+/* ── PC card selected state ─────────────────────────────── */
+.pc-card.selected { border-color: #4a90d9; box-shadow: 0 0 0 3px rgba(74,144,217,.2); }
+.pc-card { cursor: pointer; }
+
+/* ── Bottom action bar ──────────────────────────────────── */
+.action-bar {
+  position: fixed;
+  bottom: 0; left: 200px; right: 0;
+  background: #16162a;
+  border-top: 1px solid #222240;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 300;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.4);
+}
+.action-bar.hidden { display: none; }
+.ab-pc-name { color: #e0e0f0; font-size: 15px; font-weight: 700; min-width: 80px; }
+.ab-status  { color: #888;    font-size: 13px; min-width: 90px; }
+.ab-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.ab-btn {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: opacity .15s;
+}
+.ab-btn:hover { opacity: .85; }
+.ab-btn.green { background: #1d9e75; color: #fff; }
+.ab-btn.red   { background: #5a2020; border-color: #8b3030; color: #f87171; }
+.ab-btn.amber { background: #3d2a00; border-color: #8b6000; color: #ffc040; }
+.ab-btn.blue  { background: #1a3a6a; border-color: #2a5aa0; color: #90c0ff; }
+

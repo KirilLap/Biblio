@@ -121,6 +121,10 @@
                         Content="📊  Всё"
                         Style="{StaticResource TabBtn}"
                         Click="TabAll_Click"/>
+                <Button x:Name="BtnTabDebts"
+                        Content="⚠  Долги"
+                        Style="{StaticResource TabBtn}"
+                        Click="TabDebts_Click"/>
             </StackPanel>
         </Border>
 
@@ -236,6 +240,26 @@
                     </ComboBox>
                 </StackPanel>
 
+                <!-- Кнопка «Обновить» для вкладки Долги -->
+                <Button x:Name="BtnRefreshDebts"
+                        Content="↺ Обновить"
+                        Visibility="Collapsed"
+                        Padding="12,4" FontSize="12" Cursor="Hand"
+                        BorderThickness="1" BorderBrush="#DDDDDD"
+                        Background="White" Foreground="#555"
+                        Click="RefreshDebts_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
                 <TextBlock x:Name="TxtFilterResult"
                            Foreground="#888" FontSize="12"
                            VerticalAlignment="Center"
@@ -323,6 +347,29 @@
                     </Grid>
                 </Border>
 
+                <!-- Заголовок: Долги -->
+                <Border x:Name="HeaderDebts"
+                        Grid.Row="0" Background="#FFF8F0"
+                        CornerRadius="10,10,0,0" Padding="16,10"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="120"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="ПК"          Foreground="#854F0B" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="1" Text="Услуга"      Foreground="#854F0B" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="2" Text="Читатель"    Foreground="#854F0B" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="3" Text="Долг"        Foreground="#854F0B" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="4" Text="Дата"        Foreground="#854F0B" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Grid.Column="5" Text="Действие"    Foreground="#854F0B" FontSize="12" FontWeight="Medium"/>
+                    </Grid>
+                </Border>
+
                 <!-- Содержимое -->
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
@@ -330,6 +377,7 @@
                         <StackPanel x:Name="DeletedPcsList"/>
                         <StackPanel x:Name="ServicesList" Visibility="Collapsed"/>
                         <StackPanel x:Name="AllList" Visibility="Collapsed"/>
+                        <StackPanel x:Name="DebtsList" Visibility="Collapsed"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

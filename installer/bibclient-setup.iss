@@ -1,0 +1,75 @@
+#define AppName    "Biblio"
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
+#define AppPublisher "Biblio"
+#define SrcClient    "..\BibClient\bin\Publish\win-x64"
+
+[Setup]
+AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppPublisher={#AppPublisher}
+DefaultDirName={autopf}\Biblio
+OutputDir=Output
+OutputBaseFilename=bibclient-setup-{#AppVersion}
+Compression=lzma2/max
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=admin
+ArchitecturesInstallIn64BitMode=x64compatible
+DisableWelcomePage=yes
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+CreateUninstallRegKey=no
+Uninstallable=no
+
+[Languages]
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+
+[Files]
+; Основные файлы — settings.json исключён, чтобы не перезаписать настройки при обновлении
+Source: "{#SrcClient}\*"; DestDir: "{app}\BibClient"; \
+    Flags: ignoreversion recursesubdirs createallsubdirs; \
+    Excludes: "settings.json"
+; Файл настроек — копируется только при первой установке (если файла ещё нет)
+Source: "{#SrcClient}\settings.json"; DestDir: "{app}\BibClient"; \
+    Flags: onlyifdoesntexist skipifsourcedoesntexist
+
+[Run]
+Filename: "sc.exe"; \
+    Parameters: "create BibClientWatchdog binPath= ""{app}\BibClient\BibClientService.exe"" start= auto DisplayName= ""BibClient Watchdog"""; \
+    Flags: runhidden waituntilterminated
+Filename: "sc.exe"; \
+    Parameters: "failure BibClientWatchdog reset= 0 actions= restart/5000/restart/5000/restart/5000"; \
+    Flags: runhidden waituntilterminated
+Filename: "sc.exe"; Parameters: "start BibClientWatchdog"; \
+    Flags: runhidden waituntilterminated
+
+[UninstallRun]
+Filename: "sc.exe"; Parameters: "stop BibClientWatchdog";   Flags: runhidden
+Filename: "sc.exe"; Parameters: "delete BibClientWatchdog"; Flags: runhidden
+
+[Code]
+procedure StopRunningProcesses();
+var
+  ResultCode: Integer;
+begin
+  // Останавливаем службу и сразу удаляем — при обновлении sc create иначе падает
+  // с ошибкой "служба уже существует". После установки [Run] создаст её заново.
+  Exec('sc.exe', 'stop BibClientWatchdog',   '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(2000);
+  Exec('sc.exe', 'delete BibClientWatchdog', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibClientGuardian.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/f /im BibClient.exe',         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopRunningProcesses();
+  Result := '';
+end;
+
+// BibClient НЕ запускается здесь — инсталлятор работает от SYSTEM в Session 0
+// и не может показать UI пользователю. После sc start BibClientWatchdog служба
+// сама запустит BibClient.exe в сессии пользователя через CreateProcessAsUser.

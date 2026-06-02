@@ -13,7 +13,7 @@ namespace BibAdminWeb
 
         public static async Task CheckAsync()
         {
-            var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "version.json");
+            var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates", "bibadminweb-version.json");
             if (!File.Exists(versionFile)) return;
 
             VersionInfo? info = null;
@@ -46,6 +46,10 @@ namespace BibAdminWeb
                     "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+
+            // Помечаем что это перезапуск после обновления — браузер открывать не нужно
+            var flagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update_restart.flag");
+            File.WriteAllText(flagPath, DateTime.UtcNow.ToString("o"));
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {

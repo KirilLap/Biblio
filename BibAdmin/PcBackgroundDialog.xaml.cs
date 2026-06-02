@@ -26,7 +26,7 @@ namespace BibAdmin
             try
             {
                 _hub = new HubConnectionBuilder()
-                    .WithUrl("http://localhost:8080/hub")
+                    .WithUrl($"http://localhost:{GlobalSettings.Load().ServerPort}/hub")
                     .Build();
                 await _hub.StartAsync();
             }

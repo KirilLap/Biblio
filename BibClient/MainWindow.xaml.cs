@@ -29,6 +29,7 @@ namespace BibClient
 
         private SessionManager? _sessionManager = null;
         private TrayIcon? _trayIcon = null;
+        private bool _sessionExpiredHandled = false;
 
         // true — экран заблокирован из-за потери сети, сессия при этом жива
         private bool _isOfflineLocked = false;
@@ -132,7 +133,6 @@ namespace BibClient
                 Dispatcher.Invoke(() =>
                 {
                     NetDot.Fill = isConnected ? WpfBrushes.Green : WpfBrushes.Red;
-                    NetStatusText.Text = isConnected ? "Онлайн" : "Оффлайн";
 
                     if (!isConnected && _sessionManager != null && PolicyEngine.LockOnOffline && !_isOfflineLocked)
                     {
@@ -283,7 +283,8 @@ namespace BibClient
             TxtTime.FontSize = _settings.TimeFontSize;
 
             // ── Фон ──────────────────────────────────────────────────────────────
-            BgImage.Opacity = _settings.BackgroundOpacity;
+            // BackgroundOpacity управляет затемнением поверх фото, не самим фото
+            DimOverlay.Opacity = _settings.BackgroundOpacity;
 
             if (!string.IsNullOrEmpty(_settings.BackgroundImagePath) && File.Exists(_settings.BackgroundImagePath))
             {
@@ -295,35 +296,100 @@ namespace BibClient
                 catch (Exception ex) { Logger.Error($"Ошибка загрузки фона: {ex.Message}"); }
             }
 
-            // ── Позиции ──────────────────────────────────────────────────────────
-            ApplyPosition(PanelCenter, _settings.PcNumberPosition);
-            ApplyPosition(PanelTime, _settings.TimePosition);
+            // ── Позиции, стекинг, отступы ────────────────────────────────────────
+            RebuildLayout();
         }
 
-        // Переводит строку-позицию ("TopLeft", "MiddleCenter", …) в выравнивание WPF
-        private static void ApplyPosition(FrameworkElement? element, string position)
+        // Перестраивает расположение панелей с учётом стекинга и отступов.
+        // Вызывается при каждом изменении настроек позиций/порядка/отступов.
+        private void RebuildLayout()
         {
-            if (element == null) return;
+            var s = _settings;
 
-            VerticalAlignment va;
-            WpfHorizontalAlignment ha;
+            // Иконка онлайн
+            NetDot.Visibility = s.ShowStatusDot ? Visibility.Visible : Visibility.Collapsed;
 
-            switch (position)
+            // Убираем старые обёртки, возвращая вложенные панели обратно в LayoutGrid
+            var oldWrappers = LayoutGrid.Children
+                .OfType<StackPanel>()
+                .Where(sp => sp.Tag?.ToString() == "group-wrapper")
+                .ToList();
+            foreach (var w in oldWrappers)
             {
-                case "TopLeft":      va = VerticalAlignment.Top;    ha = WpfHorizontalAlignment.Left;   break;
-                case "TopCenter":    va = VerticalAlignment.Top;    ha = WpfHorizontalAlignment.Center; break;
-                case "TopRight":     va = VerticalAlignment.Top;    ha = WpfHorizontalAlignment.Right;  break;
-                case "MiddleLeft":   va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Left;   break;
-                case "MiddleCenter": va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Center; break;
-                case "MiddleRight":  va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Right;  break;
-                case "BottomLeft":   va = VerticalAlignment.Bottom; ha = WpfHorizontalAlignment.Left;   break;
-                case "BottomCenter": va = VerticalAlignment.Bottom; ha = WpfHorizontalAlignment.Center; break;
-                case "BottomRight":  va = VerticalAlignment.Bottom; ha = WpfHorizontalAlignment.Right;  break;
-                default:             va = VerticalAlignment.Center; ha = WpfHorizontalAlignment.Center; break;
+                var nested = w.Children.OfType<StackPanel>().ToList();
+                w.Children.Clear();
+                foreach (var child in nested)
+                    LayoutGrid.Children.Add(child);
+                LayoutGrid.Children.Remove(w);
             }
+
+            // Видимость панели "Заблокировано"
+            PanelLocked.Visibility = s.ShowLockedText ? Visibility.Visible : Visibility.Collapsed;
+
+            // Группируем панели по позиции
+            var groups = new Dictionary<string, List<(StackPanel panel, int order)>>();
+            void Add(string pos, StackPanel panel, int order)
+            {
+                if (!groups.ContainsKey(pos)) groups[pos] = new();
+                groups[pos].Add((panel, order));
+            }
+            Add(s.PcNumberPosition, PanelCenter, s.PcNumberOrder);
+            if (s.ShowLockedText) Add(s.LockedTextPosition, PanelLocked, s.LockedTextOrder);
+            Add(s.TimePosition, PanelTime, s.TimeOrder);
+
+            foreach (var (pos, items) in groups)
+            {
+                if (items.Count == 1)
+                {
+                    ApplyPositionWithOffset(items[0].panel, pos, s.ScreenOffsetX, s.ScreenOffsetY);
+                }
+                else
+                {
+                    // Несколько элементов на одной позиции — оборачиваем в общий StackPanel
+                    var wrapper = new StackPanel
+                    {
+                        Tag = "group-wrapper",
+                        Orientation = System.Windows.Controls.Orientation.Vertical
+                    };
+                    foreach (var (panel, _) in items.OrderBy(x => x.order))
+                    {
+                        // Нормализуем горизонтальное выравнивание внутри обёртки
+                        panel.HorizontalAlignment = WpfHorizontalAlignment.Stretch;
+                        LayoutGrid.Children.Remove(panel);
+                        wrapper.Children.Add(panel);
+                    }
+                    LayoutGrid.Children.Add(wrapper);
+                    ApplyPositionWithOffset(wrapper, pos, s.ScreenOffsetX, s.ScreenOffsetY);
+                }
+            }
+        }
+
+        // Применяет позицию и отступ от ближайшего края монитора
+        private static void ApplyPositionWithOffset(FrameworkElement element, string position, int offsetX, int offsetY)
+        {
+            (VerticalAlignment va, WpfHorizontalAlignment ha) = position switch
+            {
+                "TopLeft"      => (VerticalAlignment.Top,    WpfHorizontalAlignment.Left),
+                "TopCenter"    => (VerticalAlignment.Top,    WpfHorizontalAlignment.Center),
+                "TopRight"     => (VerticalAlignment.Top,    WpfHorizontalAlignment.Right),
+                "MiddleLeft"   => (VerticalAlignment.Center, WpfHorizontalAlignment.Left),
+                "MiddleCenter" => (VerticalAlignment.Center, WpfHorizontalAlignment.Center),
+                "MiddleRight"  => (VerticalAlignment.Center, WpfHorizontalAlignment.Right),
+                "BottomLeft"   => (VerticalAlignment.Bottom, WpfHorizontalAlignment.Left),
+                "BottomCenter" => (VerticalAlignment.Bottom, WpfHorizontalAlignment.Center),
+                "BottomRight"  => (VerticalAlignment.Bottom, WpfHorizontalAlignment.Right),
+                _              => (VerticalAlignment.Center, WpfHorizontalAlignment.Center),
+            };
 
             element.VerticalAlignment = va;
             element.HorizontalAlignment = ha;
+
+            // Отступ применяется только к «прижатым» краям; по центру — 0
+            double left   = ha == WpfHorizontalAlignment.Left   ? offsetX : 0;
+            double right  = ha == WpfHorizontalAlignment.Right  ? offsetX : 0;
+            double top    = va == VerticalAlignment.Top          ? offsetY : 0;
+            double bottom = va == VerticalAlignment.Bottom       ? offsetY : 0;
+            element.Margin = new Thickness(left, top, right, bottom);
         }
 
         private void StartClock()
@@ -368,6 +434,7 @@ namespace BibClient
             this.Hide();
 
             // 3. Создаём SessionManager (с восстановленным временем если нужно)
+            _sessionExpiredHandled = false;
             _sessionManager = new SessionManager(
                 sessionType,
                 limitSeconds,
@@ -400,6 +467,8 @@ namespace BibClient
 
         private void OnSessionExpiredInternal()
         {
+            if (_sessionExpiredHandled) return;
+            _sessionExpiredHandled = true;
             Logger.Info("Сессия завершена — блокируем ПК");
 
             // 1. Очищаем менеджер сессии

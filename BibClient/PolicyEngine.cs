@@ -51,6 +51,8 @@ namespace BibClient
 
         // Фаза 4: дрейф системных часов — offsetSeconds > 0 → клиент отстаёт
         public static event Action<double>? ClockMismatchDetected;
+        /// <summary>Вызывается с содержимым лог-файла когда сервер запрашивает GET_LOGS.</summary>
+        public static event Action<string>? LogsReady;
 
         public static async Task HandleCommand(string json)
         {
@@ -106,7 +108,8 @@ namespace BibClient
                         break;
 
                     case "EXTEND_SESSION":
-                        ExtendSessionRequested?.Invoke(int.TryParse(value, out int extSecs) ? extSecs : 0);
+                        if (int.TryParse(value, out int extSecs) && extSecs > 0)
+                            ExtendSessionRequested?.Invoke(extSecs);
                         break;
 
                     case "END_SESSION":
@@ -190,7 +193,7 @@ namespace BibClient
                     case "SET_PC_NUMBER_FONT_SIZE":
                         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double pcFont))
                         {
-                            SettingsManager.Current.PcNumberFontSize = Math.Clamp(pcFont, 8, 200);
+                            SettingsManager.Current.PcNumberFontSize = Math.Clamp(pcFont, 8, 400);
                             SettingsManager.Save();
                             SettingsChanged?.Invoke();
                         }
@@ -221,6 +224,57 @@ namespace BibClient
                         SettingsManager.Current.TimePosition = value;
                         SettingsManager.Save();
                         SettingsChanged?.Invoke();
+                        break;
+
+                    case "SET_SCREEN_OFFSET_X":
+                        if (int.TryParse(value, out int offX))
+                        {
+                            SettingsManager.Current.ScreenOffsetX = Math.Clamp(offX, 0, 500);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SET_SCREEN_OFFSET_Y":
+                        if (int.TryParse(value, out int offY))
+                        {
+                            SettingsManager.Current.ScreenOffsetY = Math.Clamp(offY, 0, 500);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SHOW_STATUS_DOT":
+                        SettingsManager.Current.ShowStatusDot = value.ToLower() == "true";
+                        SettingsManager.Save();
+                        SettingsChanged?.Invoke();
+                        break;
+
+                    case "SET_PC_NUMBER_ORDER":
+                        if (int.TryParse(value, out int pcOrd))
+                        {
+                            SettingsManager.Current.PcNumberOrder = Math.Clamp(pcOrd, 1, 10);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SET_LOCKED_TEXT_ORDER":
+                        if (int.TryParse(value, out int lockedOrd))
+                        {
+                            SettingsManager.Current.LockedTextOrder = Math.Clamp(lockedOrd, 1, 10);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
+                        break;
+
+                    case "SET_TIME_ORDER":
+                        if (int.TryParse(value, out int timeOrd))
+                        {
+                            SettingsManager.Current.TimeOrder = Math.Clamp(timeOrd, 1, 10);
+                            SettingsManager.Save();
+                            SettingsChanged?.Invoke();
+                        }
                         break;
 
                     case "SET_TIME_FONT_SIZE":
@@ -272,8 +326,10 @@ namespace BibClient
                     case "ADMIN_PASSWORD":
                         if (!string.IsNullOrEmpty(value))
                         {
-                            // Setter хеширует пароль через MD5 перед сохранением
-                            SettingsManager.Current.AdminPassword = value;
+                            // Если пришёл уже SHA256-хеш — сохраняем напрямую, иначе хешируем
+                            SettingsManager.Current.AdminPasswordHash = ClientSettings.IsHash(value)
+                                ? value
+                                : ClientSettings.HashPassword(value);
                             SettingsManager.Save();
                             Logger.Info("🔑 Пароль обновлён");
                         }
@@ -323,12 +379,14 @@ namespace BibClient
                     case "HIDE_DRIVE_C":
                         SettingsManager.Current.HideDriveC = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetHideDriveC(SettingsManager.Current.HideDriveC);
                         SettingsChanged?.Invoke();
                         break;
 
                     case "BLOCK_INSTALL_UNINSTALL":
                         SettingsManager.Current.BlockInstall = value.ToLower() == "true";
                         SettingsManager.Save();
+                        RegistryPolicyEngine.SetBlockInstallUninstall(SettingsManager.Current.BlockInstall);
                         SettingsChanged?.Invoke();
                         break;
 
@@ -366,6 +424,57 @@ namespace BibClient
                     case "RESTART":
                         Logger.Info("🔄 Перезагрузка ПК по команде сервера");
                         Process.Start("shutdown", "/r /f /t 0");
+                        break;
+
+                    case "UPDATE_NOW":
+                        Logger.Info("⬆️ Получена команда UPDATE_NOW — запуск тихого обновления");
+                        var serverBase = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                        _ = UpdateChecker.CheckAsync(serverBase);
+                        break;
+
+                    case "UPDATE_FOLDER_NOW":
+                        Logger.Info("📦 Получена команда UPDATE_FOLDER_NOW — обновление из папки");
+                        var serverBaseFolder = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                        _ = UpdateChecker.CheckFolderUpdateAsync(serverBaseFolder);
+                        break;
+
+                    case "GET_LOGS":
+                        Logger.Info("📋 Запрос логов от сервера");
+                        try
+                        {
+                            var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+                            var logFile = Path.Combine(logDir, $"bibclient_{DateTime.Now:yyyy-MM-dd}.log");
+                            string logContent = "";
+                            if (File.Exists(logFile))
+                            {
+                                var allLines = File.ReadAllLines(logFile);
+                                // Последние 300 строк чтобы не перегружать
+                                var lastLines = allLines.Length > 300
+                                    ? allLines[^300..]
+                                    : allLines;
+                                logContent = string.Join("\n", lastLines);
+                            }
+                            else
+                            {
+                                logContent = $"Лог-файл не найден: {logFile}";
+                            }
+                            LogsReady?.Invoke(logContent);
+                        }
+                        catch (Exception ex)
+                        {
+                            LogsReady?.Invoke($"Ошибка чтения лога: {ex.Message}");
+                        }
+                        break;
+
+                    case "START_SCREENSHOT_STREAM":
+                        Logger.Info("📸 Запуск трансляции скриншотов");
+                        var streamBase = $"http://{SettingsManager.Current.ServerIp}:{SettingsManager.Current.ServerPort}";
+                        ScreenshotStreamer.Start(streamBase, SettingsManager.Current.PcNumber);
+                        break;
+
+                    case "STOP_SCREENSHOT_STREAM":
+                        Logger.Info("📸 Остановка трансляции скриншотов");
+                        ScreenshotStreamer.Stop();
                         break;
 
                     default:

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Версия читается из файла VERSION в корне репозитория.
+         Чтобы выпустить новую версию — меняй только этот файл. -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</Version>
+  </PropertyGroup>
+</Project>

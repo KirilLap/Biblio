@@ -69,15 +69,17 @@ main { padding: 20px 24px 100px; }
 .stat-item.stat-amber span { color: #B87A0E; }
 .btn-service-top {
   margin-left: auto;
-  background: #1D3D30;
-  border: 1px solid #2A7A5A;
-  color: #4DC79A;
+  background: #1D9E75;
+  border: none;
+  color: #fff;
   border-radius: 8px;
   padding: 8px 18px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: filter .15s;
 }
-.btn-service-top:hover { background: #1D9E75; color: #fff; }
+.btn-service-top:hover { filter: brightness(1.12); }
 
 /* ── Грид ────────────────────────────────────────────────────── */
 .pc-grid {
@@ -96,6 +98,10 @@ main { padding: 20px 24px 100px; }
   transition: border-color 0.15s, box-shadow 0.15s;
   user-select: none;
   position: relative;
+  /* Фиксированная высота — карточки не прыгают при старте/конце сессии */
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
 }
 .pc-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); }
 .pc-card.selected { border-color: #4A90D9; box-shadow: 0 0 0 3px rgba(74,144,217,0.2); }
@@ -147,6 +153,41 @@ main { padding: 20px 24px 100px; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.pc-session-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+.badge-vip   { background: #fef3c7; color: #92400e; }
+.badge-limit { background: #d1fae5; color: #065f46; }
+
+.pc-cost {
+  font-size: 11px;
+  color: #92400e;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.pc-remaining {
+  font-size: 11px;
+  color: #065f46;
+  font-weight: 500;
+  margin-top: 2px;
+}
+.pc-remaining.urgent { color: #dc2626; font-weight: 700; }
+
+.pc-meta-op {
+  margin-top: auto; /* прижимает IP/мета к низу карточки */
+  padding-top: 6px;
+  font-size: 11px;
+  color: #777;
+  line-height: 1.6;
+}
+.pc-meta-op span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Панель действий ─────────────────────────────────────────── */
 .action-bar {
@@ -208,6 +249,7 @@ main { padding: 20px 24px 100px; }
   border: 1px solid #3D3D6B;
 }
 .dlg.dlg-warn { border-color: #E24B4A; }
+.dlg.dlg-wide { width: min(900px, calc(100vw - 40px)); }
 
 .dlg-title {
   font-size: 17px;
@@ -326,3 +368,50 @@ main { padding: 20px 24px 100px; }
 .toast.warn  { border-color: #E24B4A; }
 .toast.good  { border-color: #1D9E75; }
 @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── Версия клиента на карточке ──────────────────────────────────────────── */
+.pc-ver        { font-size: 10px; color: #888; display: block; }
+.pc-ver.pc-ver-old { color: #f59e0b; font-weight: 600; }
+
+/* ── Бейдж статуса обновления на карточке ───────────────────────────────── */
+.pc-update-badge { font-size: 10px; font-weight: 600; margin-top: 2px; display: block; }
+.pc-update-badge.pending  { color: #888; }
+.pc-update-badge.updating { color: #60a5fa; }
+.pc-update-badge.done     { color: #34d399; }
+.pc-update-badge.failed   { color: #f87171; }
+.pc-update-badge.deferred { color: #a78bfa; }
+
+/* ── Панель прогресса обновлений ─────────────────────────────────────────── */
+.update-progress-panel {
+  background: #1a1a2e; border: 1px solid #2d2d4e; border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 16px; animation: slideIn .2s ease;
+}
+.update-progress-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px; font-weight: 600; font-size: 14px; color: #e2e8f0;
+}
+.update-progress-close {
+  background: none; border: none; color: #888; cursor: pointer;
+  font-size: 16px; padding: 0 4px; line-height: 1;
+}
+.update-progress-close:hover { color: #e2e8f0; }
+.update-progress-bar-wrap {
+  background: #2d2d4e; border-radius: 4px; height: 6px; margin-bottom: 12px; overflow: hidden;
+}
+.update-progress-bar {
+  height: 100%; background: #1d9e75; border-radius: 4px;
+  transition: width .4s ease; width: 0%;
+}
+.update-progress-list { display: flex; flex-direction: column; gap: 4px; }
+.update-progress-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: #94a3b8; padding: 3px 0;
+}
+.update-progress-row .upd-pc  { font-weight: 600; color: #e2e8f0; min-width: 80px; }
+.update-progress-row .upd-ver { color: #64748b; flex: 1; }
+.update-progress-row .upd-st  { min-width: 140px; text-align: right; font-weight: 500; }
+.upd-st.pending  { color: #94a3b8; }
+.upd-st.updating { color: #60a5fa; }
+.upd-st.done     { color: #34d399; }
+.upd-st.failed   { color: #f87171; }
+.upd-st.deferred { color: #a78bfa; }

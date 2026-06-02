@@ -104,16 +104,14 @@
                 </Grid>
             </Border>
 
-            <!-- Читатель (необязательно) -->
-            <TextBlock Text="Читатель (необязательно)"
+            <!-- Привязать к сессии (ПК) -->
+            <TextBlock Text="Привязать к сессии"
                        Style="{StaticResource FieldLabel}"/>
-            <TextBlock Text="Введите имя, фамилию или номер читательского билета"
-                       FontSize="11" Foreground="#AAA"
-                       Margin="0,0,0,5"/>
-            <TextBox x:Name="TxtReader"
-                     Style="{StaticResource Field}"
-                     Margin="0,0,0,6"/>
-            <TextBlock x:Name="TxtActiveSession"
+            <ComboBox x:Name="CmbPcSession"
+                      FontSize="13" Padding="8,6"
+                      Margin="0,0,0,6"
+                      SelectionChanged="CmbPcSession_Changed"/>
+            <TextBlock x:Name="TxtSessionInfo"
                        FontSize="11" Foreground="#1D9E75"
                        Visibility="Collapsed"
                        Margin="0,0,0,14"/>
@@ -129,10 +127,10 @@
                                  FontSize="13" IsChecked="True"
                                  Margin="0,0,0,10"/>
                     <RadioButton x:Name="RbDeferred"
-                                 Content="Отложить (читатель оплатит позже)"
+                                 Content="Отложить (оплатит позже)"
                                  FontSize="13"/>
                     <TextBlock x:Name="TxtDeferNote"
-                               Text="ⓘ Без привязки к читателю нельзя отложить оплату"
+                               Text="ⓘ Выберите активную сессию, чтобы отложить оплату"
                                FontSize="11" Foreground="#E09000"
                                Margin="0,8,0,0"
                                Visibility="Collapsed"

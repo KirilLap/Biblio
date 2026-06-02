@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -7,8 +8,6 @@ namespace BibAdminWeb
 {
     class Program
     {
-        private const int Port = 8080;
-
         [STAThread]
         static void Main()
         {
@@ -23,18 +22,10 @@ namespace BibAdminWeb
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            var server = new ServerHost();
-            try
-            {
-                server.StartAsync(Port).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Не удалось запустить сервер на порту {Port}:\n{ex.Message}",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
+            var port = GlobalSettings.Load().ServerPort;
 
+            // Загружаем данные ДО старта сервера, чтобы исключить гонку:
+            // при быстром реконнекте BibClient не получит пустое состояние.
             AdminHub.LoadRegistry();
             AdminHub.LoadActiveSessions();
             AdminHub.LoadDeletedPcs();
@@ -42,14 +33,36 @@ namespace BibAdminWeb
             ServiceTransaction.LoadHistory();
             ReaderStore.Init();
 
-            Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{Port}");
+            var server = new ServerHost();
+            try
+            {
+                server.StartAsync(port).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось запустить сервер на порту {port}:\n{ex.Message}",
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            Logger.Info($"🌐 BibAdmin Web запущен: http://localhost:{port}");
 
             // Проверяем обновления через 5 секунд после старта
             _ = Task.Delay(5000).ContinueWith(_ => UpdateChecker.CheckAsync());
 
-            OpenBrowser(Port);
+            // После обновления браузер уже открыт и сам перезагружается — не открываем новое окно
+            var restartFlag = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update_restart.flag");
+            if (File.Exists(restartFlag))
+            {
+                File.Delete(restartFlag);
+                Logger.Info("🔄 Перезапуск после обновления — браузер открывать не нужно");
+            }
+            else
+            {
+                OpenBrowser(port);
+            }
 
-            using var tray = new TrayIcon(Port, () => Application.Exit());
+            using var tray = new TrayIcon(port, () => Application.Exit());
             Application.Run();
 
             server.StopAsync().GetAwaiter().GetResult();

@@ -10,13 +10,29 @@ namespace BibAdmin
         private GlobalSettings _settings;
         private ServiceType? _selectedService;
 
+        // Вспомогательный класс для элементов ComboBox сессий
+        private class PcSessionItem
+        {
+            public string PcNumber { get; set; } = "";
+            public string ReaderId { get; set; } = "";
+            public string ReaderName { get; set; } = "";
+            public bool HasSession { get; set; }
+            public override string ToString()
+            {
+                if (!HasSession) return "— Без привязки —";
+                string reader = !string.IsNullOrEmpty(ReaderName) ? ReaderName
+                    : !string.IsNullOrEmpty(ReaderId) ? $"ID: {ReaderId}" : "(анонимная сессия)";
+                return $"{PcNumber}  —  {reader}";
+            }
+        }
+
         public ServiceOrderDialog()
         {
             InitializeComponent();
             Owner = Application.Current.MainWindow;
             _settings = GlobalSettings.Load();
             LoadServices();
-            TxtReader.TextChanged += TxtReader_Changed;
+            LoadSessions();
             RbDeferred.Checked += PaymentMode_Changed;
             RbPaidNow.Checked += PaymentMode_Changed;
         }
@@ -27,11 +43,32 @@ namespace BibAdmin
             var active = _settings.Services.Where(s => s.IsActive).ToList();
             foreach (var s in active)
                 CmbService.Items.Add(s);
-
             CmbService.DisplayMemberPath = "Name";
+            if (active.Count > 0) CmbService.SelectedIndex = 0;
+        }
 
-            if (active.Count > 0)
-                CmbService.SelectedIndex = 0;
+        private void LoadSessions()
+        {
+            CmbPcSession.Items.Clear();
+            CmbPcSession.Items.Add(new PcSessionItem { HasSession = false });
+
+            var activeSessions = AdminHub.KnownClients.Values
+                .Where(c => c.SessionStart.HasValue)
+                .OrderBy(c => c.PcNumberValue)
+                .ToList();
+
+            foreach (var c in activeSessions)
+            {
+                CmbPcSession.Items.Add(new PcSessionItem
+                {
+                    PcNumber = c.PcNumber,
+                    ReaderId = c.ReaderId ?? "",
+                    ReaderName = c.UserName ?? "",
+                    HasSession = true
+                });
+            }
+
+            CmbPcSession.SelectedIndex = 0;
         }
 
         private void CmbService_Changed(object sender, SelectionChangedEventArgs e)
@@ -45,61 +82,53 @@ namespace BibAdmin
         private void UpdateTotal()
         {
             if (_selectedService == null) return;
-
             if (!int.TryParse(TxtQty.Text, out int qty) || qty < 1)
             {
                 TxtTotal.Text = "—";
                 TxtServiceInfo.Text = "Укажите корректное количество";
                 return;
             }
-
             int total = _selectedService.Price * qty;
             TxtTotal.Text = $"{total:N0} сум";
             TxtServiceInfo.Text = $"{_selectedService.Price:N0} сум × {qty} {_selectedService.Unit}";
         }
 
-        private void TxtReader_Changed(object sender, TextChangedEventArgs e)
+        private void CmbPcSession_Changed(object sender, SelectionChangedEventArgs e)
         {
-            string reader = TxtReader.Text.Trim();
-            bool hasReader = !string.IsNullOrEmpty(reader);
+            if (CmbPcSession.SelectedItem is not PcSessionItem item) return;
 
-            // Проверяем активные сессии по ID или имени
-            var activePc = AdminHub.KnownClients.Values
-                .FirstOrDefault(c => c.SessionStart.HasValue &&
-                    (!string.IsNullOrEmpty(c.ReaderId) && c.ReaderId.Equals(reader, StringComparison.OrdinalIgnoreCase) ||
-                     !string.IsNullOrEmpty(c.UserName) && c.UserName.Contains(reader, StringComparison.OrdinalIgnoreCase)));
-
-            if (activePc != null)
+            if (item.HasSession)
             {
-                TxtActiveSession.Text = $"✓ Активная сессия на {activePc.PcNumber}";
-                TxtActiveSession.Visibility = Visibility.Visible;
+                string reader = !string.IsNullOrEmpty(item.ReaderName) ? item.ReaderName
+                    : !string.IsNullOrEmpty(item.ReaderId) ? $"ID: {item.ReaderId}" : "";
+                TxtSessionInfo.Text = string.IsNullOrEmpty(reader)
+                    ? $"✓ Активная сессия на {item.PcNumber} (анонимный пользователь)"
+                    : $"✓ Активная сессия на {item.PcNumber}: {reader}";
+                TxtSessionInfo.Visibility = Visibility.Visible;
             }
             else
             {
-                TxtActiveSession.Visibility = Visibility.Collapsed;
+                TxtSessionInfo.Visibility = Visibility.Collapsed;
             }
 
-            // Без читателя нельзя отложить
-            if (!hasReader && RbDeferred.IsChecked == true)
-                RbPaidNow.IsChecked = true;
-
-            TxtDeferNote.Visibility = !hasReader ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDeferNote();
         }
 
-        private void PaymentMode_Changed(object sender, RoutedEventArgs e)
+        private void PaymentMode_Changed(object sender, RoutedEventArgs e) => UpdateDeferNote();
+
+        private void UpdateDeferNote()
         {
             if (TxtDeferNote == null) return;
-            bool hasReader = !string.IsNullOrEmpty(TxtReader.Text.Trim());
-            TxtDeferNote.Visibility = (!hasReader && RbDeferred.IsChecked == true)
-                ? Visibility.Visible : Visibility.Collapsed;
+            bool selectedSession = CmbPcSession.SelectedItem is PcSessionItem item && item.HasSession;
+            bool wantDeferred = RbDeferred?.IsChecked == true;
+            TxtDeferNote.Visibility = (wantDeferred && !selectedSession) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void Create_Click(object sender, RoutedEventArgs e)
         {
             if (_selectedService == null)
             {
-                MessageBox.Show("Выберите услугу.", "Ошибка",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Выберите услугу.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -110,32 +139,12 @@ namespace BibAdmin
                 return;
             }
 
-            string reader = TxtReader.Text.Trim();
-            bool deferred = RbDeferred.IsChecked == true && !string.IsNullOrEmpty(reader);
+            var selectedItem = CmbPcSession.SelectedItem as PcSessionItem;
+            bool hasSession = selectedItem?.HasSession == true;
+            bool deferred = RbDeferred.IsChecked == true && hasSession;
 
             int total = _selectedService.Price * qty;
             int paid = deferred ? 0 : total;
-
-            // Определяем ID и имя читателя
-            string readerId = "";
-            string readerName = reader;
-
-            // Пробуем найти по активным сессиям для привязки ID
-            var activePc = AdminHub.KnownClients.Values
-                .FirstOrDefault(c => c.SessionStart.HasValue &&
-                    (!string.IsNullOrEmpty(c.ReaderId) && c.ReaderId.Equals(reader, StringComparison.OrdinalIgnoreCase) ||
-                     !string.IsNullOrEmpty(c.UserName) && c.UserName.Contains(reader, StringComparison.OrdinalIgnoreCase)));
-
-            if (activePc != null)
-            {
-                readerId = activePc.ReaderId ?? reader;
-                readerName = activePc.UserName ?? reader;
-            }
-            else if (!string.IsNullOrEmpty(reader))
-            {
-                // Текст может быть ID или именем — сохраняем как есть
-                readerId = reader;
-            }
 
             var transaction = new ServiceTransaction
             {
@@ -146,15 +155,17 @@ namespace BibAdmin
                 PricePerUnit = _selectedService.Price,
                 TotalAmount = total,
                 PaidAmount = paid,
-                ReaderId = readerId,
-                ReaderName = readerName,
+                PcNumber = hasSession ? selectedItem!.PcNumber : "",
+                ReaderId = hasSession ? selectedItem!.ReaderId : "",
+                ReaderName = hasSession ? selectedItem!.ReaderName : "",
                 CreatedAt = DateTime.Now,
                 PaidAt = deferred ? null : DateTime.Now
             };
 
             ServiceTransaction.Add(transaction);
 
-            Logger.Info($"🛎 Услуга: {_selectedService.Name} ×{qty} = {total} сум, читатель: {readerName}, оплачено: {paid}");
+            string pcInfo = hasSession ? $", ПК: {selectedItem!.PcNumber}" : "";
+            Logger.Info($"🛎 Услуга: {_selectedService.Name} ×{qty} = {total} сум{pcInfo}, оплачено: {paid}");
 
             DialogResult = true;
             Close();

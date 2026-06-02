@@ -12,6 +12,7 @@ namespace BibAdmin
         public int LimitSeconds { get; private set; }
         public int PaidAmount { get; private set; }
         public string ReaderId { get; private set; } = "";
+        public string UserName { get; private set; } = "";
 
         private bool _isSyncing = false;
         private bool _isVip = false;
@@ -24,6 +25,20 @@ namespace BibAdmin
             TxtPcInfo.Text = pcNumber;
             Owner = Application.Current.MainWindow;
             SelectLimited(); // По умолчанию — лимитированная
+            ApplyFieldSettings();
+        }
+
+        private void ApplyFieldSettings()
+        {
+            var gs = GlobalSettings.Load();
+            bool reqReader = gs.RequireReaderId;
+            bool reqName   = gs.RequireUserName;
+
+            PanelReaderId.Visibility = reqReader ? Visibility.Visible : Visibility.Collapsed;
+            PanelUserName.Visibility = reqName   ? Visibility.Visible : Visibility.Collapsed;
+
+            TxtReaderIdLabel.Text = reqReader ? "ID читателя *" : "ID читателя";
+            TxtUserNameLabel.Text = reqName   ? "Имя *" : "Имя пользователя";
         }
 
         // =====================
@@ -165,16 +180,28 @@ namespace BibAdmin
 
         private void BtnStart_Click(object sender, RoutedEventArgs e)
         {
-            // Для ВСЕХ платных сессий (и Лимит, и VIP) требуется ID читателя
-            if (string.IsNullOrWhiteSpace(TxtReaderId.Text))
+            var gs = GlobalSettings.Load();
+
+            // Проверка ID читателя (если обязателен)
+            if (gs.RequireReaderId && string.IsNullOrWhiteSpace(TxtReaderId.Text))
             {
                 MessageBox.Show("Введите ID читателя для платной сессии", "Ошибка",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 TxtReaderId.Focus();
                 return;
             }
-            
+
+            // Проверка имени пользователя (если обязательно)
+            if (gs.RequireUserName && string.IsNullOrWhiteSpace(TxtUserName.Text))
+            {
+                MessageBox.Show("Введите имя пользователя", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                TxtUserName.Focus();
+                return;
+            }
+
             ReaderId = TxtReaderId.Text.Trim();
+            UserName = TxtUserName.Text.Trim();
 
             if (_isVip)
             {

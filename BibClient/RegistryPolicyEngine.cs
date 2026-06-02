@@ -7,9 +7,11 @@ namespace BibClient
     // Работает на всех версиях Windows (Home/Pro/Enterprise), вступает в силу немедленно.
     internal static class RegistryPolicyEngine
     {
-        private const string SysPolicy = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
+        private const string SysPolicy    = @"Software\Microsoft\Windows\CurrentVersion\Policies\System";
         private const string WinSysPolicy = @"Software\Policies\Microsoft\Windows\System";
-        private const string PsPolicy = @"Software\Policies\Microsoft\Windows\PowerShell";
+        private const string PsPolicy     = @"Software\Policies\Microsoft\Windows\PowerShell";
+        private const string ExplorerPolicy = @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer";
+        private const string ProgramsPolicy = @"Software\Microsoft\Windows\CurrentVersion\Policies\Programs";
 
         // Применить все политики из текущих настроек — вызывать при старте приложения
         public static void ApplyAll()
@@ -19,6 +21,8 @@ namespace BibClient
             SetRegeditBlock(s.BlockRegedit);
             SetCmdBlock(s.BlockCmd);
             SetPowerShellBlock(s.BlockPowerShell);
+            SetHideDriveC(s.HideDriveC);
+            SetBlockInstallUninstall(s.BlockInstall);
         }
 
         public static void SetTaskMgrBlock(bool block)
@@ -40,6 +44,20 @@ namespace BibClient
         public static void SetPowerShellBlock(bool block)
         {
             SetDword(PsPolicy, "EnableScripts", block ? 0 : null);
+        }
+
+        public static void SetHideDriveC(bool hide)
+        {
+            // Бит 2 (значение 4) в NoDrives отвечает за диск C.
+            // NoViewOnDrive скрывает диск из проводника; NoDrives — из диалогов открытия/сохранения.
+            SetDword(ExplorerPolicy, "NoDrives",     hide ? 4 : null);
+            SetDword(ExplorerPolicy, "NoViewOnDrive", hide ? 4 : null);
+        }
+
+        public static void SetBlockInstallUninstall(bool block)
+        {
+            // Скрывает раздел «Программы и компоненты» в панели управления
+            SetDword(ProgramsPolicy, "NoProgramsAndFeatures", block ? 1 : null);
         }
 
         private static void SetDword(string subKey, string name, int? value)
