@@ -90,7 +90,7 @@ if exist "!ISCC!" set ISCC_OK=1
 if "!ISCC_OK!"=="0" (
     echo.
     echo  ERROR: Inno Setup not found!
-    echo  Path: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
+    echo  Path: C:\Program Files ^(x86^)\Inno Setup 6\ISCC.exe
     echo  Download: https://jrsoftware.org/isdl.php
     echo.
     pause & exit /b 1
