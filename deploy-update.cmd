@@ -85,7 +85,9 @@ if "!PKG_CHOICE!"=="3" set PKG_ZIP=1
 if "!PKG_EXE!!PKG_ZIP!"=="00" ( echo ERROR: choose 1, 2 or 3 & pause & exit /b 1 )
 
 if "!PKG_EXE!"=="0" goto SKIP_ISCC_CHECK
-if not exist "!ISCC!" (
+set ISCC_OK=0
+if exist "!ISCC!" set ISCC_OK=1
+if "!ISCC_OK!"=="0" (
     echo.
     echo  ERROR: Inno Setup not found!
     echo  Path: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
