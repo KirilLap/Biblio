@@ -105,8 +105,12 @@ namespace BibAdminWeb
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                File.Move(oldPath, _path);
-                Logger.Info("GlobalSettings перенесены в %APPDATA%\\BibAdmin\\");
+                // Copy instead of Move: Move requires write access to source directory (Program Files),
+                // which regular users don't have. Copy only needs read access on source.
+                File.Copy(oldPath, _path);
+                Logger.Info("GlobalSettings скопированы в %APPDATA%\\BibAdmin\\");
+                // Try to remove old file to avoid confusion, but ignore failure (no write access is OK)
+                try { File.Delete(oldPath); } catch { }
             }
             catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
         }
