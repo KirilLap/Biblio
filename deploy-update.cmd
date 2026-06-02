@@ -1,4 +1,9 @@
 @echo off
+:: If launched by double-click (cmd /c), relaunch with cmd /k so window stays open
+if "%1"=="__run__" goto MAIN
+cmd /k "%~f0" __run__
+exit /b
+:MAIN
 chcp 866 >nul
 setlocal enabledelayedexpansion
 
