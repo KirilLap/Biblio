@@ -2168,14 +2168,15 @@ function renderReadersTable() {
     el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel».</div>';
     return;
   }
-  const cols = '150px 1fr 100px 55px 160px 110px 110px 110px 60px';
-  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
+  const cols = '150px 220px 100px 55px 160px 110px 110px 110px 60px';
+  const minW = 'min-width:1090px';
+  let html = `<div class="fin-table-header" style="grid-template-columns:${cols};${minW}">
     <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span><span>Дата обновления</span><span>Действителен до</span><span></span>
   </div>`;
   readersData.forEach(r => {
     const age = calcReaderAge(r.birthDate);
     const st = readerCardStatus(r);
-    html += `<div class="fin-row" style="grid-template-columns:${cols}">
+    html += `<div class="fin-row" style="grid-template-columns:${cols};${minW}">
       <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
       <b>${esc(r.fullName)}</b>
       <span>${esc(r.birthDate)}${age !== null ? ` <span style="color:#555">(${age} л.)</span>` : ''}</span>

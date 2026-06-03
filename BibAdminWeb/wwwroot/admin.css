@@ -265,7 +265,8 @@ body {
   background: #16162a;
   border-radius: 10px;
   border: 1px solid #222240;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .fin-table-header {
   display: grid;
