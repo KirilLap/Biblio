@@ -486,8 +486,10 @@ namespace BibAdminWeb
                 var exePath  = Path.Combine(appDir, "BibAdminWeb.exe");
                 var flagPath = Path.Combine(appDir, "update_restart.flag");
                 var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate_zip.bat");
+                var logPath = Path.Combine(appDir, "update_log.txt");
                 var script = string.Join("\r\n",
                     "@echo off",
+                    $"echo Update started %DATE% %TIME% > \"{logPath}\"",
                     "timeout /t 5 /nobreak >nul",
                     $"robocopy \"{tempDir}\" \"{appDir}\" /E /IS /IT" +
                     $" /XF global_settings.json" +
@@ -495,7 +497,8 @@ namespace BibAdminWeb
                     $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     $" /XD Files" +
-                    $" /NFL /NDL /NJH /NJS /NC /NS /NP",
+                    $" /LOG+:\"{logPath}\"",
+                    $"echo Robocopy exit code: %ERRORLEVEL% >> \"{logPath}\"",
                     $"rmdir /s /q \"{tempDir}\"",
                     $"echo.> \"{flagPath}\"",
                     $"start \"\" \"{exePath}\""
