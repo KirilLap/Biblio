@@ -67,8 +67,9 @@ namespace BibAdminWeb
                 }
             }
 
-            // Обновить список услуг у операторов
+            // Обновить список услуг и настройки полей сессии у операторов
             OperatorBroadcaster.Instance?.PushServiceTypes();
+            OperatorBroadcaster.Instance?.PushSessionFields();
         }
     }
 }

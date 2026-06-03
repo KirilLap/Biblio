@@ -86,6 +86,14 @@ function startSignalR() {
   connection.on('tariff', t => { tariff = t; });
   connection.on('serviceTypes', list => { serviceTypes = list; });
   connection.on('readerCardPrefix', p => { readerCardPrefix = p || 'FAA'; });
+  connection.on('sessionFields', sf => {
+    sessionFields = sf;
+    // Применить к открытому диалогу сессии если он открыт
+    const rowReader = document.getElementById('rowReaderId');
+    if (rowReader) rowReader.style.display = sf.requireReaderId ? '' : 'none';
+    const rowName = document.getElementById('rowUserName');
+    if (rowName) rowName.style.display = sf.requireUserName ? '' : 'none';
+  });
 
   connection.on('offlineAlert', data => {
     offlinePcNumber = data.pcNumber;

@@ -47,6 +47,16 @@ namespace BibAdminWeb
             _ = _ctx.Clients.All.SendAsync("serviceTypes", services);
         }
 
+        public void PushSessionFields()
+        {
+            var settings = GlobalSettings.Load();
+            _ = _ctx.Clients.All.SendAsync("sessionFields", new
+            {
+                requireReaderId = settings.RequireReaderId,
+                requireUserName = settings.RequireUserName
+            });
+        }
+
         public static object ClientDto(ClientState cs) => new
         {
             pcNumber = cs.PcNumber, pcNumberValue = cs.PcNumberValue, status = cs.Status,
