@@ -2168,7 +2168,7 @@ function renderReadersTable() {
       <span>${esc(r.gender)}</span>
       <span>${esc(r.category)}</span>
       <span style="color:#555">${esc(r.registeredAt)}</span>
-      <span style="color:#aaa">${esc(r.updatedAt || '—')}</span>
+      <span style="color:${r.updatedAt ? '#aaa' : '#444'}">${esc(r.updatedAt || r.registeredAt || '—')}</span>
     </div>`;
   });
   el.innerHTML = html;
