@@ -28,14 +28,19 @@ namespace BibAdminWeb
     public static class ReaderStore
     {
         private static readonly string DbPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "BibAdmin", "readers.db");
+            AppDomain.CurrentDomain.BaseDirectory, "data", "readers.db");
 
         private static string ConnStr => $"Data Source={DbPath}";
 
         public static void Init()
         {
             Directory.CreateDirectory(Path.GetDirectoryName(DbPath)!);
+            // Миграция: перенести readers.db из %APPDATA%\BibAdmin\ в data\
+            var oldDb = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BibAdmin", "readers.db");
+            if (!File.Exists(DbPath) && File.Exists(oldDb))
+            {
+                try { File.Copy(oldDb, DbPath); File.Delete(oldDb); Logger.Info("readers.db перенесён в папку data\\"); } catch { }
+            }
             using var conn = Open();
             Exec(conn, @"CREATE TABLE IF NOT EXISTS readers (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,

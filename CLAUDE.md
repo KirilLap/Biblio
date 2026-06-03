@@ -32,13 +32,17 @@ git push origin dev
 
 Следующие части кода нельзя изменять без явного запроса от пользователя:
 
-### `BibAdminWeb/GlobalSettings.cs` — путь хранения настроек
+### `BibAdminWeb/GlobalSettings.cs` и другие хранилища — папка `data\`
 
-Настройки хранятся **рядом с exe**: `C:\Program Files\Biblio\BibAdminWeb\global_settings.json` (`BaseDirectory`).
+Все данные хранятся в `C:\Program Files\Biblio\BibAdminWeb\data\`:
+- `global_settings.json` — настройки сервера
+- `readers.db` — база читателей
+- `finance_history.json` — история финансов
+- `service_history.json` — история услуг
 
-**Нельзя менять на `%APPDATA%`** (`SpecialFolder.ApplicationData`) — у каждого пользователя и сервис-аккаунта своя папка, настройки теряются после обновлений.
+**Нельзя менять на `%APPDATA%`** — у каждого пользователя и сервис-аккаунта своя папка, данные теряются.
 
-При обновлениях файл уже защищён: robocopy (`/XF global_settings.json`) и Inno Setup (`onlyifdoesntexist`) его не трогают. В коде есть подробный комментарий. Не удалять и не менять.
+При обновлениях папка `data\` защищена: robocopy (`/XD data`) и Inno Setup (`onlyifdoesntexist`) её не трогают. Не менять пути без явного запроса.
 
 ### `BibAdminWeb/AdminApi.cs` — исключения robocopy при zip-обновлении
 

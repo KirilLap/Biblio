@@ -81,8 +81,9 @@ namespace BibAdminWeb
         // ╔══════════════════════════════════════════════════════════════════════╗
         // ║  ВАЖНО: путь к файлу настроек — НЕ МЕНЯТЬ без крайней необходимости ║
         // ║                                                                      ║
-        // ║  Настройки хранятся рядом с exe (BaseDirectory), т.е. в папке       ║
-        // ║  C:\Program Files\Biblio\BibAdminWeb\global_settings.json            ║
+        // ║  Настройки хранятся в папке data\ рядом с exe:                        ║
+        // ║  C:\Program Files\Biblio\BibAdminWeb\data\global_settings.json       ║
+        // ║  Там же: readers.db, finance_history.json, service_history.json      ║
         // ║                                                                      ║
         // ║  Сервис запускается с правами администратора — запись туда работает. ║
         // ║                                                                      ║
@@ -94,7 +95,7 @@ namespace BibAdminWeb
         // ║  сервис-аккаунта своя папка, настройки теряются.                     ║
         // ╚══════════════════════════════════════════════════════════════════════╝
         private static readonly string _path = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
+            AppDomain.CurrentDomain.BaseDirectory, "data", "global_settings.json");
 
         public static GlobalSettings Load()
         {
@@ -120,6 +121,9 @@ namespace BibAdminWeb
             // 2) %APPDATA%\BibAdmin\ (самый старый путь)
             var candidates = new[]
             {
+                // Предыдущий шаг миграции — рядом с exe (до переноса в data\)
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json"),
+                // Старые пути в AppData
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "BibAdmin", "global_settings.json"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),       "BibAdmin", "global_settings.json"),
             };

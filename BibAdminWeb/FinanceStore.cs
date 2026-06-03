@@ -26,11 +26,16 @@ namespace BibAdminWeb
         public static List<SessionRecord> Sessions { get; } = new();
 
         private static readonly string HistoryFilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "BibAdmin", "finance_history.json");
+            AppDomain.CurrentDomain.BaseDirectory, "data", "finance_history.json");
 
         public static void LoadHistory()
         {
+            // Миграция: перенести finance_history.json из %APPDATA%\BibAdmin\ в data\
+            var oldPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BibAdmin", "finance_history.json");
+            if (!File.Exists(HistoryFilePath) && File.Exists(oldPath))
+            {
+                try { Directory.CreateDirectory(Path.GetDirectoryName(HistoryFilePath)!); File.Copy(oldPath, HistoryFilePath); File.Delete(oldPath); } catch { }
+            }
             try
             {
                 if (!File.Exists(HistoryFilePath)) return;

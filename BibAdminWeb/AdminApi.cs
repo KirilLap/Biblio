@@ -400,12 +400,11 @@ namespace BibAdminWeb
                     // Исключаем все файлы настроек и runtime-данных, чтобы обновление
                     // не перезаписало порт, пароль, реестр ПК и историю финансов.
                     $"robocopy \"{sourcePath}\" \"{appDir}\" /E /IS /IT" +
-                    // Настройки — самое важное
-                    $" /XF global_settings.json" +
-                    // Прочие конфиги
+                    // Папка с данными (настройки, БД, история) — никогда не перезаписывать
+                    $" /XD data" +
+                    // Прочие runtime-файлы рядом с exe
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
-                    // Runtime JSON-данные (реестр ПК, сессии, история)
-                    $" /XF clients.json /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF active_sessions.json /XF deleted_pcs.json" +
                     $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     // Папка с загруженными фоновыми изображениями
