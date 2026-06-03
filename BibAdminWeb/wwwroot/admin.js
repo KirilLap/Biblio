@@ -538,16 +538,18 @@ function ssSyncMoney() {
 async function confirmStartSession() {
   const isTemp  = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
   const nums    = document.getElementById('dlgSsReader').value.trim();
-  if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
 
   const prefix = settings.readerCardPrefix || 'FAA';
   const reader = isTemp ? nums : (prefix + nums);
 
-  if (!isTemp) {
-    if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
-    if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
-    if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
-    if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+  if (settings.requireReaderId) {
+    if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
+    if (!isTemp) {
+      if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
+      if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+      if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+      if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+    }
   }
   const name = document.getElementById('dlgSsName').value.trim();
   if (settings.requireUserName && !name) { toast('Введите имя пользователя', 'warn'); return; }
