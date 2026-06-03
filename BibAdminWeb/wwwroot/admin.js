@@ -2139,6 +2139,53 @@ function periodFrom(p) {
 
 // ─── Readers ──────────────────────────────────────────────────────────────────
 let readersData = [];
+let readersSortCol = 'cardId';   // текущая колонка сортировки
+let readersSortAsc = true;       // направление
+
+function parseReaderDate(s) {
+  if (!s) return 0;
+  const p = s.split('-');
+  if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
+  return 0;
+}
+
+function cardIdNum(id) {
+  // FAA220500035 → берём только цифровую часть
+  const m = id.match(/\d+/);
+  return m ? parseInt(m[0], 10) : 0;
+}
+
+function sortReaders(col) {
+  if (readersSortCol === col) readersSortAsc = !readersSortAsc;
+  else { readersSortCol = col; readersSortAsc = true; }
+  renderReadersTable();
+}
+
+function getSortedReaders() {
+  const col = readersSortCol;
+  const asc = readersSortAsc ? 1 : -1;
+  return [...readersData].sort((a, b) => {
+    let va, vb;
+    if (col === 'cardId') {
+      va = cardIdNum(a.cardId); vb = cardIdNum(b.cardId);
+    } else if (col === 'registeredAt') {
+      va = parseReaderDate(a.registeredAt); vb = parseReaderDate(b.registeredAt);
+    } else if (col === 'updatedAt') {
+      va = parseReaderDate(a.updatedAt || a.registeredAt);
+      vb = parseReaderDate(b.updatedAt || b.registeredAt);
+    } else {
+      va = (a[col] || '').toLowerCase(); vb = (b[col] || '').toLowerCase();
+    }
+    return va < vb ? -asc : va > vb ? asc : 0;
+  });
+}
+
+function sortArrow(col) {
+  if (readersSortCol !== col) return '<span style="color:#444;margin-left:4px">⇅</span>';
+  return readersSortAsc
+    ? '<span style="color:#1d9e75;margin-left:4px">↑</span>'
+    : '<span style="color:#1d9e75;margin-left:4px">↓</span>';
+}
 
 async function loadReaders(search = '') {
   const url = '/api/admin/readers' + (search ? `?search=${encodeURIComponent(search)}` : '');
@@ -2160,10 +2207,12 @@ function renderReadersTable() {
     return;
   }
   const cols = '170px 1fr 110px 60px 180px 120px 120px';
+  const th = (label, col) =>
+    `<span onclick="sortReaders('${col}')" style="cursor:pointer;user-select:none">${label}${sortArrow(col)}</span>`;
   let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span><span>Дата обновления</span>
+    ${th('ID билета','cardId')}${th('ФИО','fullName')}<span>Дата рождения</span><span>Пол</span><span>Категория</span>${th('Дата регистрации','registeredAt')}${th('Дата обновления','updatedAt')}
   </div>`;
-  readersData.forEach(r => {
+  getSortedReaders().forEach(r => {
     const age = calcReaderAge(r.birthDate);
     html += `<div class="fin-row" style="grid-template-columns:${cols}">
       <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
