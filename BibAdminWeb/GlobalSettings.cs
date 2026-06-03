@@ -116,16 +116,18 @@ namespace BibAdminWeb
         {
             if (File.Exists(_path)) return;
 
-            // Миграция из старых путей если файл ещё не рядом с exe:
-            // 1) C:\ProgramData\BibAdmin\ (промежуточный путь)
-            // 2) %APPDATA%\BibAdmin\ (самый старый путь)
+            // Миграция из старых путей если файл ещё не в data\.
+            // ВАЖНО: %APPDATA% проверяется РАНЬШЕ корневого файла рядом с exe,
+            // потому что Inno Setup может установить дефолтный global_settings.json
+            // в корень папки программы (IsFirstRun=true), и мы не должны его
+            // принять за реальные настройки пользователя.
             var candidates = new[]
             {
-                // Предыдущий шаг миграции — рядом с exe (до переноса в data\)
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json"),
-                // Старые пути в AppData
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "BibAdmin", "global_settings.json"),
+                // Реальные пользовательские настройки из старых путей AppData
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),       "BibAdmin", "global_settings.json"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "BibAdmin", "global_settings.json"),
+                // В последнюю очередь — корневой файл рядом с exe (может быть дефолтным от installer)
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json"),
             };
 
             foreach (var src in candidates)
