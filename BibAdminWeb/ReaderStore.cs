@@ -82,12 +82,15 @@ namespace BibAdminWeb
             string? search, string sortCol, bool sortAsc, int page, int pageSize)
         {
             // Допустимые колонки для сортировки (защита от SQL-инъекций)
+            // Для дат dd-MM-yyyy → переставляем в yyyy-MM-dd для корректной сортировки строк
+            const string dateSort = "SUBSTR({0},7,4)||'-'||SUBSTR({0},4,2)||'-'||SUBSTR({0},1,2)";
             var orderExpr = sortCol switch
             {
                 "cardId"       => "CAST(SUBSTR(card_id, 4) AS INTEGER)",
                 "fullName"     => "full_name COLLATE NOCASE",
-                "registeredAt" => "registered_at",
-                "updatedAt"    => "COALESCE(NULLIF(updated_at,''), registered_at)",
+                "registeredAt" => string.Format(dateSort, "registered_at"),
+                "updatedAt"    => string.Format(dateSort,
+                                    "COALESCE(NULLIF(updated_at,''), registered_at)"),
                 _              => "full_name COLLATE NOCASE"
             };
             var dir = sortAsc ? "ASC" : "DESC";
