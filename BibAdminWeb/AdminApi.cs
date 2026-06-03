@@ -405,7 +405,8 @@ namespace BibAdminWeb
                     // Прочие конфиги
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
                     // Runtime JSON-данные (реестр ПК, сессии, история)
-                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     // Папка с загруженными фоновыми изображениями
                     $" /XD Files" +
@@ -494,7 +495,8 @@ namespace BibAdminWeb
                     $"robocopy \"{tempDir}\" \"{appDir}\" /E /IS /IT" +
                     $" /XF global_settings.json" +
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
-                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     $" /XD Files" +
                     $" /LOG+:\"{logPath}\"",
