@@ -28,6 +28,28 @@ git push origin dev
 
 Оба проекта должны быть функционально идентичны. Если добавляешь фичу в одном — сразу добавляй в другом.
 
+## Защищённые части кода — НЕ ТРОГАТЬ
+
+Следующие части кода нельзя изменять без явного запроса от пользователя:
+
+### `BibAdminWeb/GlobalSettings.cs` — путь хранения настроек
+
+Настройки хранятся в `C:\ProgramData\BibAdmin\global_settings.json` (`CommonApplicationData`).
+
+**Нельзя менять на:**
+- `%APPDATA%` (`SpecialFolder.ApplicationData`) — у каждого пользователя и сервис-аккаунта своя папка, настройки теряются
+- `BaseDirectory` (рядом с exe) — папка `Program Files` защищена от записи
+
+В коде есть подробный комментарий почему именно `ProgramData`. Не удалять и не менять.
+
+### `BibAdminWeb/AdminApi.cs` — исключения robocopy при zip-обновлении
+
+В bat-скрипте self-update обязательно исключаются `/XF global_settings.json *.db ...` — без этого обновление затрёт пользовательские данные.
+
+### `installer/bibadminweb-setup.iss` — Inno Setup
+
+Строка `Flags: onlyifdoesntexist` для `global_settings.json` обязательна — без неё установщик затрёт настройки при обновлении.
+
 ## Документация
 
 - [README.md](README.md) — описание проекта

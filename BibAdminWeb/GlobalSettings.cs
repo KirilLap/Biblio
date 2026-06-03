@@ -78,8 +78,22 @@ namespace BibAdminWeb
         public bool RequireReaderId { get; set; } = true;
         public bool RequireUserName { get; set; } = false;
 
+        // ╔══════════════════════════════════════════════════════════════════════╗
+        // ║  ВАЖНО: путь к файлу настроек — НЕ МЕНЯТЬ без крайней необходимости ║
+        // ║                                                                      ║
+        // ║  Используется C:\ProgramData\BibAdmin\ (CommonApplicationData).      ║
+        // ║  Это единственный путь, доступный на запись любому Windows-сервису   ║
+        // ║  (SYSTEM, LocalService, NetworkService) и любому пользователю.       ║
+        // ║                                                                      ║
+        // ║  НЕ использовать %APPDATA% (SpecialFolder.ApplicationData) —         ║
+        // ║  у каждого пользователя и каждого сервис-аккаунта своя папка,        ║
+        // ║  настройки будут теряться после обновлений и перезапуска сервиса.    ║
+        // ║                                                                      ║
+        // ║  НЕ использовать BaseDirectory (рядом с exe) — папка Program Files   ║
+        // ║  защищена от записи для не-администраторов.                          ║
+        // ╚══════════════════════════════════════════════════════════════════════╝
         private static readonly string _path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "BibAdmin", "global_settings.json");
 
         public static GlobalSettings Load()
@@ -100,17 +114,27 @@ namespace BibAdminWeb
         private static void MigrateIfNeeded()
         {
             if (File.Exists(_path)) return;
-            var oldPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
-            if (!File.Exists(oldPath)) return;
+
+            // Шаг 1: старый путь в %APPDATA% (использовался до перехода на ProgramData)
+            var appDataPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "BibAdmin", "global_settings.json");
+
+            // Шаг 2: самый старый путь — рядом с exe
+            var baseDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
+
+            var sourcePath = File.Exists(appDataPath) ? appDataPath
+                           : File.Exists(baseDirPath) ? baseDirPath
+                           : null;
+
+            if (sourcePath == null) return;
+
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                // Copy instead of Move: Move requires write access to source directory (Program Files),
-                // which regular users don't have. Copy only needs read access on source.
-                File.Copy(oldPath, _path);
-                Logger.Info("GlobalSettings скопированы в %APPDATA%\\BibAdmin\\");
-                // Try to remove old file to avoid confusion, but ignore failure (no write access is OK)
-                try { File.Delete(oldPath); } catch { }
+                File.Copy(sourcePath, _path);
+                Logger.Info($"GlobalSettings перенесены в C:\\ProgramData\\BibAdmin\\ (из {sourcePath})");
+                try { File.Delete(sourcePath); } catch { }
             }
             catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
         }
