@@ -620,12 +620,24 @@
     <div class="dlg-title" id="dlgEditReaderTitle">✏ Редактировать читателя</div>
     <input type="hidden" id="editReaderId">
     <div class="form-row" id="editReaderCardIdRow">
-      <label>ID билета</label>
-      <input type="text" id="editReaderIdInput" placeholder="FAA260500035">
+      <label>Номер билета (цифры, макс 9)</label>
+      <div style="display:flex;align-items:center;gap:0;border:1px solid #3D3D6B;border-radius:6px;overflow:hidden;background:#1A1A2E">
+        <span id="editReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B">FAA</span>
+        <input type="text" id="editReaderIdInput" inputmode="numeric" placeholder="230700422" maxlength="9"
+               oninput="onReaderIdNumInput(this)"
+               style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px">
+      </div>
     </div>
     <div class="form-row"><label>ФИО</label><input type="text" id="editReaderName"></div>
-    <div class="form-row"><label>Дата рождения</label><input type="text" id="editReaderBirth" placeholder="дд-мм-гггг"></div>
-    <div class="form-row"><label>Категория</label><input type="text" id="editReaderCat"></div>
+    <div class="form-row">
+      <label>Дата рождения</label>
+      <input type="text" id="editReaderBirth" placeholder="26-03-2004" maxlength="10"
+             oninput="autoFormatDate(this)">
+    </div>
+    <div class="form-row">
+      <label>Категория</label>
+      <select id="editReaderCat" style="background:#1A1A2E;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:6px 10px"></select>
+    </div>
     <div class="form-row">
       <label>Пол</label>
       <select id="editReaderGender" style="background:#1A1A2E;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:6px 10px">
@@ -634,11 +646,17 @@
         <option value="Ж">Ж</option>
       </select>
     </div>
-    <div class="form-row"><label>Дата регистрации</label><input type="text" id="editReaderReg" placeholder="дд-мм-гггг"></div>
-    <div class="form-row"><label>Дата последнего обновления</label><input type="text" id="editReaderUpd" placeholder="дд-мм-гггг"></div>
+    <div class="form-row">
+      <label>Дата регистрации</label>
+      <input type="text" id="editReaderReg" placeholder="26-03-2024" maxlength="10" oninput="autoFormatDate(this)">
+    </div>
+    <div class="form-row">
+      <label>Дата последнего обновления</label>
+      <input type="text" id="editReaderUpd" placeholder="26-03-2024" maxlength="10" oninput="autoFormatDate(this)">
+    </div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgEditReader')">Отмена</button>
-      <button class="btn btn-primary" id="editReaderSaveBtn" onclick="saveEditReader()">Сохранить</button>
+      <button class="btn btn-primary" id="editReaderSaveBtn">Сохранить</button>
     </div>
   </div>
 </div>
