@@ -390,7 +390,7 @@ function ssOnCardTypeChanged() {
 // Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
 function onSsReaderInput() {
   const el = document.getElementById('dlgSsReader');
-  el.value = el.value.replace(/\D/g, '').slice(0, 12);
+  el.value = el.value.replace(/\D/g, '').slice(0, 9);
   _ssLookupState = null;
   clearTimeout(_ssLookupTimer);
   const nums = el.value;

@@ -366,7 +366,7 @@ function parseRegDate(dateStr) {
 // Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
 function onReaderInput() {
   const el = document.getElementById('dlgReaderId');
-  el.value = el.value.replace(/\D/g, '').slice(0, 12);
+  el.value = el.value.replace(/\D/g, '').slice(0, 9);
   _readerLookupState = null;
   clearTimeout(_readerLookupTimer);
   const nums = el.value;

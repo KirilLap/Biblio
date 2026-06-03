@@ -705,7 +705,7 @@
       </div>
       <div style="display:flex;gap:0;border:1px solid #3D3D6B;border-radius:8px;overflow:hidden;background:#1A1A2E">
         <span id="dlgSsReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B;white-space:nowrap;line-height:1.5">FAA</span>
-        <input type="text" id="dlgSsReader" inputmode="numeric" placeholder="260500456"
+        <input type="text" id="dlgSsReader" inputmode="numeric" placeholder="260500456" maxlength="9"
                style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px"
                oninput="onSsReaderInput()"
                onblur="ssLookupReader()" onkeydown="if(event.key==='Enter'){ssLookupReader();}">
