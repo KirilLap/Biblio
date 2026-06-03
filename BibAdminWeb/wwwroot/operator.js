@@ -366,7 +366,7 @@ function parseRegDate(dateStr) {
 // Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
 function onReaderInput() {
   const el = document.getElementById('dlgReaderId');
-  el.value = el.value.replace(/\D/g, '');
+  el.value = el.value.replace(/\D/g, '').slice(0, 12);
   _readerLookupState = null;
   clearTimeout(_readerLookupTimer);
   const nums = el.value;
@@ -530,6 +530,7 @@ async function _lookupReaderImpl() {
     const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
     if (!r.ok) {
       _readerLookupState = 'not_found';
+      document.getElementById('dlgUserName').value = '';
       infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;display:flex;align-items:center;gap:10px';
       infoEl.innerHTML = `<span style="flex:1">&#x2717; Читатель ${esc(cardId)} не найден в базе</span>
         <button data-quick-add="${esc(cardId)}"
