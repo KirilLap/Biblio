@@ -2235,14 +2235,14 @@ function searchReaders() {
 function renderReadersTable() {
   const el = document.getElementById('readersTable');
   if (!readersData.length) {
-    el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel».</div>';
+    el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel» или добавьте вручную.</div>';
     return;
   }
-  const cols = '170px 1fr 110px 60px 180px 120px 120px';
+  const cols = '160px 1fr 110px 55px 170px 115px 115px 74px';
   const th = (label, col) =>
     `<span onclick="sortReaders('${col}')" style="cursor:pointer;user-select:none">${label}${sortArrow(col)}</span>`;
   let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    ${th('ID билета','cardId')}${th('ФИО','fullName')}<span>Дата рождения</span><span>Пол</span><span>Категория</span>${th('Дата регистрации','registeredAt')}${th('Дата обновления','updatedAt')}
+    ${th('ID билета','cardId')}${th('ФИО','fullName')}<span>Дата рождения</span><span>Пол</span><span>Категория</span>${th('Дата регистрации','registeredAt')}${th('Дата обновления','updatedAt')}<span></span>
   </div>`;
   getSortedReaders().forEach(r => {
     const age = calcReaderAge(r.birthDate);
@@ -2254,6 +2254,12 @@ function renderReadersTable() {
       <span>${esc(r.category)}</span>
       <span style="color:#555">${esc(r.registeredAt)}</span>
       <span style="color:${cleanUpdatedAt(r) ? '#aaa' : '#444'}">${esc(cleanUpdatedAt(r) || r.registeredAt || '—')}</span>
+      <span style="display:flex;gap:4px">
+        <button onclick="openEditReader(${JSON.stringify(r.cardId)})" title="Редактировать"
+          style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">✏</button>
+        <button onclick="deleteReader(${JSON.stringify(r.cardId)},${JSON.stringify(r.fullName||r.cardId)})" title="Удалить"
+          style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #5D2A2A;background:#2D1A1A;color:#F87171">🗑</button>
+      </span>
     </div>`;
   });
   el.innerHTML = html;
@@ -2321,19 +2327,24 @@ function exportReaderStats() {
 function openEditReader(cardId) {
   const r = readersData.find(x => x.cardId === cardId);
   if (!r) return;
+  document.getElementById('editReaderCardIdRow').style.display = '';
   document.getElementById('editReaderId').value      = r.cardId;
+  document.getElementById('editReaderIdInput').value = r.cardId;
+  document.getElementById('editReaderIdInput').setAttribute('readonly', 'true');
   document.getElementById('editReaderName').value    = r.fullName;
   document.getElementById('editReaderBirth').value   = r.birthDate;
   document.getElementById('editReaderCat').value     = r.category;
   document.getElementById('editReaderGender').value  = r.gender;
   document.getElementById('editReaderReg').value     = r.registeredAt;
   document.getElementById('editReaderUpd').value     = r.updatedAt || '';
+  document.getElementById('dlgEditReaderTitle').textContent = '✏ Редактировать читателя';
+  document.getElementById('editReaderSaveBtn').onclick = saveEditReader;
   document.getElementById('dlgEditReader').style.display = 'flex';
 }
 
 async function saveEditReader() {
   const reader = {
-    cardId:       document.getElementById('editReaderId').value,
+    cardId:       document.getElementById('editReaderIdInput').value,
     fullName:     document.getElementById('editReaderName').value.trim(),
     birthDate:    document.getElementById('editReaderBirth').value.trim(),
     category:     document.getElementById('editReaderCat').value.trim(),
@@ -2389,6 +2400,79 @@ function setReportPeriod(period) {
   document.getElementById('rptDateDay').style.display = period === 'day' ? '' : 'none';
   document.getElementById('rptDateMonth').style.display = period === 'month' ? '' : 'none';
   loadReport();
+}
+
+// ─── Delete reader ────────────────────────────────────────────────────────────
+async function deleteReader(cardId, name) {
+  if (!confirm(`Удалить читателя «${name}»?\nЭто действие нельзя отменить.`)) return;
+  const r = await fetch(`/api/admin/readers/${encodeURIComponent(cardId)}`, { method: 'DELETE' });
+  if (r.ok) { await loadReaders(); toast('Читатель удалён', 'success'); }
+  else toast('Ошибка удаления', 'warn');
+}
+
+async function deleteAllReaders() {
+  if (!confirm('Удалить ВСЕХ читателей из базы?\n\nЭто действие нельзя отменить.')) return;
+  if (!confirm('Вы уверены? Будут удалены все ' + readersData.length + ' записей.')) return;
+  const r = await fetch('/api/admin/readers', { method: 'DELETE' });
+  if (r.ok) { await loadReaders(); toast('База читателей очищена', 'success'); }
+  else toast('Ошибка очистки', 'warn');
+}
+
+// ─── Add reader manually ──────────────────────────────────────────────────────
+function openAddReader() {
+  document.getElementById('editReaderCardIdRow').style.display = '';
+  document.getElementById('editReaderId').value    = '';
+  document.getElementById('editReaderIdInput').removeAttribute('readonly');
+  document.getElementById('editReaderName').value  = '';
+  document.getElementById('editReaderBirth').value = '';
+  document.getElementById('editReaderCat').value   = '';
+  document.getElementById('editReaderGender').value = '';
+  const today = new Date().toLocaleDateString('ru-RU').split('.').join('-').split('-').reverse().join('-');
+  // convert to dd-MM-yyyy
+  const d = new Date(); const dd = String(d.getDate()).padStart(2,'0'); const mm = String(d.getMonth()+1).padStart(2,'0'); const yyyy = d.getFullYear();
+  document.getElementById('editReaderReg').value   = `${dd}-${mm}-${yyyy}`;
+  document.getElementById('editReaderUpd').value   = `${dd}-${mm}-${yyyy}`;
+  document.getElementById('dlgEditReaderTitle').textContent = '➕ Добавить читателя';
+  document.getElementById('editReaderSaveBtn').onclick = saveAddReader;
+  document.getElementById('dlgEditReader').style.display = 'flex';
+}
+
+async function saveAddReader() {
+  const cardId = document.getElementById('editReaderIdInput').value.trim();
+  if (!cardId) { toast('Введите ID билета', 'warn'); return; }
+  const reader = {
+    cardId,
+    fullName:     document.getElementById('editReaderName').value.trim(),
+    birthDate:    document.getElementById('editReaderBirth').value.trim(),
+    category:     document.getElementById('editReaderCat').value.trim(),
+    gender:       document.getElementById('editReaderGender').value,
+    registeredAt: document.getElementById('editReaderReg').value.trim(),
+    updatedAt:    document.getElementById('editReaderUpd').value.trim(),
+  };
+  const btn = document.getElementById('editReaderSaveBtn');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await fetch('/api/admin/readers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reader)
+    });
+    const data = await r.json();
+    if (r.ok) {
+      closeDlg('dlgEditReader');
+      await loadReaders();
+      toast('Читатель добавлен', 'success');
+    } else {
+      toast(data.error || 'Ошибка добавления', 'warn');
+    }
+  } catch { toast('Ошибка добавления', 'warn'); }
+  btn.disabled = false; btn.textContent = 'Сохранить';
+}
+
+// ─── Clear readers report ─────────────────────────────────────────────────────
+function clearReadersReport() {
+  document.getElementById('reportTable').innerHTML  = '<div class="fin-empty">Выберите период и нажмите «Показать»</div>';
+  document.getElementById('reportSummary').style.display = 'none';
 }
 
 async function loadReport() {

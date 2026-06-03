@@ -56,6 +56,46 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Admin: add reader manually (full data) ───────────────────────
+            if (path == "/api/admin/readers" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    var reader = await JsonSerializer.DeserializeAsync<Reader>(ctx.Request.Body, _json);
+                    if (reader == null || string.IsNullOrWhiteSpace(reader.CardId))
+                    { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан ID билета\"}"); return; }
+                    if (ReaderStore.GetByCardId(reader.CardId) != null)
+                    { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsync("{\"error\":\"Читатель с таким ID уже существует\"}"); return; }
+                    if (string.IsNullOrEmpty(reader.RegisteredAt)) reader.RegisteredAt = DateTime.Today.ToString("dd-MM-yyyy");
+                    if (string.IsNullOrEmpty(reader.UpdatedAt))    reader.UpdatedAt    = reader.RegisteredAt;
+                    ReaderStore.Import(new System.Collections.Generic.List<Reader> { reader });
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex) { ctx.Response.StatusCode = 500; await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json)); }
+                return;
+            }
+
+            // ─── Admin: delete reader ──────────────────────────────────────────
+            if (path.StartsWith("/api/admin/readers/") && method == "DELETE" && !path.Contains("quick-add"))
+            {
+                ctx.Response.ContentType = "application/json";
+                var cardId = Uri.UnescapeDataString(path["/api/admin/readers/".Length..]);
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан ID\"}"); return; }
+                ReaderStore.Delete(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
+            // ─── Admin: delete ALL readers ─────────────────────────────────────
+            if (path == "/api/admin/readers" && method == "DELETE")
+            {
+                ctx.Response.ContentType = "application/json";
+                var count = ReaderStore.DeleteAll();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true, deleted = count }, _json));
+                return;
+            }
+
             // ─── Quick-add reader by card ID (admin) ──────────────────────────
             if (path == "/api/admin/readers/quick-add" && method == "POST")
             {

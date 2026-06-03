@@ -94,6 +94,27 @@ namespace BibAdminWeb
             return rows > 0;
         }
 
+        public static bool Delete(string cardId)
+        {
+            using var conn = Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM readers WHERE card_id=@id";
+            cmd.Parameters.AddWithValue("@id", cardId);
+            var rows = cmd.ExecuteNonQuery();
+            if (rows > 0) Logger.Info($"🗑 Читатель удалён: {cardId}");
+            return rows > 0;
+        }
+
+        public static int DeleteAll()
+        {
+            using var conn = Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM readers";
+            var rows = cmd.ExecuteNonQuery();
+            Logger.Info($"🗑 Все читатели удалены ({rows})");
+            return rows;
+        }
+
         public static Reader? GetByCardId(string cardId)
         {
             using var conn = Open();
