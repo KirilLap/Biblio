@@ -34,13 +34,11 @@ git push origin dev
 
 ### `BibAdminWeb/GlobalSettings.cs` — путь хранения настроек
 
-Настройки хранятся в `C:\ProgramData\BibAdmin\global_settings.json` (`CommonApplicationData`).
+Настройки хранятся **рядом с exe**: `C:\Program Files\Biblio\BibAdminWeb\global_settings.json` (`BaseDirectory`).
 
-**Нельзя менять на:**
-- `%APPDATA%` (`SpecialFolder.ApplicationData`) — у каждого пользователя и сервис-аккаунта своя папка, настройки теряются
-- `BaseDirectory` (рядом с exe) — папка `Program Files` защищена от записи
+**Нельзя менять на `%APPDATA%`** (`SpecialFolder.ApplicationData`) — у каждого пользователя и сервис-аккаунта своя папка, настройки теряются после обновлений.
 
-В коде есть подробный комментарий почему именно `ProgramData`. Не удалять и не менять.
+При обновлениях файл уже защищён: robocopy (`/XF global_settings.json`) и Inno Setup (`onlyifdoesntexist`) его не трогают. В коде есть подробный комментарий. Не удалять и не менять.
 
 ### `BibAdminWeb/AdminApi.cs` — исключения robocopy при zip-обновлении
 

@@ -81,20 +81,20 @@ namespace BibAdminWeb
         // ╔══════════════════════════════════════════════════════════════════════╗
         // ║  ВАЖНО: путь к файлу настроек — НЕ МЕНЯТЬ без крайней необходимости ║
         // ║                                                                      ║
-        // ║  Используется C:\ProgramData\BibAdmin\ (CommonApplicationData).      ║
-        // ║  Это единственный путь, доступный на запись любому Windows-сервису   ║
-        // ║  (SYSTEM, LocalService, NetworkService) и любому пользователю.       ║
+        // ║  Настройки хранятся рядом с exe (BaseDirectory), т.е. в папке       ║
+        // ║  C:\Program Files\Biblio\BibAdminWeb\global_settings.json            ║
         // ║                                                                      ║
-        // ║  НЕ использовать %APPDATA% (SpecialFolder.ApplicationData) —         ║
-        // ║  у каждого пользователя и каждого сервис-аккаунта своя папка,        ║
-        // ║  настройки будут теряться после обновлений и перезапуска сервиса.    ║
+        // ║  Сервис запускается с правами администратора — запись туда работает. ║
         // ║                                                                      ║
-        // ║  НЕ использовать BaseDirectory (рядом с exe) — папка Program Files   ║
-        // ║  защищена от записи для не-администраторов.                          ║
+        // ║  При обновлениях файл защищён:                                       ║
+        // ║  - zip (robocopy): /XF global_settings.json                          ║
+        // ║  - exe (Inno Setup): Flags: onlyifdoesntexist                        ║
+        // ║                                                                      ║
+        // ║  НЕ использовать %APPDATA% — у каждого пользователя и               ║
+        // ║  сервис-аккаунта своя папка, настройки теряются.                     ║
         // ╚══════════════════════════════════════════════════════════════════════╝
         private static readonly string _path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BibAdmin", "global_settings.json");
+            AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
 
         public static GlobalSettings Load()
         {
@@ -115,28 +115,27 @@ namespace BibAdminWeb
         {
             if (File.Exists(_path)) return;
 
-            // Шаг 1: старый путь в %APPDATA% (использовался до перехода на ProgramData)
-            var appDataPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "BibAdmin", "global_settings.json");
-
-            // Шаг 2: самый старый путь — рядом с exe
-            var baseDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
-
-            var sourcePath = File.Exists(appDataPath) ? appDataPath
-                           : File.Exists(baseDirPath) ? baseDirPath
-                           : null;
-
-            if (sourcePath == null) return;
-
-            try
+            // Миграция из старых путей если файл ещё не рядом с exe:
+            // 1) C:\ProgramData\BibAdmin\ (промежуточный путь)
+            // 2) %APPDATA%\BibAdmin\ (самый старый путь)
+            var candidates = new[]
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                File.Copy(sourcePath, _path);
-                Logger.Info($"GlobalSettings перенесены в C:\\ProgramData\\BibAdmin\\ (из {sourcePath})");
-                try { File.Delete(sourcePath); } catch { }
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "BibAdmin", "global_settings.json"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),       "BibAdmin", "global_settings.json"),
+            };
+
+            foreach (var src in candidates)
+            {
+                if (!File.Exists(src)) continue;
+                try
+                {
+                    File.Copy(src, _path);
+                    Logger.Info($"GlobalSettings перенесены в папку exe (из {src})");
+                    try { File.Delete(src); } catch { }
+                }
+                catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
+                return;
             }
-            catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
         }
 
         public void Save()
