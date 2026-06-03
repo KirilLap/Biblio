@@ -2149,34 +2149,19 @@ function searchReaders() {
   loadReaders(q);
 }
 
-function readerCardStatus(r) {
-  const base = _ssParseDate(r.updatedAt) || _ssParseDate(r.registeredAt);
-  if (!base) return { label: '—', color: '#555', expStr: '—' };
-  const exp = new Date(base);
-  exp.setFullYear(exp.getFullYear() + 3);
-  const now = Date.now();
-  const msLeft = exp - now;
-  const expStr = exp.toLocaleDateString('ru-RU');
-  if (msLeft < 0)      return { label: 'Просрочен',  color: '#F87171', expStr };
-  if (msLeft < 90 * 86400000) return { label: 'Скоро истечёт', color: '#f59e0b', expStr };
-  return { label: 'Действителен', color: '#6EE7B7', expStr };
-}
-
 function renderReadersTable() {
   const el = document.getElementById('readersTable');
   if (!readersData.length) {
     el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel».</div>';
     return;
   }
-  const cols = '150px 220px 100px 55px 160px 110px 110px 110px 60px';
-  const minW = 'min-width:1090px';
-  let html = `<div class="fin-table-header" style="grid-template-columns:${cols};${minW}">
-    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span><span>Дата обновления</span><span>Действителен до</span><span></span>
+  const cols = '170px 1fr 110px 60px 180px 120px 120px';
+  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
+    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span><span>Дата обновления</span>
   </div>`;
   readersData.forEach(r => {
     const age = calcReaderAge(r.birthDate);
-    const st = readerCardStatus(r);
-    html += `<div class="fin-row" style="grid-template-columns:${cols};${minW}">
+    html += `<div class="fin-row" style="grid-template-columns:${cols}">
       <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
       <b>${esc(r.fullName)}</b>
       <span>${esc(r.birthDate)}${age !== null ? ` <span style="color:#555">(${age} л.)</span>` : ''}</span>
@@ -2184,8 +2169,6 @@ function renderReadersTable() {
       <span>${esc(r.category)}</span>
       <span style="color:#555">${esc(r.registeredAt)}</span>
       <span style="color:#aaa">${esc(r.updatedAt || '—')}</span>
-      <span style="color:${st.color};font-size:12px" title="${st.label}">${st.expStr}</span>
-      <span><button onclick="openEditReader(${JSON.stringify(r.cardId)})" style="padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">✏</button></span>
     </div>`;
   });
   el.innerHTML = html;
