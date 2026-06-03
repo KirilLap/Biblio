@@ -531,11 +531,14 @@ async function _lookupReaderImpl() {
     if (!r.ok) {
       _readerLookupState = 'not_found';
       infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;display:flex;align-items:center;gap:10px';
-      infoEl.innerHTML = `<span style="flex:1">✗ Читатель ${esc(cardId)} не найден в базе</span>
-        <button onclick="opQuickAddReader(${JSON.stringify(cardId)})"
+      infoEl.innerHTML = `<span style="flex:1">&#x2717; Читатель ${esc(cardId)} не найден в базе</span>
+        <button data-quick-add="${esc(cardId)}"
           style="padding:3px 10px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75;white-space:nowrap">
-          ➕ Добавить
+          &#x2795; Добавить
         </button>`;
+      infoEl.querySelector('[data-quick-add]').addEventListener('click', function() {
+        opQuickAddReader(this.dataset.quickAdd);
+      });
       return;
     }
     const data = await r.json();
