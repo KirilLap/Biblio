@@ -405,6 +405,11 @@ function openSessionDlg() {
   document.querySelectorAll('[name="stype"]')[0].checked = true;
   document.getElementById('limitFields').style.display = '';
 
+  // Показываем/скрываем поле читательского билета согласно настройкам
+  const reqReader = !!sessionFields.requireReaderId;
+  const rowReader = document.getElementById('rowReaderId');
+  if (rowReader) rowReader.style.display = reqReader ? '' : 'none';
+
   // Показываем/скрываем имя согласно настройкам
   const reqName = !!sessionFields.requireUserName;
   const rowName = document.getElementById('rowUserName');
@@ -442,20 +447,16 @@ async function confirmStartSession() {
   const isTemp     = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
   const readerNums = document.getElementById('dlgReaderId').value.trim();
 
-  if (!readerNums) { toast('Введите номер читательского билета', 'warn'); return; }
-
   const readerId = isTemp ? readerNums : (readerCardPrefix + readerNums);
 
-  if (isTemp) {
-    // Временные билеты не ищутся в базе — просто фиксируем посещение
-  } else {
-    // Для постоянных — обязательна проверка в базе
-    if (_readerLookupState === null || _readerLookedUpId !== readerId) {
-      await lookupReader();
+  if (sessionFields.requireReaderId) {
+    if (!readerNums) { toast('Введите номер читательского билета', 'warn'); return; }
+    if (!isTemp) {
+      if (_readerLookupState === null || _readerLookedUpId !== readerId) await lookupReader();
+      if (_readerLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+      if (_readerLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+      if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
     }
-    if (_readerLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
-    if (_readerLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
-    if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
   }
 
   const userName = document.getElementById('dlgUserName').value.trim();
