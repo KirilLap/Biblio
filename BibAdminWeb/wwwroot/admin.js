@@ -2142,11 +2142,18 @@ let readersData = [];
 let readersSortCol = 'cardId';   // текущая колонка сортировки
 let readersSortAsc = true;       // направление
 
+const INVALID_DATE = '30-12-1899';
+
 function parseReaderDate(s) {
-  if (!s) return 0;
+  if (!s || s === INVALID_DATE) return 0;
   const p = s.split('-');
   if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
   return 0;
+}
+
+function cleanUpdatedAt(r) {
+  // treat 30-12-1899 (Excel -1) same as empty — fall back to registeredAt
+  return (r.updatedAt && r.updatedAt !== INVALID_DATE) ? r.updatedAt : '';
 }
 
 function cardIdNum(id) {
@@ -2171,8 +2178,8 @@ function getSortedReaders() {
     } else if (col === 'registeredAt') {
       va = parseReaderDate(a.registeredAt); vb = parseReaderDate(b.registeredAt);
     } else if (col === 'updatedAt') {
-      va = parseReaderDate(a.updatedAt || a.registeredAt);
-      vb = parseReaderDate(b.updatedAt || b.registeredAt);
+      va = parseReaderDate(cleanUpdatedAt(a) || a.registeredAt);
+      vb = parseReaderDate(cleanUpdatedAt(b) || b.registeredAt);
     } else {
       va = (a[col] || '').toLowerCase(); vb = (b[col] || '').toLowerCase();
     }
@@ -2221,7 +2228,7 @@ function renderReadersTable() {
       <span>${esc(r.gender)}</span>
       <span>${esc(r.category)}</span>
       <span style="color:#555">${esc(r.registeredAt)}</span>
-      <span style="color:${r.updatedAt ? '#aaa' : '#444'}">${esc(r.updatedAt || r.registeredAt || '—')}</span>
+      <span style="color:${cleanUpdatedAt(r) ? '#aaa' : '#444'}">${esc(cleanUpdatedAt(r) || r.registeredAt || '—')}</span>
     </div>`;
   });
   el.innerHTML = html;

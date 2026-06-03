@@ -49,6 +49,8 @@ namespace BibAdminWeb
             )");
             // Migration: add updated_at to existing databases
             try { Exec(conn, "ALTER TABLE readers ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"); } catch { }
+            // Migration: fix invalid dates (30-12-1899 from Excel -1) — replace with registered_at
+            Exec(conn, "UPDATE readers SET updated_at = registered_at WHERE updated_at = '30-12-1899'");
             Logger.Info("📚 ReaderStore инициализирован");
         }
 
