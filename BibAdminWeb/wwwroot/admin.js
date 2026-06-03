@@ -125,6 +125,20 @@ function showPage(name) {
   }
 }
 
+// Event delegation для таблицы читателей — вешается один раз при загрузке
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('readersTable');
+    if (!el) return;
+    el.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      if (btn.dataset.action === 'edit') openEditReader(btn.dataset.id);
+      else if (btn.dataset.action === 'del') deleteReader(btn.dataset.id, btn.dataset.name);
+    });
+  });
+})();
+
 // ─── PC Grid ──────────────────────────────────────────────────────────────
 function renderPcGrid() {
   const grid = document.getElementById('pcGrid');
@@ -2176,6 +2190,9 @@ function periodFrom(p) {
 let readersData = [];
 let readersSortCol = 'cardId';   // текущая колонка сортировки
 let readersSortAsc = true;       // направление
+let readersSorted = [];          // кэш отсортированного массива
+let readersPage = 0;             // текущая страница
+const READERS_PAGE_SIZE = 100;   // строк на страницу
 
 const INVALID_DATE = '30-12-1899';
 
@@ -2200,13 +2217,15 @@ function cardIdNum(id) {
 function sortReaders(col) {
   if (readersSortCol === col) readersSortAsc = !readersSortAsc;
   else { readersSortCol = col; readersSortAsc = true; }
+  readersPage = 0;
+  rebuildSortedReaders();
   renderReadersTable();
 }
 
-function getSortedReaders() {
+function rebuildSortedReaders() {
   const col = readersSortCol;
   const asc = readersSortAsc ? 1 : -1;
-  return [...readersData].sort((a, b) => {
+  readersSorted = [...readersData].sort((a, b) => {
     let va, vb;
     if (col === 'cardId') {
       va = cardIdNum(a.cardId); vb = cardIdNum(b.cardId);
@@ -2232,6 +2251,8 @@ function sortArrow(col) {
 async function loadReaders(search = '') {
   const url = '/api/admin/readers' + (search ? `?search=${encodeURIComponent(search)}` : '');
   readersData = await fetch(url).then(r => r.json()).catch(() => []);
+  readersPage = 0;
+  rebuildSortedReaders();
   renderReadersTable();
   document.getElementById('readersCount').textContent =
     `Читателей в базе: ${readersData.length}${search ? ` (по запросу «${search}»)` : ''}`;
@@ -2244,41 +2265,58 @@ function searchReaders() {
 
 function renderReadersTable() {
   const el = document.getElementById('readersTable');
-  if (!readersData.length) {
+  if (!readersSorted.length) {
     el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel» или добавьте вручную.</div>';
     return;
   }
+
+  const total = readersSorted.length;
+  const pages = Math.ceil(total / READERS_PAGE_SIZE);
+  const start = readersPage * READERS_PAGE_SIZE;
+  const pageData = readersSorted.slice(start, start + READERS_PAGE_SIZE);
+
   const cols = '160px 1fr 110px 55px 170px 115px 115px 74px';
   const th = (label, col) =>
     `<span onclick="sortReaders('${col}')" style="cursor:pointer;user-select:none">${label}${sortArrow(col)}</span>`;
+
   let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
     ${th('ID билета','cardId')}${th('ФИО','fullName')}<span>Дата рождения</span><span>Пол</span><span>Категория</span>${th('Дата регистрации','registeredAt')}${th('Дата обновления','updatedAt')}<span></span>
   </div>`;
-  getSortedReaders().forEach(r => {
-    const age = calcReaderAge(r.birthDate);
-    html += `<div class="fin-row" style="grid-template-columns:${cols}">
-      <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
-      <b>${esc(r.fullName)}</b>
-      <span>${esc(r.birthDate)}${age !== null ? ` <span style="color:#555">(${age} л.)</span>` : ''}</span>
-      <span>${esc(r.gender)}</span>
-      <span>${esc(r.category)}</span>
-      <span style="color:#555">${esc(r.registeredAt)}</span>
-      <span style="color:${cleanUpdatedAt(r) ? '#aaa' : '#444'}">${esc(cleanUpdatedAt(r) || r.registeredAt || '—')}</span>
-      <span style="display:flex;gap:4px">
-        <button data-action="edit" data-id="${esc(r.cardId)}" title="Редактировать"
-          style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">&#9998;</button>
-        <button data-action="del" data-id="${esc(r.cardId)}" data-name="${esc(r.fullName || r.cardId)}" title="Удалить"
-          style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #5D2A2A;background:#2D1A1A;color:#F87171">&#128465;</button>
-      </span>
-    </div>`;
-  });
+
+  for (var i = 0; i < pageData.length; i++) {
+    var r = pageData[i];
+    var age = calcReaderAge(r.birthDate);
+    html += '<div class="fin-row" style="grid-template-columns:' + cols + '">' +
+      '<span style="font-family:monospace;font-size:12px">' + esc(r.cardId) + '</span>' +
+      '<b>' + esc(r.fullName) + '</b>' +
+      '<span>' + esc(r.birthDate) + (age !== null ? ' <span style="color:#555">(' + age + ' л.)</span>' : '') + '</span>' +
+      '<span>' + esc(r.gender) + '</span>' +
+      '<span>' + esc(r.category) + '</span>' +
+      '<span style="color:#555">' + esc(r.registeredAt) + '</span>' +
+      '<span style="color:' + (cleanUpdatedAt(r) ? '#aaa' : '#444') + '">' + esc(cleanUpdatedAt(r) || r.registeredAt || '—') + '</span>' +
+      '<span style="display:flex;gap:4px">' +
+        '<button data-action="edit" data-id="' + esc(r.cardId) + '" title="Редактировать" style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">&#9998;</button>' +
+        '<button data-action="del" data-id="' + esc(r.cardId) + '" data-name="' + esc(r.fullName || r.cardId) + '" title="Удалить" style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #5D2A2A;background:#2D1A1A;color:#F87171">&#128465;</button>' +
+      '</span>' +
+    '</div>';
+  }
+
+  // Пагинация
+  if (pages > 1) {
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid #1a1a30;background:#111128">' +
+      '<button onclick="readersPageNav(-1)" style="padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa" ' + (readersPage === 0 ? 'disabled' : '') + '>&#8249;</button>' +
+      '<span style="color:#666;font-size:13px">Страница ' + (readersPage + 1) + ' из ' + pages + ' &nbsp;(' + start + '–' + Math.min(start + READERS_PAGE_SIZE, total) + ' из ' + total + ')</span>' +
+      '<button onclick="readersPageNav(1)" style="padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa" ' + (readersPage >= pages - 1 ? 'disabled' : '') + '>&#8250;</button>' +
+    '</div>';
+  }
+
   el.innerHTML = html;
-  el.querySelectorAll('[data-action="edit"]').forEach(function(btn) {
-    btn.addEventListener('click', function() { openEditReader(btn.dataset.id); });
-  });
-  el.querySelectorAll('[data-action="del"]').forEach(function(btn) {
-    btn.addEventListener('click', function() { deleteReader(btn.dataset.id, btn.dataset.name); });
-  });
+}
+
+function readersPageNav(dir) {
+  var pages = Math.ceil(readersSorted.length / READERS_PAGE_SIZE);
+  readersPage = Math.max(0, Math.min(pages - 1, readersPage + dir));
+  renderReadersTable();
 }
 
 function calcReaderAge(birthDate) {
