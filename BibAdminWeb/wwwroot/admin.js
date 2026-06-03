@@ -426,6 +426,12 @@ async function ssQuickAddReader(cardId) {
 
 async function ssLookupReader() {
   if (_ssLookupInFlight) { await _ssLookupInFlight; return; }
+  // Не перезапускать если результат уже известен для этого ID
+  const nums = document.getElementById('dlgSsReader').value.trim();
+  const prefix = settings.readerCardPrefix || 'FAA';
+  const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  const currentId = isTemp ? nums : (prefix + nums);
+  if (_ssLookupState !== null && _ssLookedUpId === currentId) return;
   _ssLookupInFlight = _ssLookupReaderImpl();
   try { await _ssLookupInFlight; } finally { _ssLookupInFlight = null; }
 }
@@ -2448,8 +2454,7 @@ async function deleteReader(cardId, name) {
 }
 
 async function deleteAllReaders() {
-  if (!confirm('Удалить ВСЕХ читателей из базы?\n\nЭто действие нельзя отменить.')) return;
-  if (!confirm('Вы уверены? Будут удалены все ' + readersData.length + ' записей.')) return;
+  if (!confirm('Удалить ВСЕХ читателей (' + readersData.length + ' записей)?\nЭто действие нельзя отменить.')) return;
   const r = await fetch('/api/admin/readers', { method: 'DELETE' });
   if (r.ok) { await loadReaders(); toast('База читателей очищена', 'success'); }
   else toast('Ошибка очистки', 'warn');

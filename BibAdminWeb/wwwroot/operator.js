@@ -503,6 +503,13 @@ async function opQuickAddReader(cardId) {
 
 async function lookupReader() {
   if (_readerLookupInFlight) { await _readerLookupInFlight; return; }
+  // Не перезапускать поиск если результат уже известен для этого ID
+  // (иначе onblur перезаписывает кнопку «Добавить» и первый клик промахивается)
+  const nums = document.getElementById('dlgReaderId').value.trim();
+  const prefix = readerCardPrefix || 'FAA';
+  const isTemp = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
+  const currentId = isTemp ? nums : (prefix + nums);
+  if (_readerLookupState !== null && _readerLookedUpId === currentId) return;
   _readerLookupInFlight = _lookupReaderImpl();
   try { await _readerLookupInFlight; } finally { _readerLookupInFlight = null; }
 }
