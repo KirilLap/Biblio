@@ -698,6 +698,18 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Operator: быстрое добавление читателя по номеру билета ──────
+            if (path == "/api/op/readers/quick-add" && method == "POST")
+            {
+                string body = await ReadBody(ctx);
+                string cardId = "";
+                try { using var doc = JsonDocument.Parse(body); cardId = doc.RootElement.GetProperty("cardId").GetString()?.Trim() ?? ""; } catch { }
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан cardId\"}"); return; }
+                ReaderStore.QuickAdd(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Operator: список/поиск читателей ─────────────────────────────
             if (path == "/api/op/readers" && method == "GET")
             {

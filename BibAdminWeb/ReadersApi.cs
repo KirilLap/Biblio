@@ -56,6 +56,19 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Quick-add reader by card ID (admin) ──────────────────────────
+            if (path == "/api/admin/readers/quick-add" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                string body = await new System.IO.StreamReader(ctx.Request.Body).ReadToEndAsync();
+                string cardId = "";
+                try { using var doc = System.Text.Json.JsonDocument.Parse(body); cardId = doc.RootElement.GetProperty("cardId").GetString()?.Trim() ?? ""; } catch { }
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан cardId\"}"); return; }
+                ReaderStore.QuickAdd(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Admin: update reader ──────────────────────────────────────────
             if (path == "/api/admin/readers" && method == "PUT")
             {

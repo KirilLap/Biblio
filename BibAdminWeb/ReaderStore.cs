@@ -73,6 +73,22 @@ namespace BibAdminWeb
             return list;
         }
 
+        // Быстрое добавление нового читателя только по номеру билета (без полных данных)
+        public static bool QuickAdd(string cardId)
+        {
+            var today = DateTime.Today.ToString("dd-MM-yyyy");
+            using var conn = Open();
+            using var cmd = conn.CreateCommand();
+            // INSERT OR IGNORE — если вдруг уже есть, просто ничего не делаем
+            cmd.CommandText = "INSERT OR IGNORE INTO readers (card_id, registered_at, updated_at) VALUES (@c, @r, @u)";
+            cmd.Parameters.AddWithValue("@c", cardId);
+            cmd.Parameters.AddWithValue("@r", today);
+            cmd.Parameters.AddWithValue("@u", today);
+            var rows = cmd.ExecuteNonQuery();
+            if (rows > 0) Logger.Info($"➕ Быстрое добавление читателя: {cardId}");
+            return rows > 0;
+        }
+
         public static Reader? GetByCardId(string cardId)
         {
             using var conn = Open();

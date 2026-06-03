@@ -403,6 +403,27 @@ function onSsReaderInput() {
 }
 
 // Deduplication wrapper — prevents two concurrent lookups (blur + button click)
+async function ssQuickAddReader(cardId) {
+  const infoEl = document.getElementById('dlgSsReaderInfo');
+  infoEl.innerHTML = `<span style="color:#aaa">Добавление…</span>`;
+  try {
+    const r = await fetch('/api/admin/readers/quick-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId })
+    });
+    if (r.ok) {
+      _ssLookupState = 'valid';
+      _ssLookedUpId  = cardId;
+      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
+      infoEl.textContent = `✓ ${cardId} — добавлен как новый читатель`;
+      toast('Читатель добавлен', 'success');
+    } else {
+      toast('Ошибка добавления', 'warn');
+    }
+  } catch { toast('Ошибка добавления', 'warn'); }
+}
+
 async function ssLookupReader() {
   if (_ssLookupInFlight) { await _ssLookupInFlight; return; }
   _ssLookupInFlight = _ssLookupReaderImpl();
@@ -430,8 +451,12 @@ async function _ssLookupReaderImpl() {
     const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
     if (!r.ok) {
       _ssLookupState = 'not_found';
-      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
-      infoEl.textContent = `✗ Читатель ${cardId} не найден в базе`;
+      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;display:flex;align-items:center;gap:10px';
+      infoEl.innerHTML = `<span style="flex:1">✗ Читатель ${esc(cardId)} не найден в базе</span>
+        <button onclick="ssQuickAddReader(${JSON.stringify(cardId)})"
+          style="padding:3px 10px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75;white-space:nowrap">
+          ➕ Добавить
+        </button>`;
       return;
     }
     const data = await r.json();
