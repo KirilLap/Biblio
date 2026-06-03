@@ -2187,12 +2187,12 @@ function periodFrom(p) {
 }
 
 // ─── Readers ──────────────────────────────────────────────────────────────────
-let readersData = [];
-let readersSortCol = 'cardId';   // текущая колонка сортировки
-let readersSortAsc = true;       // направление
-let readersSorted = [];          // кэш отсортированного массива
-let readersPage = 0;             // текущая страница
-const READERS_PAGE_SIZE = 100;   // строк на страницу
+let readersData  = [];        // текущая страница (для диалогов редактирования)
+let readersTotal = 0;         // всего записей на сервере
+let readersSortCol = 'fullName';
+let readersSortAsc = true;
+let readersPage    = 0;
+let readersPageSize = 25;     // по умолчанию
 
 const INVALID_DATE = '30-12-1899';
 
@@ -2218,27 +2218,7 @@ function sortReaders(col) {
   if (readersSortCol === col) readersSortAsc = !readersSortAsc;
   else { readersSortCol = col; readersSortAsc = true; }
   readersPage = 0;
-  rebuildSortedReaders();
-  renderReadersTable();
-}
-
-function rebuildSortedReaders() {
-  const col = readersSortCol;
-  const asc = readersSortAsc ? 1 : -1;
-  readersSorted = [...readersData].sort((a, b) => {
-    let va, vb;
-    if (col === 'cardId') {
-      va = cardIdNum(a.cardId); vb = cardIdNum(b.cardId);
-    } else if (col === 'registeredAt') {
-      va = parseReaderDate(a.registeredAt); vb = parseReaderDate(b.registeredAt);
-    } else if (col === 'updatedAt') {
-      va = parseReaderDate(cleanUpdatedAt(a) || a.registeredAt);
-      vb = parseReaderDate(cleanUpdatedAt(b) || b.registeredAt);
-    } else {
-      va = (a[col] || '').toLowerCase(); vb = (b[col] || '').toLowerCase();
-    }
-    return va < vb ? -asc : va > vb ? asc : 0;
-  });
+  loadReaders();
 }
 
 function sortArrow(col) {
@@ -2248,43 +2228,63 @@ function sortArrow(col) {
     : '<span style="color:#1d9e75;margin-left:4px">↓</span>';
 }
 
-async function loadReaders(search = '') {
-  const url = '/api/admin/readers' + (search ? `?search=${encodeURIComponent(search)}` : '');
-  readersData = await fetch(url).then(r => r.json()).catch(() => []);
-  readersPage = 0;
-  rebuildSortedReaders();
+async function loadReaders() {
+  const search = document.getElementById('readersSearch')?.value.trim() || '';
+  const params = new URLSearchParams({
+    page:     readersPage,
+    pageSize: readersPageSize,
+    sort:     readersSortCol,
+    order:    readersSortAsc ? 'asc' : 'desc',
+  });
+  if (search) params.set('search', search);
+
+  const res = await fetch('/api/admin/readers?' + params).catch(() => null);
+  if (!res || !res.ok) return;
+  const data = await res.json();
+
+  readersData  = data.items  || [];
+  readersTotal = data.total  || 0;
   renderReadersTable();
+
+  const q = search ? ` (поиск: «${search}»)` : '';
   document.getElementById('readersCount').textContent =
-    `Читателей в базе: ${readersData.length}${search ? ` (по запросу «${search}»)` : ''}`;
+    `Читателей в базе: ${readersTotal}${q}`;
 }
 
 function searchReaders() {
-  const q = document.getElementById('readersSearch').value.trim();
-  loadReaders(q);
+  readersPage = 0;
+  loadReaders();
+}
+
+function readersSetPageSize(size) {
+  readersPageSize = parseInt(size) || 25;
+  readersPage = 0;
+  loadReaders();
 }
 
 function renderReadersTable() {
   const el = document.getElementById('readersTable');
-  if (!readersSorted.length) {
+  if (!readersData.length && readersTotal === 0) {
     el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel» или добавьте вручную.</div>';
     return;
   }
 
-  const total = readersSorted.length;
-  const pages = Math.ceil(total / READERS_PAGE_SIZE);
-  const start = readersPage * READERS_PAGE_SIZE;
-  const pageData = readersSorted.slice(start, start + READERS_PAGE_SIZE);
+  const pages = Math.ceil(readersTotal / readersPageSize);
+  const start = readersPage * readersPageSize + 1;
+  const end   = Math.min(start + readersData.length - 1, readersTotal);
 
   const cols = '160px 1fr 110px 55px 170px 115px 115px 74px';
   const th = (label, col) =>
-    `<span onclick="sortReaders('${col}')" style="cursor:pointer;user-select:none">${label}${sortArrow(col)}</span>`;
+    '<span onclick="sortReaders(\'' + col + '\')" style="cursor:pointer;user-select:none">' + label + sortArrow(col) + '</span>';
 
-  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    ${th('ID билета','cardId')}${th('ФИО','fullName')}<span>Дата рождения</span><span>Пол</span><span>Категория</span>${th('Дата регистрации','registeredAt')}${th('Дата обновления','updatedAt')}<span></span>
-  </div>`;
+  var html = '<div class="fin-table-header" style="grid-template-columns:' + cols + '">' +
+    th('ID билета','cardId') + th('ФИО','fullName') +
+    '<span>Дата рождения</span><span>Пол</span><span>Категория</span>' +
+    th('Дата регистрации','registeredAt') + th('Дата обновления','updatedAt') +
+    '<span></span></div>';
 
-  for (var i = 0; i < pageData.length; i++) {
-    var r = pageData[i];
+  for (var i = 0; i < readersData.length; i++) {
+    var r = readersData[i];
     var age = calcReaderAge(r.birthDate);
     html += '<div class="fin-row" style="grid-template-columns:' + cols + '">' +
       '<span style="font-family:monospace;font-size:12px">' + esc(r.cardId) + '</span>' +
@@ -2297,26 +2297,32 @@ function renderReadersTable() {
       '<span style="display:flex;gap:4px">' +
         '<button data-action="edit" data-id="' + esc(r.cardId) + '" title="Редактировать" style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">&#9998;</button>' +
         '<button data-action="del" data-id="' + esc(r.cardId) + '" data-name="' + esc(r.fullName || r.cardId) + '" title="Удалить" style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #5D2A2A;background:#2D1A1A;color:#F87171">&#128465;</button>' +
-      '</span>' +
-    '</div>';
+      '</span></div>';
   }
 
-  // Пагинация
-  if (pages > 1) {
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid #1a1a30;background:#111128">' +
-      '<button onclick="readersPageNav(-1)" style="padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa" ' + (readersPage === 0 ? 'disabled' : '') + '>&#8249;</button>' +
-      '<span style="color:#666;font-size:13px">Страница ' + (readersPage + 1) + ' из ' + pages + ' &nbsp;(' + start + '–' + Math.min(start + READERS_PAGE_SIZE, total) + ' из ' + total + ')</span>' +
-      '<button onclick="readersPageNav(1)" style="padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa" ' + (readersPage >= pages - 1 ? 'disabled' : '') + '>&#8250;</button>' +
-    '</div>';
-  }
+  // Панель пагинации
+  var btnStyle = 'padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa';
+  var selStyle = 'background:#1A1A2E;border:1px solid #3D3D6B;border-radius:4px;color:#aaa;padding:3px 6px;font-size:12px';
+  html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #1a1a30;background:#111128;flex-wrap:wrap">' +
+    '<button onclick="readersPageNav(-1)" ' + (readersPage === 0 ? 'disabled' : '') + ' style="' + btnStyle + '">&#8249;</button>' +
+    '<span style="color:#666;font-size:13px">' + start + '–' + end + ' из ' + readersTotal + '</span>' +
+    '<button onclick="readersPageNav(1)" ' + (readersPage >= pages - 1 ? 'disabled' : '') + ' style="' + btnStyle + '">&#8250;</button>' +
+    '<span style="color:#444;font-size:12px">|</span>' +
+    '<span style="color:#666;font-size:12px">Строк:</span>' +
+    '<select onchange="readersSetPageSize(this.value)" style="' + selStyle + '">' +
+    [25,50,100,250].map(function(n) {
+      return '<option value="' + n + '"' + (n === readersPageSize ? ' selected' : '') + '>' + n + '</option>';
+    }).join('') +
+    '</select>' +
+  '</div>';
 
   el.innerHTML = html;
 }
 
 function readersPageNav(dir) {
-  var pages = Math.ceil(readersSorted.length / READERS_PAGE_SIZE);
+  var pages = Math.ceil(readersTotal / readersPageSize);
   readersPage = Math.max(0, Math.min(pages - 1, readersPage + dir));
-  renderReadersTable();
+  loadReaders();
 }
 
 function calcReaderAge(birthDate) {

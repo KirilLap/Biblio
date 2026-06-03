@@ -45,14 +45,36 @@ namespace BibAdminWeb
                 return;
             }
 
-            // ─── Admin: list readers ────────────────────────────────────────
-            // Note: admin auth already enforced by AdminApi middleware for /api/admin/* paths
+            // ─── Admin: list readers (с пагинацией и сортировкой) ─────────────
             if (path == "/api/admin/readers" && method == "GET")
             {
-                var search = ctx.Request.Query["search"].ToString();
-                var list = ReaderStore.GetAll(string.IsNullOrWhiteSpace(search) ? null : search);
+                var search   = ctx.Request.Query["search"].ToString();
+                var sortCol  = ctx.Request.Query["sort"].ToString();
+                var sortDir  = ctx.Request.Query["order"].ToString();
+                var pageStr  = ctx.Request.Query["page"].ToString();
+                var sizeStr  = ctx.Request.Query["pageSize"].ToString();
+
+                // Если параметров нет — старый режим (полный список) для совместимости
+                if (string.IsNullOrEmpty(pageStr) && string.IsNullOrEmpty(sizeStr))
+                {
+                    var list = ReaderStore.GetAll(string.IsNullOrWhiteSpace(search) ? null : search);
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(list, _json));
+                    return;
+                }
+
+                int page     = int.TryParse(pageStr, out var p) ? Math.Max(0, p) : 0;
+                int pageSize = int.TryParse(sizeStr, out var s) ? Math.Clamp(s, 10, 500) : 25;
+                bool sortAsc = sortDir != "desc";
+                if (string.IsNullOrEmpty(sortCol)) sortCol = "fullName";
+
+                var (items, total) = ReaderStore.GetPaged(
+                    string.IsNullOrWhiteSpace(search) ? null : search,
+                    sortCol, sortAsc, page, pageSize);
+
                 ctx.Response.ContentType = "application/json";
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(list, _json));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(
+                    new { items, total, page, pageSize }, _json));
                 return;
             }
 

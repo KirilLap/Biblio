@@ -78,6 +78,52 @@ namespace BibAdminWeb
             return list;
         }
 
+        public static (List<Reader> Items, int Total) GetPaged(
+            string? search, string sortCol, bool sortAsc, int page, int pageSize)
+        {
+            // Допустимые колонки для сортировки (защита от SQL-инъекций)
+            var orderExpr = sortCol switch
+            {
+                "cardId"       => "CAST(SUBSTR(card_id, 4) AS INTEGER)",
+                "fullName"     => "full_name COLLATE NOCASE",
+                "registeredAt" => "registered_at",
+                "updatedAt"    => "COALESCE(NULLIF(updated_at,''), registered_at)",
+                _              => "full_name COLLATE NOCASE"
+            };
+            var dir = sortAsc ? "ASC" : "DESC";
+
+            var where = string.IsNullOrWhiteSpace(search)
+                ? ""
+                : "WHERE LOWER(full_name) LIKE @q OR LOWER(card_id) LIKE @q";
+
+            using var conn = Open();
+
+            // Общее количество
+            using var countCmd = conn.CreateCommand();
+            countCmd.CommandText = $"SELECT COUNT(*) FROM readers {where}";
+            if (!string.IsNullOrWhiteSpace(search))
+                countCmd.Parameters.AddWithValue("@q", $"%{search.ToLower()}%");
+            var total = (int)(long)countCmd.ExecuteScalar()!;
+
+            // Страница данных
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $@"
+                SELECT id,card_id,full_name,birth_date,category,gender,registered_at,updated_at
+                FROM readers {where}
+                ORDER BY {orderExpr} {dir}
+                LIMIT @limit OFFSET @offset";
+            if (!string.IsNullOrWhiteSpace(search))
+                cmd.Parameters.AddWithValue("@q", $"%{search.ToLower()}%");
+            cmd.Parameters.AddWithValue("@limit",  pageSize);
+            cmd.Parameters.AddWithValue("@offset", page * pageSize);
+
+            var list = new List<Reader>();
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) list.Add(Map(r));
+
+            return (list, total);
+        }
+
         // Быстрое добавление нового читателя только по номеру билета (без полных данных)
         public static bool QuickAdd(string cardId)
         {
