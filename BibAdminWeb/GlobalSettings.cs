@@ -104,8 +104,17 @@ namespace BibAdminWeb
                 MigrateIfNeeded();
                 if (File.Exists(_path))
                 {
+                    // Файл существует — читаем как есть, не трогаем
                     var json = File.ReadAllText(_path);
                     return JsonSerializer.Deserialize<GlobalSettings>(json) ?? new GlobalSettings();
+                }
+                else
+                {
+                    // Файл не существует — создаём с дефолтными значениями и сразу сохраняем
+                    var defaults = new GlobalSettings();
+                    defaults.Save();
+                    Logger.Info("📄 global_settings.json создан с дефолтными значениями");
+                    return defaults;
                 }
             }
             catch (Exception ex) { Logger.Error($"Ошибка загрузки GlobalSettings: {ex.Message}"); }
