@@ -476,6 +476,10 @@ function openStartSession(pcNumber) {
   _ssLookupState = null;
   _ssLookedUpId  = '';
 
+  // Show/hide reader ID row
+  const rowReader = document.getElementById('rowSsReader');
+  if (rowReader) rowReader.style.display = settings.requireReaderId ? '' : 'none';
+
   // Show/hide name row
   const rowName = document.getElementById('rowSsName');
   if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
