@@ -360,12 +360,17 @@ let _ssLookedUpId  = '';
 let _ssLookupInFlight = null;  // deduplicate concurrent lookups
 let _ssLookupTimer    = null;  // debounce timer for auto-lookup on input
 
-function _ssParseRegDate(str) {
+function _ssParseDate(str) {
   if (!str) return null;
   const p = str.split('-');
   if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
   const d = new Date(str);
   return isNaN(d) ? null : d;
+}
+
+// Returns the date from which card validity (3 years) is counted
+function _ssCardBaseDate(data) {
+  return _ssParseDate(data.updatedAt) || _ssParseDate(data.registeredAt);
 }
 
 function ssOnCardTypeChanged() {
@@ -430,12 +435,11 @@ async function _ssLookupReaderImpl() {
       return;
     }
     const data = await r.json();
-    const regDate = _ssParseRegDate(data.registeredAt);
-    if (regDate) {
-      const daysSince = (Date.now() - regDate) / 86400000;
-      if (daysSince > 3 * 365 + 1) {
-        const expDate = new Date(regDate);
-        expDate.setFullYear(expDate.getFullYear() + 3);
+    const baseDate = _ssCardBaseDate(data);
+    if (baseDate) {
+      const expDate = new Date(baseDate);
+      expDate.setFullYear(expDate.getFullYear() + 3);
+      if (Date.now() > expDate) {
         _ssLookupState = 'expired';
         document.getElementById('dlgSsName').value = data.fullName || '';
         infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
@@ -2143,18 +2147,32 @@ function searchReaders() {
   loadReaders(q);
 }
 
+function readerCardStatus(r) {
+  const base = _ssParseDate(r.updatedAt) || _ssParseDate(r.registeredAt);
+  if (!base) return { label: '—', color: '#555', expStr: '—' };
+  const exp = new Date(base);
+  exp.setFullYear(exp.getFullYear() + 3);
+  const now = Date.now();
+  const msLeft = exp - now;
+  const expStr = exp.toLocaleDateString('ru-RU');
+  if (msLeft < 0)      return { label: 'Просрочен',  color: '#F87171', expStr };
+  if (msLeft < 90 * 86400000) return { label: 'Скоро истечёт', color: '#f59e0b', expStr };
+  return { label: 'Действителен', color: '#6EE7B7', expStr };
+}
+
 function renderReadersTable() {
   const el = document.getElementById('readersTable');
   if (!readersData.length) {
     el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel».</div>';
     return;
   }
-  const cols = '170px 1fr 110px 60px 180px 120px';
+  const cols = '150px 1fr 100px 55px 160px 110px 110px 110px 60px';
   let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span>
+    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span><span>Дата обновления</span><span>Действителен до</span><span></span>
   </div>`;
   readersData.forEach(r => {
     const age = calcReaderAge(r.birthDate);
+    const st = readerCardStatus(r);
     html += `<div class="fin-row" style="grid-template-columns:${cols}">
       <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
       <b>${esc(r.fullName)}</b>
@@ -2162,6 +2180,9 @@ function renderReadersTable() {
       <span>${esc(r.gender)}</span>
       <span>${esc(r.category)}</span>
       <span style="color:#555">${esc(r.registeredAt)}</span>
+      <span style="color:#aaa">${esc(r.updatedAt || '—')}</span>
+      <span style="color:${st.color};font-size:12px" title="${st.label}">${st.expStr}</span>
+      <span><button onclick="openEditReader(${JSON.stringify(r.cardId)})" style="padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">✏</button></span>
     </div>`;
   });
   el.innerHTML = html;
@@ -2202,43 +2223,11 @@ async function doImport() {
     const data = await r.json();
     if (!r.ok) { toast(data.error || 'Ошибка', 'warn'); btn.disabled = false; btn.textContent = 'Загрузить'; return; }
 
-    _importConflictNewData = data.conflictNewData || {};
-    const byReader = {};
-    (data.conflicts || []).forEach(c => {
-      if (!byReader[c.cardId]) byReader[c.cardId] = { name: c.fullName, fields: [] };
-      byReader[c.cardId].fields.push(c);
-    });
-    const readerConflictCount = Object.keys(byReader).length;
-    let html = `<div style="display:flex;gap:20px;margin-bottom:${readerConflictCount ? 12 : 0}px">
+    const html = `<div style="display:flex;gap:20px">
       <span style="color:#1d9e75">✓ Добавлено: <b>${data.added}</b></span>
+      ${data.updated ? `<span style="color:#60a5fa">↻ Обновлено: <b>${data.updated}</b></span>` : ''}
       <span style="color:#666">Пропущено: <b>${data.skipped}</b></span>
-      ${readerConflictCount ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${readerConflictCount}</b></span>` : ''}
     </div>`;
-    if (readerConflictCount) {
-      html += `<div style="font-size:12px;color:#888;margin-bottom:8px">Записи с изменёнными данными. Нажмите «Обновить» чтобы применить новые значения:</div>
-      <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">`;
-      for (const [cardId, info] of Object.entries(byReader)) {
-        html += `<div style="background:#111128;border:1px solid #222240;border-radius:6px;padding:8px 10px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-            <span style="font-family:monospace;font-size:11px;color:#888">${esc(cardId)}</span>
-            <span style="font-size:12px;color:#ccc;flex:1">${esc(info.name)}</span>
-            <button id="updBtn_${esc(cardId)}" onclick="updateImportedReader(${JSON.stringify(cardId)})"
-              style="padding:2px 12px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75">
-              Обновить
-            </button>
-          </div>`;
-        info.fields.forEach(f => {
-          html += `<div style="font-size:11px;display:flex;gap:6px;color:#666">
-            <span style="color:#f59e0b;width:110px;flex-shrink:0">${esc(f.field)}</span>
-            <span>${esc(f.oldValue || '—')}</span>
-            <span style="color:#444">→</span>
-            <span style="color:#ccc">${esc(f.newValue || '—')}</span>
-          </div>`;
-        });
-        html += `</div>`;
-      }
-      html += `</div>`;
-    }
     const resultEl = document.getElementById('importResult');
     resultEl.innerHTML = html;
     resultEl.style.display = 'block';
@@ -2246,7 +2235,7 @@ async function doImport() {
     btn.disabled = false;
     btn.onclick = () => { closeDlg('dlgImportReaders'); btn.onclick = doImport; };
     await loadReaders();
-    toast(`Импорт завершён: добавлено ${data.added}`, 'success');
+    toast(`Импорт завершён: добавлено ${data.added}, обновлено ${data.updated ?? 0}`, 'success');
   } catch (e) {
     toast('Ошибка импорта: ' + e.message, 'warn');
     btn.disabled = false;
@@ -2258,14 +2247,31 @@ function exportReaderStats() {
   window.open('/api/admin/readers/stats/export', '_blank');
 }
 
-let _importConflictNewData = {};  // cardId → Reader (новые данные из Excel)
+function openEditReader(cardId) {
+  const r = readersData.find(x => x.cardId === cardId);
+  if (!r) return;
+  document.getElementById('editReaderId').value      = r.cardId;
+  document.getElementById('editReaderName').value    = r.fullName;
+  document.getElementById('editReaderBirth').value   = r.birthDate;
+  document.getElementById('editReaderCat').value     = r.category;
+  document.getElementById('editReaderGender').value  = r.gender;
+  document.getElementById('editReaderReg').value     = r.registeredAt;
+  document.getElementById('editReaderUpd').value     = r.updatedAt || '';
+  document.getElementById('dlgEditReader').style.display = 'flex';
+}
 
-async function updateImportedReader(cardId) {
-  const reader = _importConflictNewData[cardId];
-  if (!reader) return;
-  const btnId = 'updBtn_' + cardId;
-  const btn = document.getElementById(btnId);
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+async function saveEditReader() {
+  const reader = {
+    cardId:       document.getElementById('editReaderId').value,
+    fullName:     document.getElementById('editReaderName').value.trim(),
+    birthDate:    document.getElementById('editReaderBirth').value.trim(),
+    category:     document.getElementById('editReaderCat').value.trim(),
+    gender:       document.getElementById('editReaderGender').value,
+    registeredAt: document.getElementById('editReaderReg').value.trim(),
+    updatedAt:    document.getElementById('editReaderUpd').value.trim(),
+  };
+  const btn = document.getElementById('editReaderSaveBtn');
+  btn.disabled = true; btn.textContent = '…';
   try {
     const r = await fetch('/api/admin/readers', {
       method: 'PUT',
@@ -2273,15 +2279,14 @@ async function updateImportedReader(cardId) {
       body: JSON.stringify(reader)
     });
     if (r.ok) {
-      if (btn) { btn.textContent = '✓ Обновлено'; btn.style.background = '#0f3d2e'; btn.style.color = '#1d9e75'; }
+      closeDlg('dlgEditReader');
       await loadReaders();
+      toast('Читатель обновлён', 'success');
     } else {
-      if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
-      toast('Ошибка обновления', 'warn');
+      toast('Ошибка сохранения', 'warn');
     }
-  } catch {
-    if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
-  }
+  } catch { toast('Ошибка сохранения', 'warn'); }
+  btn.disabled = false; btn.textContent = 'Сохранить';
 }
 
 // ─── Readers Report ───────────────────────────────────────────────────────────

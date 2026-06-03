@@ -39,6 +39,7 @@ namespace BibAdminWeb
                     gender       = reader.Gender,
                     birthDate    = reader.BirthDate,
                     registeredAt = reader.RegisteredAt,
+                    updatedAt    = reader.UpdatedAt,
                     age          = age >= 0 ? age : (int?)null,
                 }, _json));
                 return;
@@ -486,24 +487,26 @@ namespace BibAdminWeb
             var ws = wb.Worksheet(1);
 
             // Find column indices from header row
-            var colCardId   = -1;
-            var colName     = -1;
-            var colBirth    = -1;
-            var colCategory = -1;
-            var colRegDate  = -1;
-            var colGender   = -1;
+            var colCardId    = -1;
+            var colName      = -1;
+            var colBirth     = -1;
+            var colCategory  = -1;
+            var colRegDate   = -1;
+            var colUpdatedAt = -1;
+            var colGender    = -1;
 
             var headerRow = ws.Row(1);
             foreach (var cell in headerRow.CellsUsed())
             {
                 var hdr = cell.GetString().Trim().ToLower();
                 var col = cell.Address.ColumnNumber;
-                if (hdr.Contains("id пользователя") || hdr == "id")          colCardId   = col;
-                else if (hdr.Contains("имя пользователя"))                    colName     = col;
-                else if (hdr.Contains("дата рождения"))                       colBirth    = col;
-                else if (hdr.Contains("категория"))                           colCategory = col;
-                else if (hdr.Contains("дата регистрации"))                    colRegDate  = col;
-                else if (hdr.Contains("пол"))                                 colGender   = col;
+                if (hdr.Contains("id пользователя") || hdr == "id")          colCardId    = col;
+                else if (hdr.Contains("имя пользователя"))                    colName      = col;
+                else if (hdr.Contains("дата рождения"))                       colBirth     = col;
+                else if (hdr.Contains("категория"))                           colCategory  = col;
+                else if (hdr.Contains("дата последнего обновления"))          colUpdatedAt = col;
+                else if (hdr.Contains("дата регистрации"))                    colRegDate   = col;
+                else if (hdr.Contains("пол"))                                 colGender    = col;
             }
 
             if (colCardId < 0 || colName < 0)
@@ -515,13 +518,19 @@ namespace BibAdminWeb
                 var cardId = ws.Cell(row, colCardId).GetString().Trim();
                 if (string.IsNullOrWhiteSpace(cardId)) continue;
 
+                var registeredAt = colRegDate  > 0 ? NormalizeDate(ws.Cell(row, colRegDate))  : "";
+                var updatedAt    = colUpdatedAt > 0 ? NormalizeDate(ws.Cell(row, colUpdatedAt)) : "";
+                // -1 or unparseable means no renewal — treat as registration date
+                if (string.IsNullOrEmpty(updatedAt)) updatedAt = registeredAt;
+
                 var reader = new Reader
                 {
                     CardId       = cardId,
                     FullName     = colName     > 0 ? ws.Cell(row, colName).GetString().Trim()     : "",
                     BirthDate    = colBirth    > 0 ? NormalizeDate(ws.Cell(row, colBirth))         : "",
                     Category     = colCategory > 0 ? ws.Cell(row, colCategory).GetString().Trim() : "",
-                    RegisteredAt = colRegDate  > 0 ? NormalizeDate(ws.Cell(row, colRegDate))       : "",
+                    RegisteredAt = registeredAt,
+                    UpdatedAt    = updatedAt,
                     Gender       = colGender   > 0 ? NormalizeGender(ws.Cell(row, colGender).GetString().Trim()) : "",
                 };
                 result.Add(reader);
@@ -536,6 +545,9 @@ namespace BibAdminWeb
             {
                 try
                 {
+                    // -1 or any non-positive number means "no date" (e.g. not renewed)
+                    if (cell.DataType == XLDataType.Number && cell.GetDouble() <= 0)
+                        return "";
                     var dt = cell.GetDateTime();
                     return dt.ToString("dd-MM-yyyy");
                 }

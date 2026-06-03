@@ -15,24 +15,14 @@ namespace BibAdminWeb
         public string Category { get; set; } = "";
         public string Gender { get; set; } = "";
         public string RegisteredAt { get; set; } = "";
-    }
-
-    public class ImportConflict
-    {
-        public string CardId { get; set; } = "";
-        public string FullName { get; set; } = "";
-        public string Field { get; set; } = "";
-        public string OldValue { get; set; } = "";
-        public string NewValue { get; set; } = "";
+        public string UpdatedAt { get; set; } = "";
     }
 
     public class ImportResult
     {
         public int Added { get; set; }
+        public int Updated { get; set; }
         public int Skipped { get; set; }
-        public List<ImportConflict> Conflicts { get; set; } = new();
-        // New values from Excel for each conflicting reader (cardId → Reader)
-        public Dictionary<string, Reader> ConflictNewData { get; set; } = new();
     }
 
     public static class ReaderStore
@@ -54,8 +44,11 @@ namespace BibAdminWeb
                 birth_date    TEXT NOT NULL DEFAULT '',
                 category      TEXT NOT NULL DEFAULT '',
                 gender        TEXT NOT NULL DEFAULT '',
-                registered_at TEXT NOT NULL DEFAULT ''
+                registered_at TEXT NOT NULL DEFAULT '',
+                updated_at    TEXT NOT NULL DEFAULT ''
             )");
+            // Migration: add updated_at to existing databases
+            try { Exec(conn, "ALTER TABLE readers ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"); } catch { }
             Logger.Info("📚 ReaderStore инициализирован");
         }
 
@@ -65,11 +58,11 @@ namespace BibAdminWeb
             using var cmd = conn.CreateCommand();
             if (string.IsNullOrWhiteSpace(search))
             {
-                cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at FROM readers ORDER BY full_name COLLATE NOCASE";
+                cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at,updated_at FROM readers ORDER BY full_name COLLATE NOCASE";
             }
             else
             {
-                cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at FROM readers WHERE LOWER(full_name) LIKE @q OR LOWER(card_id) LIKE @q ORDER BY full_name COLLATE NOCASE";
+                cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at,updated_at FROM readers WHERE LOWER(full_name) LIKE @q OR LOWER(card_id) LIKE @q ORDER BY full_name COLLATE NOCASE";
                 cmd.Parameters.AddWithValue("@q", $"%{search.ToLower()}%");
             }
             var list = new List<Reader>();
@@ -82,7 +75,7 @@ namespace BibAdminWeb
         {
             using var conn = Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at FROM readers WHERE card_id=@id";
+            cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at,updated_at FROM readers WHERE card_id=@id";
             cmd.Parameters.AddWithValue("@id", cardId);
             using var r = cmd.ExecuteReader();
             return r.Read() ? Map(r) : null;
@@ -106,52 +99,58 @@ namespace BibAdminWeb
             {
                 if (string.IsNullOrWhiteSpace(r.CardId)) continue;
 
-                string? existName = null, existBirth = null, existCat = null, existGender = null;
+                string? existUpdatedAt = null;
 
                 using (var check = conn.CreateCommand())
                 {
                     check.Transaction = tx;
-                    check.CommandText = "SELECT full_name,birth_date,category,gender FROM readers WHERE card_id=@id";
+                    check.CommandText = "SELECT updated_at FROM readers WHERE card_id=@id";
                     check.Parameters.AddWithValue("@id", r.CardId);
                     using var dr = check.ExecuteReader();
-                    if (dr.Read())
-                    {
-                        existName   = dr.GetString(0);
-                        existBirth  = dr.GetString(1);
-                        existCat    = dr.GetString(2);
-                        existGender = dr.GetString(3);
-                    }
+                    if (dr.Read()) existUpdatedAt = dr.GetString(0);
                 }
 
-                if (existName != null)
+                if (existUpdatedAt != null)
                 {
-                    var diffs = new List<ImportConflict>();
-                    AddDiff(r.CardId, r.FullName, "ФИО",           existName,   r.FullName,   diffs);
-                    AddDiff(r.CardId, r.FullName, "Дата рождения", existBirth!,  r.BirthDate,  diffs);
-                    AddDiff(r.CardId, r.FullName, "Категория",     existCat!,    r.Category,   diffs);
-                    AddDiff(r.CardId, r.FullName, "Пол",           existGender!, r.Gender,     diffs);
-
-                    if (diffs.Count == 0) result.Skipped++;
-                    else { result.Conflicts.AddRange(diffs); result.ConflictNewData[r.CardId] = r; }
+                    if (existUpdatedAt == r.UpdatedAt)
+                    {
+                        result.Skipped++;
+                    }
+                    else
+                    {
+                        using var upd = conn.CreateCommand();
+                        upd.Transaction = tx;
+                        upd.CommandText = "UPDATE readers SET full_name=@n,birth_date=@b,category=@cat,gender=@g,registered_at=@r,updated_at=@u WHERE card_id=@c";
+                        upd.Parameters.AddWithValue("@n",   r.FullName);
+                        upd.Parameters.AddWithValue("@b",   r.BirthDate);
+                        upd.Parameters.AddWithValue("@cat", r.Category);
+                        upd.Parameters.AddWithValue("@g",   r.Gender);
+                        upd.Parameters.AddWithValue("@r",   r.RegisteredAt);
+                        upd.Parameters.AddWithValue("@u",   r.UpdatedAt);
+                        upd.Parameters.AddWithValue("@c",   r.CardId);
+                        upd.ExecuteNonQuery();
+                        result.Updated++;
+                    }
                 }
                 else
                 {
                     using var ins = conn.CreateCommand();
                     ins.Transaction = tx;
-                    ins.CommandText = "INSERT INTO readers (card_id,full_name,birth_date,category,gender,registered_at) VALUES (@c,@n,@b,@cat,@g,@r)";
+                    ins.CommandText = "INSERT INTO readers (card_id,full_name,birth_date,category,gender,registered_at,updated_at) VALUES (@c,@n,@b,@cat,@g,@r,@u)";
                     ins.Parameters.AddWithValue("@c",   r.CardId);
                     ins.Parameters.AddWithValue("@n",   r.FullName);
                     ins.Parameters.AddWithValue("@b",   r.BirthDate);
                     ins.Parameters.AddWithValue("@cat", r.Category);
                     ins.Parameters.AddWithValue("@g",   r.Gender);
                     ins.Parameters.AddWithValue("@r",   r.RegisteredAt);
+                    ins.Parameters.AddWithValue("@u",   r.UpdatedAt);
                     ins.ExecuteNonQuery();
                     result.Added++;
                 }
             }
 
             tx.Commit();
-            Logger.Info($"📥 Импорт: добавлено={result.Added}, пропущено={result.Skipped}, конфликтов={result.Conflicts.Count}");
+            Logger.Info($"📥 Импорт: добавлено={result.Added}, обновлено={result.Updated}, пропущено={result.Skipped}");
             return result;
         }
 
@@ -213,20 +212,16 @@ namespace BibAdminWeb
         {
             using var conn = Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "UPDATE readers SET full_name=@n, birth_date=@b, category=@cat, gender=@g WHERE card_id=@c";
+            cmd.CommandText = "UPDATE readers SET full_name=@n, birth_date=@b, category=@cat, gender=@g, registered_at=@r, updated_at=@u WHERE card_id=@c";
             cmd.Parameters.AddWithValue("@n",   reader.FullName);
             cmd.Parameters.AddWithValue("@b",   reader.BirthDate);
             cmd.Parameters.AddWithValue("@cat", reader.Category);
             cmd.Parameters.AddWithValue("@g",   reader.Gender);
+            cmd.Parameters.AddWithValue("@r",   reader.RegisteredAt);
+            cmd.Parameters.AddWithValue("@u",   reader.UpdatedAt);
             cmd.Parameters.AddWithValue("@c",   reader.CardId);
             cmd.ExecuteNonQuery();
             Logger.Info($"✏️ Читатель обновлён: {reader.CardId}");
-        }
-
-        private static void AddDiff(string cardId, string fullName, string field, string oldVal, string newVal, List<ImportConflict> diffs)
-        {
-            if (oldVal != newVal)
-                diffs.Add(new() { CardId = cardId, FullName = fullName, Field = field, OldValue = oldVal, NewValue = newVal });
         }
 
         private static Dictionary<string, int> GroupBy(SqliteConnection conn, string sql)
@@ -262,6 +257,7 @@ namespace BibAdminWeb
             Category     = r.GetString(4),
             Gender       = r.GetString(5),
             RegisteredAt = r.GetString(6),
+            UpdatedAt    = r.GetString(7),
         };
     }
 }
