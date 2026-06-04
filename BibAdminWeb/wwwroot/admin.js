@@ -73,7 +73,11 @@ function connectHub() {
     all.forEach(c => pcs[c.pcNumber] = c);
     renderPcGrid();
   });
-  conn.on('sessionSummary', d => showSummary(d));
+  conn.on('sessionSummary', d => {
+    const isManual = _manuallyEndedPcs.has(d.pcNumber);
+    _manuallyEndedPcs.delete(d.pcNumber);
+    showSummary(d, isManual);
+  });
   conn.on('offlineAlert', d => showOfflineAlert(d));
   conn.on('offlineResolved', d => {
     toast(`${d.pcNumber}: решение — ${d.decision === 'Pause' ? 'пауза' : 'продолжить'}`);
@@ -689,7 +693,10 @@ async function confirmStartSession() {
 
 function GlobalSettings_Tariff() { return settings.tariff || 3000; }
 
+const _manuallyEndedPcs = new Set();
+
 async function endSession(pcNumber) {
+  _manuallyEndedPcs.add(pcNumber);
   await conn.invoke('EndSession', pcNumber);
 }
 
@@ -1092,13 +1099,15 @@ async function confirmExtend() {
 let _adminSummaryReaderId = '';
 let _adminSummaryPcNumber = '';
 
-function showSummary(d) {
+function showSummary(d, isManual = false) {
   const h = Math.floor(d.duration / 3600), m = Math.floor((d.duration % 3600) / 60), s = d.duration % 60;
   _adminSummaryReaderId = d.readerId || '';
   _adminSummaryPcNumber = d.pcNumber || '';
-  const name = d.userName || d.readerId || 'Анонимный';
-  bibNotify(`✅ ${d.pcNumber} — сессия завершена`,
-    `${name} · ${h}ч ${m}м · ${d.earned.toLocaleString()} сум`);
+  if (!isManual) {
+    const name = d.userName || d.readerId || 'Анонимный';
+    bibNotify(`✅ ${d.pcNumber} — сессия завершена`,
+      `${name} · ${h}ч ${m}м · ${d.earned.toLocaleString()} сум`);
+  }
 
   let html = `
     <b>ПК:</b> ${esc(d.pcNumber)}<br>

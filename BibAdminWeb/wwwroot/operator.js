@@ -179,10 +179,14 @@ function startSignalR() {
   });
 
   connection.on('sessionSummary', s => {
+    const isManual = _opManuallyEndedPcs.has(s.pcNumber);
+    _opManuallyEndedPcs.delete(s.pcNumber);
     showSessionSummary(s);
-    const name = s.userName || s.readerId || 'Анонимный';
-    bibNotify(`✅ ${s.pcNumber} — сессия завершена`,
-      `${name} · ${fmtTime(s.duration)} · ${fmt(s.earned)} сум`);
+    if (!isManual) {
+      const name = s.userName || s.readerId || 'Анонимный';
+      bibNotify(`✅ ${s.pcNumber} — сессия завершена`,
+        `${name} · ${fmtTime(s.duration)} · ${fmt(s.earned)} сум`);
+    }
   });
 
   connection.on('serviceCreated', s => {
@@ -662,11 +666,14 @@ async function _lookupReaderImpl() {
   }
 }
 
+const _opManuallyEndedPcs = new Set();
+
 async function doEndSession() {
   if (!selectedPc) return;
+  _opManuallyEndedPcs.add(selectedPc);
   try {
     await connection.invoke('EndSession', selectedPc);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { _opManuallyEndedPcs.delete(selectedPc); toast('Ошибка: ' + e, 'warn'); }
 }
 
 async function doTogglePause() {

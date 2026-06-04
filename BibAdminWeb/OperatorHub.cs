@@ -186,6 +186,7 @@ namespace BibAdminWeb
             if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return Task.CompletedTask;
             var client = AdminHub.SetOfflineDecision(pcNumber, d);
             if (client != null) OperatorBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+            if (client != null) AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
             if (client != null) AdminHub.RaiseClientUpdated(client);
             return Task.CompletedTask;
         }

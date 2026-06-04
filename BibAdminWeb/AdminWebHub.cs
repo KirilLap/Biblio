@@ -199,6 +199,7 @@ namespace BibAdminWeb
             if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return Task.CompletedTask;
             var client = AdminHub.SetOfflineDecision(pcNumber, d);
             if (client != null) AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+            if (client != null) OperatorBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
             if (client != null) AdminHub.RaiseClientUpdated(client);
             return Task.CompletedTask;
         }
@@ -582,7 +583,11 @@ namespace BibAdminWeb
             pcNumber = c.PcNumber, pcNumberValue = c.PcNumberValue, customName = c.CustomName,
             status = c.Status, isOnline = c.IsOnline, isSession = c.IsSession,
             isFree = c.IsFree, isLocked = c.IsLocked, isPaused = c.IsPaused,
-            sessionType = c.SessionType, elapsedSeconds = c.ElapsedSeconds,
+            sessionType = c.SessionType,
+            // Для offline+Continue считаем elapsed с учётом времени с момента обрыва
+            elapsedSeconds = (!c.IsOnline && c.IsSession && !c.IsPaused && c.DisconnectedAt.HasValue)
+                ? c.ElapsedAtDisconnect + (int)(DateTime.UtcNow - c.DisconnectedAt.Value).TotalSeconds
+                : c.ElapsedSeconds,
             limitSeconds = c.LimitSeconds, paidAmount = c.PaidAmount,
             userName = c.UserName, readerId = c.ReaderId,
             sessionStart = c.SessionStart?.ToString("o"),
