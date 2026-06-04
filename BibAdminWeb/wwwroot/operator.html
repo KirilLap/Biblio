@@ -37,8 +37,13 @@
 
     <div id="limitFields">
       <div class="field-row">
-        <label>Время (мин)</label>
-        <input id="dlgLimitMin" type="number" min="1" max="999" value="60" oninput="calcAmount()">
+        <label>Время</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="dlgLimitHours" type="number" min="0" max="23" value="1" style="width:70px" oninput="calcAmount()">
+          <span style="color:#888;font-size:13px">ч</span>
+          <input id="dlgLimitMins" type="number" min="0" max="59" value="0" style="width:70px" oninput="calcAmount()">
+          <span style="color:#888;font-size:13px">мин</span>
+        </div>
       </div>
       <div class="field-row">
         <label>Сумма (сум)</label>

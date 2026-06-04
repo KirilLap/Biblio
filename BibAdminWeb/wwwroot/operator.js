@@ -396,7 +396,8 @@ function onCardTypeChanged() {
 function openSessionDlg() {
   if (!selectedPc) return;
   document.getElementById('dlgSessionPc').textContent = selectedPc;
-  document.getElementById('dlgLimitMin').value = 60;
+  document.getElementById('dlgLimitHours').value = 1;
+  document.getElementById('dlgLimitMins').value  = 0;
   document.getElementById('dlgAmount').value = tariff;
   document.getElementById('dlgUserName').value = '';
   document.getElementById('dlgReaderId').value = '';
@@ -440,17 +441,21 @@ function openSessionDlg() {
 }
 
 function calcAmount() {
-  const mins = parseInt(document.getElementById('dlgLimitMin').value) || 0;
+  const h = parseInt(document.getElementById('dlgLimitHours').value) || 0;
+  const mins = h * 60 + (parseInt(document.getElementById('dlgLimitMins').value) || 0);
   document.getElementById('dlgAmount').value = Math.round(tariff * mins / 60);
 }
 function calcTime() {
   const amount = parseInt(document.getElementById('dlgAmount').value) || 0;
-  document.getElementById('dlgLimitMin').value = Math.round(amount / tariff * 60);
+  const totalMins = Math.round(amount / tariff * 60);
+  document.getElementById('dlgLimitHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgLimitMins').value  = totalMins % 60;
 }
 
 async function confirmStartSession() {
   const sessionType = document.querySelector('[name="stype"]:checked')?.value || 'Лимит';
-  const limitMin    = parseInt(document.getElementById('dlgLimitMin').value) || 0;
+  const h           = parseInt(document.getElementById('dlgLimitHours').value) || 0;
+  const limitMin    = h * 60 + (parseInt(document.getElementById('dlgLimitMins').value) || 0);
   const paidAmount  = parseInt(document.getElementById('dlgAmount').value) || 0;
   const isTemp     = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
   const readerNums = document.getElementById('dlgReaderId').value.trim();
