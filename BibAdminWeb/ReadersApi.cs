@@ -938,6 +938,70 @@ namespace BibAdminWeb
                 }
             }
 
+            // ── PC session statistics ──────────────────────────────────────────
+            var pcList = new List<(string Id, Reader? Rd, bool IsReg, int DurSecs, int Earned)>();
+            foreach (var s in sessions)
+            {
+                Reader? pcRd = null; bool pcReg = false;
+                if (!string.IsNullOrEmpty(s.ReaderId))
+                {
+                    if (readerMap.TryGetValue(s.ReaderId, out var fr)) { pcRd = fr; pcReg = true; }
+                    else if (!s.ReaderId.All(char.IsDigit)) continue;
+                }
+                pcList.Add((s.ReaderId ?? "", pcRd, pcReg, s.DurationSeconds, s.EarnedAmount));
+            }
+
+            var pcGVis  = new Dictionary<string, int>(); var pcGUniq  = new Dictionary<string, HashSet<string>>();
+            var pcCVis  = new Dictionary<string, int>(); var pcCUniq  = new Dictionary<string, HashSet<string>>();
+            var pcAVis  = ageKeys.ToDictionary(g => g, g => 0);
+            var pcAUniq = ageKeys.ToDictionary(g => g, g => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            var pcAGVis = ageKeys.ToDictionary(g => g, g => new Dictionary<string, int>());
+            var pcAGUniq= ageKeys.ToDictionary(g => g, g => new Dictionary<string, HashSet<string>>());
+
+            foreach (var (pcId, pcRd, pcReg, _, _) in pcList)
+            {
+                var g2 = (pcRd == null || string.IsNullOrEmpty(pcRd.Gender))   ? "Не указан"  : pcRd.Gender;
+                var c2 = (pcRd == null || string.IsNullOrEmpty(pcRd.Category)) ? "Не указана" : pcRd.Category;
+                string ag2;
+                if (pcRd != null && DateTime.TryParseExact(pcRd.BirthDate, "dd-MM-yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var bd2))
+                { var a2 = today.Year - bd2.Year; if (bd2 > today.AddYears(-a2)) a2--; ag2 = a2 < 14 ? "до 14" : a2 <= 17 ? "14–17" : a2 <= 30 ? "18–30" : a2 <= 60 ? "31–60" : "60+"; }
+                else ag2 = "Не указан";
+
+                if (!pcGVis.ContainsKey(g2))  { pcGVis[g2]  = 0; pcGUniq[g2]  = new(StringComparer.OrdinalIgnoreCase); }
+                pcGVis[g2]++;  if (pcReg) pcGUniq[g2].Add(pcId);
+                if (!pcCVis.ContainsKey(c2))  { pcCVis[c2]  = 0; pcCUniq[c2]  = new(StringComparer.OrdinalIgnoreCase); }
+                pcCVis[c2]++;  if (pcReg) pcCUniq[c2].Add(pcId);
+                pcAVis[ag2]++; if (pcReg) pcAUniq[ag2].Add(pcId);
+                if (!pcAGVis[ag2].ContainsKey(g2)) { pcAGVis[ag2][g2] = 0; pcAGUniq[ag2][g2] = new(StringComparer.OrdinalIgnoreCase); }
+                pcAGVis[ag2][g2]++; if (pcReg) pcAGUniq[ag2][g2].Add(pcId);
+            }
+
+            var pcTop = pcList.Where(v => v.IsReg)
+                .GroupBy(v => v.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(grp => new {
+                    readerName   = grp.First().Rd?.FullName ?? grp.Key,
+                    category     = grp.First().Rd?.Category ?? "",
+                    visits       = grp.Count(),
+                    totalMinutes = grp.Sum(v => v.DurSecs / 60)
+                }).ToList();
+
+            var pcStats = new {
+                totalSessions = pcList.Count,
+                anonSessions  = pcList.Count(v => !v.IsReg),
+                uniqueReaders = pcList.Where(v => v.IsReg).Select(v => v.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                totalRevenue  = pcList.Sum(v => v.Earned),
+                gender     = pcGVis.Keys.OrderBy(k => k).Select(k => new { name = k, sessions = pcGVis[k], uniqueReaders = pcGUniq[k].Count }).ToList(),
+                categories = pcCVis.Keys.OrderByDescending(k => pcCVis[k]).Select(k => new { name = k, sessions = pcCVis[k], uniqueReaders = pcCUniq[k].Count }).ToList(),
+                ageGroups  = ageKeys.Select(g => new {
+                    group = g, sessions = pcAVis[g], uniqueReaders = pcAUniq[g].Count,
+                    byGender = pcAGVis[g].Keys.OrderBy(k => k).ToDictionary(k => k,
+                        k => new { sessions = pcAGVis[g][k], uniqueReaders = pcAGUniq[g][k].Count })
+                }).ToList(),
+                topByVisits = pcTop.OrderByDescending(x => x.visits).Take(10).ToList(),
+                topByHours  = pcTop.OrderByDescending(x => x.totalMinutes).Take(10).ToList()
+            };
+
             string periodLabel = period switch
             {
                 "day"     => from.ToString("dd MMMM yyyy г.", cultureRu),
@@ -967,7 +1031,8 @@ namespace BibAdminWeb
                         k => new { visits = ageGVis[g][k], uniqueReaders = ageGUniq[g][k].Count })
                 }).ToList(),
                 services = svcQty.Keys.OrderByDescending(k => svcAmt[k]).Select(k => new {
-                    name = svcNm[k], quantity = svcQty[k], totalAmount = svcAmt[k] }).ToList()
+                    name = svcNm[k], quantity = svcQty[k], totalAmount = svcAmt[k] }).ToList(),
+                pcStats
             };
         }
 

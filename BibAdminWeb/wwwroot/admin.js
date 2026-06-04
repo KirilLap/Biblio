@@ -2595,34 +2595,112 @@ function renderAnalytics(data) {
 
   document.getElementById('anlGenderTable').innerHTML = buildAnalyticsTable(
     ['Пол', 'Визиты', 'Уникальных'],
-    data.gender.map(g => [g.name, g.visits, g.uniqueReaders]),
-    true
-  );
+    data.gender.map(g => [g.name, g.visits, g.uniqueReaders]), true);
 
   document.getElementById('anlCategoryTable').innerHTML = buildAnalyticsTable(
     ['Категория', 'Визиты', 'Уникальных'],
-    data.categories.map(c => [c.name, c.visits, c.uniqueReaders]),
-    true
-  );
+    data.categories.map(c => [c.name, c.visits, c.uniqueReaders]), true);
 
-  // Age groups: determine which genders appear in the data
+  // Age groups: show only gender columns that have at least one non-zero value
   const knownGenders = [...new Set(data.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
-  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...knownGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
+  const activeGenders = knownGenders.filter(gn =>
+    data.ageGroups.some(ag => (ag.byGender[gn]?.visits ?? 0) > 0 || (ag.byGender[gn]?.uniqueReaders ?? 0) > 0));
+  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...activeGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
   const ageRows = data.ageGroups.map(g => {
     const byG = g.byGender || {};
-    return [g.group, g.visits, g.uniqueReaders, ...knownGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+    return [g.group, g.visits, g.uniqueReaders, ...activeGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
   });
   document.getElementById('anlAgeTable').innerHTML = buildAnalyticsTable(ageHeaders, ageRows, true);
 
-  if (data.services.length) {
-    document.getElementById('anlServicesTable').innerHTML = buildAnalyticsTable(
-      ['Услуга', 'Кол-во', 'Сумма (сум)'],
-      data.services.map(s => [s.name, s.quantity, s.totalAmount.toLocaleString('ru-RU')]),
-      false
-    );
-  } else {
-    document.getElementById('anlServicesTable').innerHTML = '<div class="fin-empty" style="text-align:left;padding:12px 0">Услуги в данном периоде не использовались</div>';
+  // Services table with «Компьютер» row and «Итого» footer
+  document.getElementById('anlServicesTable').innerHTML = buildServicesTable(data.services, data.pcStats);
+
+  // PC stats block
+  renderPcStats(data.pcStats);
+}
+
+function buildServicesTable(services, pcStats) {
+  const pc = pcStats || {};
+  const border = '1px solid #2A2A4A';
+  const rowBorder = '1px solid #1E1E38';
+  const thS = h => `<th style="padding:7px 14px;white-space:nowrap;color:#777;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;background:#111128">${esc(h)}</th>`;
+  const thC = h => `<th style="padding:7px 14px;text-align:center;color:#777;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;border-left:${border};background:#111128">${esc(h)}</th>`;
+
+  let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse">
+    <thead><tr>${thS('Услуга')}${thC('Кол-во')}${thC('Сумма (сум)')}</tr></thead><tbody>`;
+
+  const tdN = (v, ri) => `<td style="padding:7px 14px;border-bottom:${rowBorder};font-size:13px;color:#d0d0e8;${ri%2?'background:#0e0e22':''}">${esc(String(v))}</td>`;
+  const tdC = (v, ri, color) => `<td style="padding:7px 14px;border-bottom:${rowBorder};border-left:${border};text-align:center;font-size:13px;color:${color||((v===0||v==='0')?'#444':'#aaa')};${ri%2?'background:#0e0e22':''}">${typeof v==='number'?v.toLocaleString('ru-RU'):esc(String(v))}</td>`;
+
+  // «Компьютер» row first
+  if ((pc.totalSessions ?? 0) > 0) {
+    html += `<tr><td style="padding:7px 14px;border-bottom:${rowBorder};font-size:13px;color:#7799cc;font-weight:500">🖥 Компьютер (сессии)</td>
+      <td style="padding:7px 14px;border-bottom:${rowBorder};border-left:${border};text-align:center;font-size:13px;color:#aaa">${(pc.totalSessions||0).toLocaleString('ru-RU')}</td>
+      <td style="padding:7px 14px;border-bottom:${rowBorder};border-left:${border};text-align:center;font-size:13px;color:#aaa">${(pc.totalRevenue||0).toLocaleString('ru-RU')}</td></tr>`;
   }
+
+  services.forEach((s, i) => {
+    html += `<tr>${tdN(s.name, i)}${tdC(s.quantity, i)}${tdC(s.totalAmount, i)}</tr>`;
+  });
+
+  // «Итого» footer row
+  const totalQty = (pc.totalSessions || 0) + services.reduce((sum, s) => sum + s.quantity, 0);
+  const totalAmt = (pc.totalRevenue  || 0) + services.reduce((sum, s) => sum + s.totalAmount, 0);
+  if (totalQty > 0 || totalAmt > 0) {
+    html += `<tr style="border-top:2px solid #2A2A4A">
+      <td style="padding:8px 14px;font-size:13px;font-weight:700;color:#e0e0f0">Итого</td>
+      <td style="padding:8px 14px;border-left:${border};text-align:center;font-size:13px;font-weight:700;color:#e0e0f0">${totalQty.toLocaleString('ru-RU')}</td>
+      <td style="padding:8px 14px;border-left:${border};text-align:center;font-size:13px;font-weight:700;color:#1d9e75">${totalAmt.toLocaleString('ru-RU')}</td></tr>`;
+  }
+
+  if (!services.length && !(pc.totalSessions > 0)) {
+    html += `<tr><td colspan="3" style="padding:16px;text-align:center;color:#444;font-size:13px">Услуги в данном периоде не использовались</td></tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderPcStats(pc) {
+  if (!pc) return;
+  // Summary cards
+  document.getElementById('anlPcSummary').innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Сессий за ПК</div><div class="stat-val">${pc.totalSessions}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Анонимных сессий</div><div class="stat-val orange">${pc.anonSessions}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Уникальных читателей</div><div class="stat-val">${pc.uniqueReaders}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Выручка ПК (сум)</div><div class="stat-val blue">${pc.totalRevenue.toLocaleString('ru-RU')}</div></div>`;
+
+  // Gender / Category breakdowns
+  document.getElementById('anlPcGenderTable').innerHTML = buildAnalyticsTable(
+    ['Пол', 'Сессий', 'Уникальных'],
+    pc.gender.map(g => [g.name, g.sessions, g.uniqueReaders]), true);
+
+  document.getElementById('anlPcCategoryTable').innerHTML = buildAnalyticsTable(
+    ['Категория', 'Сессий', 'Уникальных'],
+    pc.categories.map(c => [c.name, c.sessions, c.uniqueReaders]), true);
+
+  // Age groups for PC (same auto-hide logic)
+  const pcGenders = [...new Set(pc.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
+  const pcActiveG = pcGenders.filter(gn =>
+    pc.ageGroups.some(ag => (ag.byGender[gn]?.sessions ?? 0) > 0 || (ag.byGender[gn]?.uniqueReaders ?? 0) > 0));
+  const pcAgeHdr = ['Группа', 'Сессий', 'Уникальных', ...pcActiveG.flatMap(g => [`${g} сессий`, `${g} уник.`])];
+  const pcAgeRows = pc.ageGroups.map(g => {
+    const byG = g.byGender || {};
+    return [g.group, g.sessions, g.uniqueReaders, ...pcActiveG.flatMap(gn => [byG[gn]?.sessions ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+  });
+  document.getElementById('anlPcAgeTable').innerHTML = buildAnalyticsTable(pcAgeHdr, pcAgeRows, true);
+
+  // Top tables
+  const topHdr = ['Читатель', 'Категория', 'Визитов', 'Часов'];
+  const topVisitRows = pc.topByVisits.map(u => [u.readerName, u.category, u.visits, +(u.totalMinutes / 60).toFixed(1)]);
+  const topHoursRows = pc.topByHours.map(u => [u.readerName, u.category, u.visits, +(u.totalMinutes / 60).toFixed(1)]);
+  document.getElementById('anlPcTopVisits').innerHTML = topVisitRows.length
+    ? buildAnalyticsTable(topHdr, topVisitRows, false)
+    : '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+  document.getElementById('anlPcTopHours').innerHTML = topHoursRows.length
+    ? buildAnalyticsTable(topHdr, topHoursRows, false)
+    : '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
 }
 
 function buildAnalyticsTable(headers, rows, numericFromCol1 = true) {

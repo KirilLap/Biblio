@@ -1212,18 +1212,76 @@ function opRenderAnalytics(data) {
     data.categories.map(c => [c.name, c.visits, c.uniqueReaders])
   );
 
+  // Age groups: auto-hide all-zero gender columns
   const knownGenders = [...new Set(data.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
-  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...knownGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
+  const activeGenders = knownGenders.filter(gn =>
+    data.ageGroups.some(ag => (ag.byGender[gn]?.visits ?? 0) > 0 || (ag.byGender[gn]?.uniqueReaders ?? 0) > 0));
+  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...activeGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
   const ageRows = data.ageGroups.map(g => {
     const byG = g.byGender || {};
-    return [g.group, g.visits, g.uniqueReaders, ...knownGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+    return [g.group, g.visits, g.uniqueReaders, ...activeGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
   });
   document.getElementById('opAnlAgeTable').innerHTML = opBuildTable(ageHeaders, ageRows);
 
-  document.getElementById('opAnlServicesTable').innerHTML = data.services.length
-    ? opBuildTable(['Услуга', 'Кол-во', 'Сумма (сум)'],
-        data.services.map(s => [s.name, s.quantity, s.totalAmount.toLocaleString('ru-RU')]))
-    : '<div class="op-empty">Услуги в данном периоде не использовались</div>';
+  // Services table with «Компьютер» row and «Итого» footer
+  document.getElementById('opAnlServicesTable').innerHTML = opBuildServicesTable(data.services, data.pcStats);
+
+  // PC stats block
+  opRenderPcStats(data.pcStats);
+}
+
+function opBuildServicesTable(services, pc) {
+  pc = pc || {};
+  let html = '<div class="anl-table-wrap"><table class="anl-table"><thead><tr><th>Услуга</th><th>Кол-во</th><th>Сумма (сум)</th></tr></thead><tbody>';
+
+  if ((pc.totalSessions ?? 0) > 0) {
+    html += `<tr><td style="color:#7799cc;font-weight:500">🖥 Компьютер (сессии)</td>
+      <td>${(pc.totalSessions||0).toLocaleString('ru-RU')}</td>
+      <td>${(pc.totalRevenue||0).toLocaleString('ru-RU')}</td></tr>`;
+  }
+  services.forEach(s => {
+    const zQ = s.quantity === 0 ? ' class="anl-zero"' : '';
+    const zA = s.totalAmount === 0 ? ' class="anl-zero"' : '';
+    html += `<tr><td>${opEsc(s.name)}</td><td${zQ}>${s.quantity.toLocaleString('ru-RU')}</td><td${zA}>${s.totalAmount.toLocaleString('ru-RU')}</td></tr>`;
+  });
+  const totalQty = (pc.totalSessions||0) + services.reduce((s,r)=>s+r.quantity,0);
+  const totalAmt = (pc.totalRevenue||0)  + services.reduce((s,r)=>s+r.totalAmount,0);
+  if (totalQty > 0 || totalAmt > 0) {
+    html += `<tr style="border-top:2px solid #2D2D5B"><td style="font-weight:700;color:#D8D8F0">Итого</td>
+      <td style="font-weight:700;color:#D8D8F0">${totalQty.toLocaleString('ru-RU')}</td>
+      <td style="font-weight:700;color:#1D9E75">${totalAmt.toLocaleString('ru-RU')}</td></tr>`;
+  }
+  if (!services.length && !(pc.totalSessions > 0)) {
+    html += '<tr><td colspan="3" style="text-align:center;color:#444;padding:16px">Услуги не использовались</td></tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function opRenderPcStats(pc) {
+  if (!pc) return;
+  document.getElementById('opAnlPcSummary').innerHTML = `
+    <div class="anl-card"><div class="anl-card-lbl">Сессий за ПК</div><div class="anl-card-val">${pc.totalSessions}</div></div>
+    <div class="anl-card"><div class="anl-card-lbl">Анонимных</div><div class="anl-card-val amber">${pc.anonSessions}</div></div>
+    <div class="anl-card"><div class="anl-card-lbl">Уникальных читателей</div><div class="anl-card-val">${pc.uniqueReaders}</div></div>
+    <div class="anl-card"><div class="anl-card-lbl">Выручка ПК (сум)</div><div class="anl-card-val green">${pc.totalRevenue.toLocaleString('ru-RU')}</div></div>`;
+
+  document.getElementById('opAnlPcGenderTable').innerHTML = opBuildTable(['Пол','Сессий','Уникальных'], pc.gender.map(g=>[g.name,g.sessions,g.uniqueReaders]));
+  document.getElementById('opAnlPcCategoryTable').innerHTML = opBuildTable(['Категория','Сессий','Уникальных'], pc.categories.map(c=>[c.name,c.sessions,c.uniqueReaders]));
+
+  const pcG = [...new Set(pc.ageGroups.flatMap(g => Object.keys(g.byGender||{})))].sort();
+  const pcAG = pcG.filter(gn => pc.ageGroups.some(ag=>(ag.byGender[gn]?.sessions??0)>0||(ag.byGender[gn]?.uniqueReaders??0)>0));
+  const pcAgeHdr = ['Группа','Сессий','Уникальных',...pcAG.flatMap(g=>[`${g} сессий`,`${g} уник.`])];
+  const pcAgeRows = pc.ageGroups.map(g=>{const b=g.byGender||{};return[g.group,g.sessions,g.uniqueReaders,...pcAG.flatMap(gn=>[b[gn]?.sessions??0,b[gn]?.uniqueReaders??0])];});
+  document.getElementById('opAnlPcAgeTable').innerHTML = opBuildTable(pcAgeHdr, pcAgeRows);
+
+  const topHdr = ['Читатель','Категория','Визитов','Часов'];
+  document.getElementById('opAnlPcTopVisits').innerHTML = pc.topByVisits.length
+    ? opBuildTable(topHdr, pc.topByVisits.map(u=>[u.readerName,u.category,u.visits,+(u.totalMinutes/60).toFixed(1)]))
+    : '<div class="op-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+  document.getElementById('opAnlPcTopHours').innerHTML = pc.topByHours.length
+    ? opBuildTable(topHdr, pc.topByHours.map(u=>[u.readerName,u.category,u.visits,+(u.totalMinutes/60).toFixed(1)]))
+    : '<div class="op-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
 }
 
 function opBuildTable(headers, rows) {
