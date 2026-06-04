@@ -2382,6 +2382,7 @@ function openImportDlg() {
   const btn = document.getElementById('importBtn');
   btn.disabled = false;
   btn.textContent = 'Загрузить';
+  btn.style.display = '';
   document.getElementById('dlgImportReaders').style.display = 'flex';
 }
 
@@ -2406,9 +2407,7 @@ async function doImport() {
     const resultEl = document.getElementById('importResult');
     resultEl.innerHTML = html;
     resultEl.style.display = 'block';
-    btn.textContent = 'Закрыть';
-    btn.disabled = false;
-    btn.onclick = () => { closeDlg('dlgImportReaders'); btn.onclick = doImport; };
+    btn.style.display = 'none';
     await loadReaders();
     toast(`Импорт завершён: добавлено ${data.added}, обновлено ${data.updated ?? 0}`, 'success');
   } catch (e) {
