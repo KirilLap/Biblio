@@ -223,6 +223,7 @@ namespace BibAdminWeb
         // Права доступа: что оператор может просматривать
         public bool CanViewReaders { get; set; } = false;
         public bool CanViewFinance { get; set; } = false;
+        public bool CanViewStats   { get; set; } = false;
     }
 
     public class PendingCommand

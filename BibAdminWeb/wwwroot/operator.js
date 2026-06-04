@@ -22,7 +22,7 @@ let _screenInterval = null;
 
 // ── Инициализация ─────────────────────────────────────────────────────────────
 // ── Права оператора ───────────────────────────────────────────────────────────
-let opPerms = { canViewReaders: false, canViewFinance: false };
+let opPerms = { canViewReaders: false, canViewFinance: false, canViewStats: false };
 let meId = null;
 
 (async function init() {
@@ -35,8 +35,18 @@ let meId = null;
   // Применяем права
   opPerms.canViewReaders = !!me.canViewReaders;
   opPerms.canViewFinance = !!me.canViewFinance;
+  opPerms.canViewStats   = !!me.canViewStats;
   if (opPerms.canViewReaders) document.getElementById('tabBtnReaders').style.display = '';
   if (opPerms.canViewFinance) document.getElementById('tabBtnFinance').style.display = '';
+  if (opPerms.canViewStats)   document.getElementById('tabBtnStats').style.display   = '';
+
+  // Инициализируем дату для аналитики
+  const _today = new Date().toISOString().split('T')[0];
+  document.getElementById('opAnlDateDay').value     = _today;
+  document.getElementById('opAnlDateMonth').value   = _today.substring(0, 7);
+  document.getElementById('opAnlYearQuarter').value = _today.substring(0, 4);
+  document.getElementById('opAnlDateYear').value    = _today.substring(0, 4);
+  opSetQuarter(Math.ceil((new Date().getMonth() + 1) / 3));
 
   // Загружаем настройки полей сессии
   fetch('/api/session-fields')
@@ -123,11 +133,14 @@ function startSignalR() {
     if (!fresh) return;
     opPerms.canViewReaders = !!fresh.canViewReaders;
     opPerms.canViewFinance = !!fresh.canViewFinance;
+    opPerms.canViewStats   = !!fresh.canViewStats;
     document.getElementById('tabBtnReaders').style.display = opPerms.canViewReaders ? '' : 'none';
     document.getElementById('tabBtnFinance').style.display = opPerms.canViewFinance ? '' : 'none';
+    document.getElementById('tabBtnStats').style.display   = opPerms.canViewStats   ? '' : 'none';
     // Если текущая вкладка стала недоступна — возвращаемся на ПК
     if (_currentOpTab === 'readers' && !opPerms.canViewReaders) switchOpTab('pcs');
     if (_currentOpTab === 'finance' && !opPerms.canViewFinance) switchOpTab('pcs');
+    if (_currentOpTab === 'stats'   && !opPerms.canViewStats)   switchOpTab('pcs');
     toast('Права доступа обновлены', 'good');
   });
 
@@ -1108,7 +1121,7 @@ let _financeLoaded = false;
 
 function switchOpTab(tab) {
   _currentOpTab = tab;
-  ['pcs', 'readers', 'finance'].forEach(t => {
+  ['pcs', 'readers', 'finance', 'stats'].forEach(t => {
     const panel = document.getElementById('panelP' + t.charAt(0).toUpperCase() + t.slice(1)) ||
                   document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1));
     const btn   = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -1116,6 +1129,136 @@ function switchOpTab(tab) {
     if (btn)   btn.classList.toggle('active',   t === tab);
   });
   if (tab === 'finance' && !_financeLoaded) { _financeLoaded = true; loadFinanceHistory(); }
+}
+
+// ── Статистика (аналитика посещений) ─────────────────────────────────────────
+let _opAnlPeriod  = 'day';
+let _opAnlQuarter = 1;
+
+function opSetAnalyticsPeriod(period) {
+  _opAnlPeriod = period;
+  ['day','month','quarter','year'].forEach(p => {
+    document.getElementById('opAnlBtn' + p.charAt(0).toUpperCase() + p.slice(1))
+      .classList.toggle('active', p === period);
+  });
+  document.getElementById('opAnlDateDay').style.display     = period === 'day'     ? ''     : 'none';
+  document.getElementById('opAnlDateMonth').style.display   = period === 'month'   ? ''     : 'none';
+  document.getElementById('opAnlDateQuarter').style.display = period === 'quarter' ? 'flex' : 'none';
+  document.getElementById('opAnlDateYear').style.display    = period === 'year'    ? ''     : 'none';
+}
+
+function opSetQuarter(q) {
+  _opAnlQuarter = q;
+  [1,2,3,4].forEach(i => document.getElementById('opAnlQ' + i).classList.toggle('active', i === q));
+}
+
+function opGetAnalyticsDateStr() {
+  switch (_opAnlPeriod) {
+    case 'day':     return document.getElementById('opAnlDateDay').value;
+    case 'month':   return document.getElementById('opAnlDateMonth').value;
+    case 'quarter': return (document.getElementById('opAnlYearQuarter').value || new Date().getFullYear()) + '-Q' + _opAnlQuarter;
+    case 'year':    return String(document.getElementById('opAnlDateYear').value || new Date().getFullYear());
+  }
+  return '';
+}
+
+async function opLoadAnalytics() {
+  const dateStr = opGetAnalyticsDateStr();
+  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+
+  const emptyEl = document.getElementById('opAnlEmpty');
+  emptyEl.style.display = '';
+  emptyEl.textContent = 'Загрузка…';
+  document.getElementById('opAnlSummary').style.display = 'none';
+  document.getElementById('opAnlContent').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/op/readers/analytics?period=${_opAnlPeriod}&date=${encodeURIComponent(dateStr)}`);
+    const data = await r.json();
+    if (!r.ok) { emptyEl.textContent = data.error || 'Ошибка'; return; }
+    opRenderAnalytics(data);
+  } catch {
+    emptyEl.textContent = 'Ошибка загрузки';
+  }
+}
+
+function opRenderAnalytics(data) {
+  const sumEl = document.getElementById('opAnlSummary');
+  sumEl.style.display = 'flex';
+  sumEl.innerHTML = `
+    <div class="fin-stat-card"><div class="fin-stat-label">Визитов всего</div><div class="fin-stat-val">${data.totalVisits}</div></div>
+    <div class="fin-stat-card"><div class="fin-stat-label">Анонимных визитов</div><div class="fin-stat-val" style="color:#f59e0b">${data.anonymousVisits}</div></div>
+    <div class="fin-stat-card"><div class="fin-stat-label">Уникальных читателей</div><div class="fin-stat-val">${data.totalUniqueReaders}</div></div>
+    <div class="fin-stat-card"><div class="fin-stat-label">Выручка (сум)</div><div class="fin-stat-val" style="color:#1d9e75">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
+    <div class="fin-stat-card" style="flex:2;min-width:140px"><div class="fin-stat-label">Период</div><div style="font-size:13px;color:#ccc;margin-top:4px">${opEsc(data.periodLabel)}</div></div>`;
+
+  const emptyEl = document.getElementById('opAnlEmpty');
+  if (!data.totalVisits) {
+    emptyEl.style.display = '';
+    emptyEl.textContent = 'Нет данных о посещениях за выбранный период';
+    document.getElementById('opAnlContent').style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  document.getElementById('opAnlContent').style.display = '';
+
+  document.getElementById('opAnlGenderTable').innerHTML = opBuildTable(
+    ['Пол', 'Визиты', 'Уникальных'],
+    data.gender.map(g => [g.name, g.visits, g.uniqueReaders])
+  );
+  document.getElementById('opAnlCategoryTable').innerHTML = opBuildTable(
+    ['Категория', 'Визиты', 'Уникальных'],
+    data.categories.map(c => [c.name, c.visits, c.uniqueReaders])
+  );
+
+  const knownGenders = [...new Set(data.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
+  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...knownGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
+  const ageRows = data.ageGroups.map(g => {
+    const byG = g.byGender || {};
+    return [g.group, g.visits, g.uniqueReaders, ...knownGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+  });
+  document.getElementById('opAnlAgeTable').innerHTML = opBuildTable(ageHeaders, ageRows);
+
+  document.getElementById('opAnlServicesTable').innerHTML = data.services.length
+    ? opBuildTable(['Услуга', 'Кол-во', 'Сумма (сум)'],
+        data.services.map(s => [s.name, s.quantity, s.totalAmount.toLocaleString('ru-RU')]))
+    : '<div class="op-empty">Услуги в данном периоде не использовались</div>';
+}
+
+function opBuildTable(headers, rows) {
+  const borderCol = '1px solid #2A2A4A';
+  const borderRow = '1px solid #1E1E38';
+  const th = (h, i) => {
+    const align = i > 0 ? 'center' : 'left';
+    const bl = i > 0 ? `border-left:${borderCol};` : '';
+    return `<th style="padding:7px 12px;white-space:nowrap;color:#777;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;text-align:${align};${bl}background:#111128">${opEsc(String(h))}</th>`;
+  };
+  const td = (v, i) => {
+    const align = i > 0 ? 'center' : 'left';
+    const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : opEsc(String(v));
+    const color = i === 0 ? '#d0d0e8' : (typeof v === 'number' && v === 0 ? '#444' : '#b0b0cc');
+    const bl = i > 0 ? `border-left:${borderCol};` : '';
+    return `<td style="padding:6px 12px;border-bottom:${borderRow};font-size:13px;text-align:${align};color:${color};${bl}">${val}</td>`;
+  };
+  if (!rows.length) return '<div class="op-empty">Нет данных</div>';
+  let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse">
+    <thead><tr>${headers.map((h, i) => th(h, i)).join('')}</tr></thead><tbody>`;
+  rows.forEach((row, ri) => {
+    const bg = ri % 2 === 1 ? 'background:#0e0e22;' : '';
+    html += `<tr style="${bg}">${row.map((v, i) => td(v, i)).join('')}</tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function opEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function opExportAnalytics() {
+  const dateStr = opGetAnalyticsDateStr();
+  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+  window.open(`/api/op/readers/analytics/export?period=${_opAnlPeriod}&date=${encodeURIComponent(dateStr)}`, '_blank');
 }
 
 // ── Читатели ──────────────────────────────────────────────────────────────────

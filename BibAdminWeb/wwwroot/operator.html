@@ -258,6 +258,7 @@
     <button class="op-tab-btn active" id="tabBtnPcs" onclick="switchOpTab('pcs')">🖥 ПК</button>
     <button class="op-tab-btn" id="tabBtnReaders" onclick="switchOpTab('readers')" style="display:none">📋 Читатели</button>
     <button class="op-tab-btn" id="tabBtnFinance" onclick="switchOpTab('finance')" style="display:none">💰 История</button>
+    <button class="op-tab-btn" id="tabBtnStats"   onclick="switchOpTab('stats')"   style="display:none">📊 Статистика</button>
   </div>
 
   <!-- ── Вкладка: ПК ────────────────────────────────────────────────── -->
@@ -317,6 +318,57 @@
         <div class="op-empty">Загрузка…</div>
       </div>
     </div>
+  </div>
+
+  <!-- ── Вкладка: Статистика ──────────────────────────────────────── -->
+  <div id="panelStats" class="op-panel">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px">
+      <div class="op-finance-tabs">
+        <button class="op-finance-tab active" id="opAnlBtnDay"     onclick="opSetAnalyticsPeriod('day')">День</button>
+        <button class="op-finance-tab"        id="opAnlBtnMonth"   onclick="opSetAnalyticsPeriod('month')">Месяц</button>
+        <button class="op-finance-tab"        id="opAnlBtnQuarter" onclick="opSetAnalyticsPeriod('quarter')">Квартал</button>
+        <button class="op-finance-tab"        id="opAnlBtnYear"    onclick="opSetAnalyticsPeriod('year')">Год</button>
+      </div>
+      <input type="date"   id="opAnlDateDay"   style="background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+      <input type="month"  id="opAnlDateMonth" style="display:none;background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+      <div id="opAnlDateQuarter" style="display:none;align-items:center;gap:6px">
+        <input type="number" id="opAnlYearQuarter" min="2020" max="2099" placeholder="Год"
+               style="width:72px;background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+        <div class="op-finance-tabs" style="gap:4px">
+          <button class="op-finance-tab" id="opAnlQ1" onclick="opSetQuarter(1)">Q1<br><span style="font-size:10px;color:#888">Янв–Мар</span></button>
+          <button class="op-finance-tab" id="opAnlQ2" onclick="opSetQuarter(2)">Q2<br><span style="font-size:10px;color:#888">Апр–Июн</span></button>
+          <button class="op-finance-tab" id="opAnlQ3" onclick="opSetQuarter(3)">Q3<br><span style="font-size:10px;color:#888">Июл–Сен</span></button>
+          <button class="op-finance-tab" id="opAnlQ4" onclick="opSetQuarter(4)">Q4<br><span style="font-size:10px;color:#888">Окт–Дек</span></button>
+        </div>
+      </div>
+      <input type="number" id="opAnlDateYear" min="2020" max="2099" placeholder="Год"
+             style="display:none;width:80px;background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+      <button class="btn-primary" onclick="opLoadAnalytics()">Показать</button>
+      <button class="btn-service-top" onclick="opExportAnalytics()">📊 Экспорт Excel</button>
+    </div>
+
+    <div id="opAnlSummary" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:16px"></div>
+    <div id="opAnlContent" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По полу</div>
+          <div id="opAnlGenderTable"></div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По категориям</div>
+          <div id="opAnlCategoryTable"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По возрастным группам (с разбивкой по полу)</div>
+        <div id="opAnlAgeTable"></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По услугам</div>
+        <div id="opAnlServicesTable"></div>
+      </div>
+    </div>
+    <div id="opAnlEmpty" class="op-empty">Выберите период и нажмите «Показать»</div>
   </div>
 </main>
 

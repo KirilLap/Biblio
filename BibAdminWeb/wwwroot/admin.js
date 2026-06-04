@@ -1963,6 +1963,11 @@ function renderOperators(list) {
             style="width:13px;height:13px">
           💰 Финансы
         </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр статистики">
+          <input type="checkbox" id="opChkStats_${op.id}" ${op.canViewStats ? 'checked' : ''}
+            style="width:13px;height:13px">
+          📊 Статистика
+        </label>
         <button class="btn btn-outline" onclick="applyOpPermissions('${op.id}')"
           style="font-size:11px;padding:3px 10px">Применить</button>
         <span id="opPermSaved_${op.id}" style="display:none;color:#1D9E75;font-size:11px">✓ Сохранено</span>
@@ -1984,10 +1989,11 @@ async function addOperator() {
   if (!name || !login || !pwd) { toast('Заполните все поля', 'warn'); return; }
   const canViewReaders = document.getElementById('newOpReaders').checked;
   const canViewFinance = document.getElementById('newOpFinance').checked;
+  const canViewStats   = document.getElementById('newOpStats').checked;
   const r = await fetch('/api/admin/operators', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ displayName: name, login, password: pwd, canViewReaders, canViewFinance })
+    body: JSON.stringify({ displayName: name, login, password: pwd, canViewReaders, canViewFinance, canViewStats })
   });
   if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка', 'warn'); return; }
   document.getElementById('newOpName').value = '';
@@ -1995,6 +2001,7 @@ async function addOperator() {
   document.getElementById('newOpPwd').value = '';
   document.getElementById('newOpReaders').checked = false;
   document.getElementById('newOpFinance').checked = false;
+  document.getElementById('newOpStats').checked   = false;
   const badge = document.getElementById('opSaved');
   badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2000);
   await loadOperators();
@@ -2003,10 +2010,11 @@ async function addOperator() {
 async function applyOpPermissions(id) {
   const canViewReaders = document.getElementById(`opChkReaders_${id}`)?.checked ?? false;
   const canViewFinance = document.getElementById(`opChkFinance_${id}`)?.checked ?? false;
+  const canViewStats   = document.getElementById(`opChkStats_${id}`)?.checked   ?? false;
   const r = await fetch(`/api/admin/operators/${id}/permissions`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ canViewReaders, canViewFinance })
+    body: JSON.stringify({ canViewReaders, canViewFinance, canViewStats })
   });
   if (r.ok) {
     const badge = document.getElementById(`opPermSaved_${id}`);

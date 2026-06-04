@@ -812,6 +812,12 @@ namespace BibAdminWeb
         }
 
         // ── Visit analytics ──────────────────────────────────────────────────
+        public static object BuildAnalyticsPublic(string period, string dateStr)
+            => BuildAnalytics(period, dateStr);
+
+        public static byte[] BuildAnalyticsExcelPublic(string period, string dateStr)
+            => BuildAnalyticsExcel(period, dateStr);
+
         private static object BuildAnalytics(string period, string dateStr)
         {
             var (from, to) = ParsePeriod(period, dateStr);

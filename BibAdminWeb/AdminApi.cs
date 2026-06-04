@@ -203,11 +203,12 @@ namespace BibAdminWeb
                 }
                 var canReaders = data.TryGetProperty("canViewReaders", out var rvr) && rvr.GetBoolean();
                 var canFinance = data.TryGetProperty("canViewFinance", out var rvf) && rvf.GetBoolean();
+                var canStats   = data.TryGetProperty("canViewStats",   out var rvs) && rvs.GetBoolean();
                 s.Operators.Add(new OperatorAccount
                 {
                     Login = login, DisplayName = displayName,
                     PasswordHash = HashPassword(password), IsActive = true,
-                    CanViewReaders = canReaders, CanViewFinance = canFinance
+                    CanViewReaders = canReaders, CanViewFinance = canFinance, CanViewStats = canStats
                 });
                 s.Save();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
@@ -251,6 +252,7 @@ namespace BibAdminWeb
                     {
                         if (data.TryGetProperty("canViewReaders", out var rvr)) op.CanViewReaders = rvr.GetBoolean();
                         if (data.TryGetProperty("canViewFinance", out var rvf)) op.CanViewFinance = rvf.GetBoolean();
+                        if (data.TryGetProperty("canViewStats",   out var rvs)) op.CanViewStats   = rvs.GetBoolean();
                         s.Save();
                         // Уведомляем оператора в реальном времени — его браузер обновит вкладки
                         if (OperatorBroadcaster.Instance != null)
@@ -765,6 +767,57 @@ namespace BibAdminWeb
                 ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
                 ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 await ctx.Response.Body.WriteAsync(bytes);
+                return;
+            }
+
+            // ─── Operator: аналитика посещений ────────────────────────────────
+            if (path == "/api/op/readers/analytics" && method == "GET")
+            {
+                if (!op.CanViewStats)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к статистике\"}");
+                    return;
+                }
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var result = ReadersApi.BuildAnalyticsPublic(period, dateStr);
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result, _json));
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
+            // ─── Operator: экспорт аналитики ──────────────────────────────────
+            if (path == "/api/op/readers/analytics/export" && method == "GET")
+            {
+                if (!op.CanViewStats)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к статистике\"}");
+                    return;
+                }
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var bytes = ReadersApi.BuildAnalyticsExcelPublic(period, dateStr);
+                    ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    ctx.Response.Headers["Content-Disposition"] =
+                        $"attachment; filename=analytics_{dateStr.Replace("-", "")}.xlsx";
+                    await ctx.Response.Body.WriteAsync(bytes);
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
                 return;
             }
 
