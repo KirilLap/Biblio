@@ -287,7 +287,8 @@ function buildPcCard(c) {
   let timer = '';
   if (c.isSession) {
     const timerCls = `pc-timer ${c.sessionType === 'VIP' ? 'vip-timer' : ''} ${c.isPaused ? 'paused-timer' : ''} ${!c.isOnline ? 'offline-timer' : ''}`;
-    timer = `<div class="${timerCls}" id="timer-${esc(c.pcNumber)}">${fmtTime(c.elapsedSeconds)}</div>`;
+    const _timerId = 'timer-' + c.pcNumber.replace(/\s/g, '_');
+    timer = `<div class="${timerCls}" id="${_timerId}">${fmtTime(c.elapsedSeconds)}</div>`;
     if (c.limitSeconds > 0) {
       const rem = Math.max(0, c.limitSeconds - c.elapsedSeconds);
       const remCls = rem <= 300 ? 'style="color:#f87171"' : '';

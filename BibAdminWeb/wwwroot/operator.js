@@ -332,7 +332,7 @@ function buildCardHtml(pc) {
 // ── Тики таймеров (локальный инкремент) ───────────────────────────────────────
 function tickTimers() {
   Object.values(pcs).forEach(pc => {
-    if (!pc.isSession || pc.isPaused || !pc.isOnline) return;
+    if (!pc.isSession || pc.isPaused) return; // не проверяем isOnline — таймер тикает и при обрыве (Continue)
     pc.elapsedSeconds += 1;
     const timerEl = document.querySelector(`[data-pc-timer="${CSS.escape(pc.pcNumber)}"]`);
     if (timerEl) timerEl.textContent = fmtTime(pc.elapsedSeconds);
