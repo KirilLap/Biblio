@@ -26,18 +26,32 @@ let opPerms = { canViewReaders: false, canViewFinance: false, canViewStats: fals
 let meId = null;
 
 // ── Браузерные уведомления ────────────────────────────────────────────────────
+let _notifDuration = parseInt(localStorage.getItem('bibNotifDuration') || '8', 10);
+
 function bibNotify(title, body) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const n = new Notification(title, { body, icon: '/favicon.ico' });
   n.onclick = () => { window.focus(); n.close(); };
+  if (_notifDuration > 0) setTimeout(() => n.close(), _notifDuration * 1000);
+}
+
+function opSaveNotifDuration() {
+  const inp = document.getElementById('opNotifDurationInput');
+  if (!inp) return;
+  const v = parseInt(inp.value || '8', 10);
+  _notifDuration = Math.max(1, Math.min(60, isNaN(v) ? 8 : v));
+  localStorage.setItem('bibNotifDuration', _notifDuration);
+  inp.value = _notifDuration;
 }
 
 function opUpdateNotifBtn() {
   const btn = document.getElementById('opNotifBtn');
+  const inp = document.getElementById('opNotifDurationInput');
   if (!btn || !('Notification' in window)) return;
   const p = Notification.permission;
   if (p === 'granted') {
     btn.style.display = 'none'; // уже работает — кнопку прячем
+    if (inp) { inp.style.display = ''; inp.value = _notifDuration; }
   } else if (p === 'denied') {
     btn.style.display = '';
     btn.title = 'Уведомления заблокированы — разрешите в настройках браузера';
@@ -45,9 +59,11 @@ function opUpdateNotifBtn() {
     btn.style.borderColor = '#5D2A2A';
     btn.style.cursor = 'default';
     btn.onclick = null;
+    if (inp) inp.style.display = 'none';
   } else {
     btn.style.display = '';
     btn.title = 'Включить браузерные уведомления';
+    if (inp) inp.style.display = 'none';
   }
 }
 
@@ -159,6 +175,7 @@ function startSignalR() {
 
   connection.on('serverRestarting', data => {
     showRestartOverlay(data.reason || 'Обновление системы');
+    bibNotify('🔄 Обновление сервера', 'Сервер перезапускается. После обновления войдите в систему снова.');
   });
 
   connection.on('permissionsUpdated', async data => {
@@ -180,13 +197,25 @@ function startSignalR() {
 
   connection.on('sessionSummary', s => {
     const isManual = _opManuallyEndedPcs.has(s.pcNumber);
-    _opManuallyEndedPcs.delete(s.pcNumber);
+    // Не удаляем из _opManuallyEndedPcs здесь — sessionEndedByStaff обработает это
     showSessionSummary(s);
     if (!isManual) {
       const name = s.userName || s.readerId || 'Анонимный';
       bibNotify(`✅ ${s.pcNumber} — сессия завершена`,
         `${name} · ${fmtTime(s.duration)} · ${fmt(s.earned)} сум`);
     }
+  });
+
+  connection.on('sessionEndedByStaff', data => {
+    if (_opManuallyEndedPcs.has(data.pcNumber)) {
+      _opManuallyEndedPcs.delete(data.pcNumber);
+      return; // сами завершили — не уведомляем
+    }
+    const name = data.userName || 'Анонимный';
+    const h = Math.floor(data.durationSeconds / 3600);
+    const m = Math.floor((data.durationSeconds % 3600) / 60);
+    bibNotify(`✅ ${data.pcNumber} — сессия завершена`,
+      `${name} · ${h}ч ${m}м · ${(data.earned || 0).toLocaleString('ru-RU')} сум`);
   });
 
   connection.on('serviceCreated', s => {

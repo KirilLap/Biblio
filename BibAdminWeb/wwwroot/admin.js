@@ -78,6 +78,17 @@ function connectHub() {
     _manuallyEndedPcs.delete(d.pcNumber);
     showSummary(d, isManual);
   });
+
+  conn.on('sessionEndedByStaff', d => {
+    if (_manuallyEndedPcs.has(d.pcNumber)) return; // я завершил сам
+    const h = Math.floor(d.durationSeconds / 3600), m = Math.floor((d.durationSeconds % 3600) / 60);
+    const name = d.userName && d.userName !== '—' ? d.userName : 'Анонимный';
+    bibNotify(`✅ ${d.pcNumber} — сессия завершена`, `${name} · ${h}ч ${m}м · ${(d.earned||0).toLocaleString('ru-RU')} сум`);
+  });
+
+  conn.on('serverRestarting', d => {
+    bibNotify('🔄 Обновление сервера', 'Страница обновится автоматически. После перезагрузки войдите снова.');
+  });
   conn.on('offlineAlert', d => showOfflineAlert(d));
   conn.on('offlineResolved', d => {
     toast(`${d.pcNumber}: решение — ${d.decision === 'Pause' ? 'пауза' : 'продолжить'}`);
@@ -122,16 +133,28 @@ function setConnStatus(ok) {
 }
 
 // ─── Browser notifications ───────────────────────────────────────────────────
+let _notifDuration = parseInt(localStorage.getItem('bibNotifDuration') || '8', 10);
+
 function bibNotify(title, body) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const n = new Notification(title, { body, icon: '/favicon.ico' });
   n.onclick = () => { window.focus(); n.close(); };
+  if (_notifDuration > 0) setTimeout(() => n.close(), _notifDuration * 1000);
+}
+
+function saveNotifDuration() {
+  const v = parseInt(document.getElementById('notifDurationInput').value || '8', 10);
+  _notifDuration = Math.max(1, Math.min(60, isNaN(v) ? 8 : v));
+  localStorage.setItem('bibNotifDuration', _notifDuration);
+  document.getElementById('notifDurationInput').value = _notifDuration;
 }
 
 function updateNotifBtn() {
   const btn    = document.getElementById('notifPermBtn');
   const status = document.getElementById('notifPermStatus');
   if (!btn || !status) return;
+  const durInp = document.getElementById('notifDurationInput');
+  if (durInp) durInp.value = _notifDuration;
   if (!('Notification' in window)) {
     status.textContent = 'Браузер не поддерживает уведомления';
     status.style.color = '#888';

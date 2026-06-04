@@ -163,6 +163,13 @@
           <button class="btn btn-outline" id="notifPermBtn" onclick="requestNotifications()" style="display:none">Включить уведомления</button>
           <span id="notifPermStatus" style="font-size:13px"></span>
         </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <label style="font-size:13px;color:#888">Длительность уведомления:</label>
+          <input type="number" id="notifDurationInput" min="1" max="60" value="8"
+            style="width:60px;padding:4px 8px;background:#1a1a2e;border:1px solid #3D3D6B;color:#fff;border-radius:6px;font-size:13px;text-align:center"
+            onchange="saveNotifDuration()">
+          <span style="font-size:13px;color:#888">сек</span>
+        </div>
       </div>
 
       <div class="settings-2col">
