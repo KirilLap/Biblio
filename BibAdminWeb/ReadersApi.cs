@@ -826,32 +826,54 @@ namespace BibAdminWeb
             var allSvc = ServiceTransaction.All
                 .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
 
-            // Collect visits for registered readers only
+            // IsReg=true → registered reader; IsReg=false → anonymous/temp
+            // Deleted registered readers (non-numeric ID not in DB) are skipped
             var usedSvcIds = new HashSet<string>();
-            var visits = new List<(string Id, Reader Rd, int Earned, List<ServiceTransaction> Svcs)>();
+            var visits = new List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)>();
 
             foreach (var s in sessions)
             {
-                if (string.IsNullOrEmpty(s.ReaderId) || !readerMap.TryGetValue(s.ReaderId, out var rd)) continue;
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(s.ReaderId))
+                {
+                    if (readerMap.TryGetValue(s.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!s.ReaderId.All(char.IsDigit))
+                    {
+                        // Deleted registered reader — mark linked services used but skip the visit
+                        var sl2 = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                        allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
+                            && t.CreatedAt.ToLocalTime() >= sl2 && t.CreatedAt.ToLocalTime() <= s.EndTime)
+                            .ToList().ForEach(t => usedSvcIds.Add(t.Id));
+                        continue;
+                    }
+                    // else: purely numeric = temp card → treat as anonymous
+                }
                 var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
                 var linked = allSvc.Where(t =>
                     !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
                     && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= s.EndTime).ToList();
                 foreach (var t in linked) usedSvcIds.Add(t.Id);
-                visits.Add((s.ReaderId, rd, s.EarnedAmount, linked));
+                visits.Add((s.ReaderId ?? "", rd, isReg, s.EarnedAmount, linked));
             }
 
             foreach (var grp in allSvc
-                .Where(t => !usedSvcIds.Contains(t.Id) && !string.IsNullOrEmpty(t.ReaderId) && readerMap.ContainsKey(t.ReaderId))
+                .Where(t => !usedSvcIds.Contains(t.Id))
                 .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : "b:" + t.BatchId))
             {
                 var items = grp.ToList(); var first = items[0];
-                if (!readerMap.TryGetValue(first.ReaderId, out var rd)) continue;
-                visits.Add((first.ReaderId, rd, 0, items));
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(first.ReaderId))
+                {
+                    if (readerMap.TryGetValue(first.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!first.ReaderId.All(char.IsDigit)) continue; // deleted registered reader
+                }
+                visits.Add((first.ReaderId ?? "", rd, isReg, 0, items));
             }
 
             int totalVisits        = visits.Count;
-            int totalUniqueReaders = visits.Select(v => v.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            int anonymousVisits    = visits.Count(v => !v.IsReg);
+            int totalUniqueReaders = visits.Where(v => v.IsReg).Select(v => v.Id)
+                                          .Distinct(StringComparer.OrdinalIgnoreCase).Count();
             int totalRevenue       = visits.Sum(v => v.Earned + v.Svcs.Sum(s => s.TotalAmount));
 
             var genderVisits  = new Dictionary<string, int>();
@@ -865,17 +887,17 @@ namespace BibAdminWeb
             var ageGVis  = ageKeys.ToDictionary(g => g, g => new Dictionary<string, int>());
             var ageGUniq = ageKeys.ToDictionary(g => g, g => new Dictionary<string, HashSet<string>>());
 
-            var svcQty    = new Dictionary<string, int>();
-            var svcAmt    = new Dictionary<string, int>();
-            var svcNm     = new Dictionary<string, string>();
+            var svcQty = new Dictionary<string, int>();
+            var svcAmt = new Dictionary<string, int>();
+            var svcNm  = new Dictionary<string, string>();
 
-            foreach (var (readerId, rd, _, svcs) in visits)
+            foreach (var (readerId, rd, isReg, _, svcs) in visits)
             {
-                var gender   = string.IsNullOrEmpty(rd.Gender)   ? "Не указан"  : rd.Gender;
-                var category = string.IsNullOrEmpty(rd.Category) ? "Не указана" : rd.Category;
+                var gender   = (rd == null || string.IsNullOrEmpty(rd.Gender))   ? "Не указан"  : rd.Gender;
+                var category = (rd == null || string.IsNullOrEmpty(rd.Category)) ? "Не указана" : rd.Category;
 
                 string ageGroup;
-                if (DateTime.TryParseExact(rd.BirthDate, "dd-MM-yyyy",
+                if (rd != null && DateTime.TryParseExact(rd.BirthDate, "dd-MM-yyyy",
                     System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out var bd))
                 {
@@ -886,16 +908,20 @@ namespace BibAdminWeb
                 else ageGroup = "Не указан";
 
                 if (!genderVisits.ContainsKey(gender)) { genderVisits[gender] = 0; genderUniq[gender] = new(StringComparer.OrdinalIgnoreCase); }
-                genderVisits[gender]++; genderUniq[gender].Add(readerId);
+                genderVisits[gender]++;
+                if (isReg) genderUniq[gender].Add(readerId);
 
                 if (!catVisits.ContainsKey(category)) { catVisits[category] = 0; catUniq[category] = new(StringComparer.OrdinalIgnoreCase); }
-                catVisits[category]++; catUniq[category].Add(readerId);
+                catVisits[category]++;
+                if (isReg) catUniq[category].Add(readerId);
 
-                ageVis[ageGroup]++; ageUniq[ageGroup].Add(readerId);
+                ageVis[ageGroup]++;
+                if (isReg) ageUniq[ageGroup].Add(readerId);
 
                 if (!ageGVis[ageGroup].ContainsKey(gender))
                 { ageGVis[ageGroup][gender] = 0; ageGUniq[ageGroup][gender] = new(StringComparer.OrdinalIgnoreCase); }
-                ageGVis[ageGroup][gender]++; ageGUniq[ageGroup][gender].Add(readerId);
+                ageGVis[ageGroup][gender]++;
+                if (isReg) ageGUniq[ageGroup][gender].Add(readerId);
 
                 foreach (var svc in svcs)
                 {
@@ -919,6 +945,7 @@ namespace BibAdminWeb
             {
                 periodLabel,
                 totalVisits,
+                anonymousVisits,
                 totalUniqueReaders,
                 totalRevenue,
                 gender = genderVisits.Keys.OrderBy(k => k).Select(k => new {
@@ -953,23 +980,40 @@ namespace BibAdminWeb
             var allSvc   = ServiceTransaction.All.Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
 
             var usedSvcIds = new HashSet<string>();
-            var visits     = new List<(string Id, Reader Rd, int Earned, List<ServiceTransaction> Svcs)>();
+            var visits     = new List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)>();
 
             foreach (var s in sessions)
             {
-                if (string.IsNullOrEmpty(s.ReaderId) || !readerMap.TryGetValue(s.ReaderId, out var rd)) continue;
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(s.ReaderId))
+                {
+                    if (readerMap.TryGetValue(s.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!s.ReaderId.All(char.IsDigit))
+                    {
+                        var sl2 = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                        allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
+                            && t.CreatedAt.ToLocalTime() >= sl2 && t.CreatedAt.ToLocalTime() <= s.EndTime)
+                            .ToList().ForEach(t => usedSvcIds.Add(t.Id));
+                        continue;
+                    }
+                }
                 var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
                 var linked = allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
                     && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= s.EndTime).ToList();
                 foreach (var t in linked) usedSvcIds.Add(t.Id);
-                visits.Add((s.ReaderId, rd, s.EarnedAmount, linked));
+                visits.Add((s.ReaderId ?? "", rd, isReg, s.EarnedAmount, linked));
             }
-            foreach (var grp in allSvc.Where(t => !usedSvcIds.Contains(t.Id) && !string.IsNullOrEmpty(t.ReaderId) && readerMap.ContainsKey(t.ReaderId))
+            foreach (var grp in allSvc.Where(t => !usedSvcIds.Contains(t.Id))
                 .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : "b:" + t.BatchId))
             {
                 var items = grp.ToList(); var first = items[0];
-                if (!readerMap.TryGetValue(first.ReaderId, out var rd)) continue;
-                visits.Add((first.ReaderId, rd, 0, items));
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(first.ReaderId))
+                {
+                    if (readerMap.TryGetValue(first.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!first.ReaderId.All(char.IsDigit)) continue;
+                }
+                visits.Add((first.ReaderId ?? "", rd, isReg, 0, items));
             }
 
             var genderVisits = new Dictionary<string, int>(); var genderUniq = new Dictionary<string, HashSet<string>>();
@@ -981,25 +1025,28 @@ namespace BibAdminWeb
             var ageGUniq = ageKeys.ToDictionary(g => g, g => new Dictionary<string, HashSet<string>>());
             var svcQty   = new Dictionary<string, int>(); var svcAmt = new Dictionary<string, int>(); var svcNm = new Dictionary<string, string>();
 
-            foreach (var (readerId, rd, _, svcs) in visits)
+            foreach (var (readerId, rd, isReg, _, svcs) in visits)
             {
-                var gender   = string.IsNullOrEmpty(rd.Gender)   ? "Не указан"  : rd.Gender;
-                var category = string.IsNullOrEmpty(rd.Category) ? "Не указана" : rd.Category;
+                var gender   = (rd == null || string.IsNullOrEmpty(rd.Gender))   ? "Не указан"  : rd.Gender;
+                var category = (rd == null || string.IsNullOrEmpty(rd.Category)) ? "Не указана" : rd.Category;
                 string ageGroup;
-                if (DateTime.TryParseExact(rd.BirthDate, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture,
+                if (rd != null && DateTime.TryParseExact(rd.BirthDate, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out var bd))
                 { var age = today.Year - bd.Year; if (bd > today.AddYears(-age)) age--; ageGroup = age < 14 ? "до 14" : age <= 17 ? "14–17" : age <= 30 ? "18–30" : age <= 60 ? "31–60" : "60+"; }
                 else ageGroup = "Не указан";
 
                 if (!genderVisits.ContainsKey(gender)) { genderVisits[gender] = 0; genderUniq[gender] = new(StringComparer.OrdinalIgnoreCase); }
-                genderVisits[gender]++; genderUniq[gender].Add(readerId);
+                genderVisits[gender]++; if (isReg) genderUniq[gender].Add(readerId);
                 if (!catVisits.ContainsKey(category)) { catVisits[category] = 0; catUniq[category] = new(StringComparer.OrdinalIgnoreCase); }
-                catVisits[category]++; catUniq[category].Add(readerId);
-                ageVis[ageGroup]++; ageUniq[ageGroup].Add(readerId);
+                catVisits[category]++; if (isReg) catUniq[category].Add(readerId);
+                ageVis[ageGroup]++; if (isReg) ageUniq[ageGroup].Add(readerId);
                 if (!ageGVis[ageGroup].ContainsKey(gender)) { ageGVis[ageGroup][gender] = 0; ageGUniq[ageGroup][gender] = new(StringComparer.OrdinalIgnoreCase); }
-                ageGVis[ageGroup][gender]++; ageGUniq[ageGroup][gender].Add(readerId);
+                ageGVis[ageGroup][gender]++; if (isReg) ageGUniq[ageGroup][gender].Add(readerId);
                 foreach (var svc in svcs) { if (!svcQty.ContainsKey(svc.ServiceTypeId)) { svcQty[svc.ServiceTypeId] = 0; svcAmt[svc.ServiceTypeId] = 0; svcNm[svc.ServiceTypeId] = svc.ServiceName; } svcQty[svc.ServiceTypeId] += svc.Quantity; svcAmt[svc.ServiceTypeId] += svc.TotalAmount; }
             }
+
+            int anonymousVisits    = visits.Count(v => !v.IsReg);
+            int totalUniqueReaders = visits.Where(v => v.IsReg).Select(v => v.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
             string periodLabel = period switch
             {
@@ -1017,9 +1064,10 @@ namespace BibAdminWeb
             ws1.Column(1).Width = 26; ws1.Column(2).Width = 12; ws1.Column(3).Width = 14;
             int r = 1;
             WriteHeader(ws1, r++, $"Аналитика посещений — {periodLabel}");
-            ws1.Cell(r, 1).Value = "Визитов всего:";   ws1.Cell(r++, 2).Value = visits.Count;
-            ws1.Cell(r, 1).Value = "Уникальных читателей:"; ws1.Cell(r++, 2).Value = visits.Select(v => v.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            ws1.Cell(r, 1).Value = "Выручка (сум):";   ws1.Cell(r++, 2).Value = visits.Sum(v => v.Earned + v.Svcs.Sum(s => s.TotalAmount));
+            ws1.Cell(r, 1).Value = "Визитов всего:";       ws1.Cell(r++, 2).Value = visits.Count;
+            ws1.Cell(r, 1).Value = "Анонимных визитов:";   ws1.Cell(r++, 2).Value = anonymousVisits;
+            ws1.Cell(r, 1).Value = "Уникальных читателей (рег.):"; ws1.Cell(r++, 2).Value = totalUniqueReaders;
+            ws1.Cell(r, 1).Value = "Выручка (сум):";       ws1.Cell(r++, 2).Value = visits.Sum(v => v.Earned + v.Svcs.Sum(s => s.TotalAmount));
 
             r++;
             WriteSubHeader(ws1, r, "По полу"); ws1.Cell(r, 2).Value = "Визиты"; ws1.Cell(r++, 3).Value = "Уникальных";

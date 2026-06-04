@@ -2548,6 +2548,7 @@ function renderAnalytics(data) {
   sumEl.style.display = 'flex';
   sumEl.innerHTML = `
     <div class="stat-card" style="flex:1"><div class="stat-label">Визитов всего</div><div class="stat-val">${data.totalVisits}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Анонимных визитов</div><div class="stat-val orange">${data.anonymousVisits}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Уникальных читателей</div><div class="stat-val">${data.totalUniqueReaders}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Выручка (сум)</div><div class="stat-val blue">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
     <div class="stat-card" style="flex:2;min-width:160px"><div class="stat-label">Период</div><div style="font-size:13px;color:#ccc;margin-top:4px">${esc(data.periodLabel)}</div></div>`;
