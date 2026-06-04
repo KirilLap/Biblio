@@ -35,23 +35,12 @@ function bibNotify(title, body) {
   if (_notifDuration > 0) setTimeout(() => n.close(), _notifDuration * 1000);
 }
 
-function opSaveNotifDuration() {
-  const inp = document.getElementById('opNotifDurationInput');
-  if (!inp) return;
-  const v = parseInt(inp.value || '8', 10);
-  _notifDuration = Math.max(1, Math.min(60, isNaN(v) ? 8 : v));
-  localStorage.setItem('bibNotifDuration', _notifDuration);
-  inp.value = _notifDuration;
-}
-
 function opUpdateNotifBtn() {
   const btn = document.getElementById('opNotifBtn');
-  const inp = document.getElementById('opNotifDurationInput');
   if (!btn || !('Notification' in window)) return;
   const p = Notification.permission;
   if (p === 'granted') {
     btn.style.display = 'none'; // уже работает — кнопку прячем
-    if (inp) { inp.style.display = ''; inp.value = _notifDuration; }
   } else if (p === 'denied') {
     btn.style.display = '';
     btn.title = 'Уведомления заблокированы — разрешите в настройках браузера';
@@ -59,11 +48,9 @@ function opUpdateNotifBtn() {
     btn.style.borderColor = '#5D2A2A';
     btn.style.cursor = 'default';
     btn.onclick = null;
-    if (inp) inp.style.display = 'none';
   } else {
     btn.style.display = '';
     btn.title = 'Включить браузерные уведомления';
-    if (inp) inp.style.display = 'none';
   }
 }
 
