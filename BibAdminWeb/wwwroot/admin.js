@@ -31,6 +31,7 @@ let pvBgUrl = null;             // URL фона для предпросмотр�
   loadSettings();
   loadOperators();
   setInterval(tickTimers, 1000);
+  updateNotifBtn();
 
   // Инициализируем дату для аналитики
   const _today = new Date().toISOString().split('T')[0];
@@ -114,6 +115,43 @@ function setConnStatus(ok) {
   const el = document.getElementById('connStatus');
   el.textContent = ok ? '🟢 Подключено' : '🔴 Нет связи';
   el.style.color = ok ? '#1d9e75' : '#f87171';
+}
+
+// ─── Browser notifications ───────────────────────────────────────────────────
+function bibNotify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const n = new Notification(title, { body, icon: '/favicon.ico' });
+  n.onclick = () => { window.focus(); n.close(); };
+}
+
+function updateNotifBtn() {
+  const btn    = document.getElementById('notifPermBtn');
+  const status = document.getElementById('notifPermStatus');
+  if (!btn || !status) return;
+  if (!('Notification' in window)) {
+    status.textContent = 'Браузер не поддерживает уведомления';
+    status.style.color = '#888';
+    return;
+  }
+  const p = Notification.permission;
+  if (p === 'granted') {
+    btn.style.display = 'none';
+    status.style.color = '#1d9e75';
+    status.textContent = '✓ Уведомления включены';
+  } else if (p === 'denied') {
+    btn.style.display = 'none';
+    status.style.color = '#f87171';
+    status.textContent = 'Заблокированы — разрешите в настройках браузера';
+  } else {
+    btn.style.display = '';
+    status.textContent = '';
+  }
+}
+
+async function requestNotifications() {
+  if (!('Notification' in window)) return;
+  await Notification.requestPermission();
+  updateNotifBtn();
 }
 
 // ─── Navigation ─────────────────────────────────────────────────────────────
@@ -1058,6 +1096,9 @@ function showSummary(d) {
   const h = Math.floor(d.duration / 3600), m = Math.floor((d.duration % 3600) / 60), s = d.duration % 60;
   _adminSummaryReaderId = d.readerId || '';
   _adminSummaryPcNumber = d.pcNumber || '';
+  const name = d.userName || d.readerId || 'Анонимный';
+  bibNotify(`✅ ${d.pcNumber} — сессия завершена`,
+    `${name} · ${h}ч ${m}м · ${d.earned.toLocaleString()} сум`);
 
   let html = `
     <b>ПК:</b> ${esc(d.pcNumber)}<br>
@@ -1181,6 +1222,7 @@ function showOfflineAlert(d) {
     `<b>${esc(d.pcNumber)}</b> потерял связь во время сессии <b>${d.sessionType}</b>.<br>
      Прошло: ${h}ч ${m}м ${s}с.<br><br>Что сделать с сессией?`;
   document.getElementById('dlgOffline').style.display = 'flex';
+  bibNotify(`⚠️ ${d.pcNumber} — потеря связи`, `Сессия ${d.sessionType} · ${h}ч ${m}м ${s}с`);
 }
 
 async function resolveOffline(decision) {

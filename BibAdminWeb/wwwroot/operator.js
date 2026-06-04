@@ -25,6 +25,38 @@ let _screenInterval = null;
 let opPerms = { canViewReaders: false, canViewFinance: false, canViewStats: false };
 let meId = null;
 
+// ── Браузерные уведомления ────────────────────────────────────────────────────
+function bibNotify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const n = new Notification(title, { body, icon: '/favicon.ico' });
+  n.onclick = () => { window.focus(); n.close(); };
+}
+
+function opUpdateNotifBtn() {
+  const btn = document.getElementById('opNotifBtn');
+  if (!btn || !('Notification' in window)) return;
+  const p = Notification.permission;
+  if (p === 'granted') {
+    btn.style.display = 'none'; // уже работает — кнопку прячем
+  } else if (p === 'denied') {
+    btn.style.display = '';
+    btn.title = 'Уведомления заблокированы — разрешите в настройках браузера';
+    btn.style.color = '#f87171';
+    btn.style.borderColor = '#5D2A2A';
+    btn.style.cursor = 'default';
+    btn.onclick = null;
+  } else {
+    btn.style.display = '';
+    btn.title = 'Включить браузерные уведомления';
+  }
+}
+
+async function opRequestNotifications() {
+  if (!('Notification' in window) || Notification.permission === 'denied') return;
+  await Notification.requestPermission();
+  opUpdateNotifBtn();
+}
+
 (async function init() {
   // Проверяем авторизацию
   const me = await fetch('/api/op/me').then(r => r.ok ? r.json() : null).catch(() => null);
@@ -47,6 +79,7 @@ let meId = null;
   document.getElementById('opAnlYearQuarter').value = _today.substring(0, 4);
   document.getElementById('opAnlDateYear').value    = _today.substring(0, 4);
   opSetQuarter(Math.ceil((new Date().getMonth() + 1) / 3));
+  opUpdateNotifBtn();
 
   // Загружаем настройки полей сессии
   fetch('/api/session-fields')
@@ -113,6 +146,7 @@ function startSignalR() {
        <div class="summary-row"><span>Тип</span><span class="val">${esc(data.sessionType)}</span></div>
        <div class="summary-row"><span>Время в сессии</span><span class="val">${fmtTime(data.elapsed)}</span></div>`;
     openDlg('dlgOffline');
+    bibNotify(`⚠️ ${data.pcNumber} — потеря связи`, `Сессия ${data.sessionType} · ${fmtTime(data.elapsed)}`);
   });
 
   connection.on('offlineResolved', data => {
@@ -146,6 +180,9 @@ function startSignalR() {
 
   connection.on('sessionSummary', s => {
     showSessionSummary(s);
+    const name = s.userName || s.readerId || 'Анонимный';
+    bibNotify(`✅ ${s.pcNumber} — сессия завершена`,
+      `${name} · ${fmtTime(s.duration)} · ${fmt(s.earned)} сум`);
   });
 
   connection.on('serviceCreated', s => {

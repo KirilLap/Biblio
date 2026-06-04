@@ -154,6 +154,17 @@
 
     <!-- ── Вкладка: Основные ── -->
     <div class="stab-panel active" id="stab-main">
+
+      <!-- Уведомления браузера -->
+      <div class="settings-card" style="max-width:560px;margin-bottom:20px">
+        <h3>🔔 Браузерные уведомления</h3>
+        <p style="color:#888;font-size:13px;margin-bottom:14px">Всплывают поверх экрана даже когда браузер свёрнут или открыта другая вкладка. Срабатывают при потере связи с ПК и при завершении сессии.</p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-outline" id="notifPermBtn" onclick="requestNotifications()" style="display:none">Включить уведомления</button>
+          <span id="notifPermStatus" style="font-size:13px"></span>
+        </div>
+      </div>
+
       <div class="settings-2col">
         <div class="settings-col">
 
