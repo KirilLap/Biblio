@@ -2621,16 +2621,28 @@ function renderAnalytics(data) {
 }
 
 function buildAnalyticsTable(headers, rows, numericFromCol1 = true) {
-  const th = h => `<th style="text-align:left;padding:6px 12px;white-space:nowrap;color:#888;font-weight:500;border-bottom:1px solid #2A2A4A;font-size:12px">${esc(String(h))}</th>`;
+  const borderCol = '1px solid #2A2A4A';
+  const borderRow = '1px solid #1E1E38';
+  const th = (h, i) => {
+    const align = (numericFromCol1 && i > 0) ? 'center' : 'left';
+    const bl = i > 0 ? `border-left:${borderCol};` : '';
+    return `<th style="padding:7px 14px;white-space:nowrap;color:#777;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;text-align:${align};${bl}background:#111128">${esc(String(h))}</th>`;
+  };
   const td = (v, i) => {
-    const align = (numericFromCol1 && i > 0) ? 'right' : 'left';
+    const isNum = numericFromCol1 && i > 0;
+    const align = isNum ? 'center' : 'left';
     const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : esc(String(v));
-    return `<td style="padding:6px 12px;border-bottom:1px solid #1A1A2E;font-size:13px;text-align:${align};color:${i === 0 ? '#ccc' : '#aaa'}">${val}</td>`;
+    const color = i === 0 ? '#d0d0e8' : (typeof v === 'number' && v === 0 ? '#444' : '#b0b0cc');
+    const bl = i > 0 ? `border-left:${borderCol};` : '';
+    return `<td style="padding:7px 14px;border-bottom:${borderRow};font-size:13px;text-align:${align};color:${color};${bl}">${val}</td>`;
   };
   if (!rows.length) return '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
-  let html = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-    <thead><tr>${headers.map(h => th(h)).join('')}</tr></thead><tbody>`;
-  rows.forEach(row => { html += `<tr>${row.map((v, i) => td(v, i)).join('')}</tr>`; });
+  let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse">
+    <thead><tr>${headers.map((h, i) => th(h, i)).join('')}</tr></thead><tbody>`;
+  rows.forEach((row, ri) => {
+    const bg = ri % 2 === 1 ? 'background:#0e0e22;' : '';
+    html += `<tr style="${bg}">${row.map((v, i) => td(v, i)).join('')}</tr>`;
+  });
   html += '</tbody></table></div>';
   return html;
 }
