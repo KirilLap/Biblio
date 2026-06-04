@@ -2110,9 +2110,13 @@ function closeDlg(id) {
   document.getElementById(id).style.display = 'none';
 }
 
-// Close on overlay click
+// Close on overlay click — only if mousedown also started on the overlay,
+// so text selection inside the dialog doesn't accidentally close it.
+let _dlgMousedownTarget = null;
+document.addEventListener('mousedown', e => { _dlgMousedownTarget = e.target; });
 document.addEventListener('click', e => {
-  if (e.target.classList.contains('dlg-overlay')) e.target.style.display = 'none';
+  if (e.target.classList.contains('dlg-overlay') && _dlgMousedownTarget === e.target)
+    e.target.style.display = 'none';
 });
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

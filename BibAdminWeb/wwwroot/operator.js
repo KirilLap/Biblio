@@ -1043,8 +1043,12 @@ function openDlg(id) {
 function closeDlg(id) {
   document.getElementById(id).classList.remove('open');
 }
+let _dlgMousedownTarget = null;
+document.addEventListener('mousedown', e => { _dlgMousedownTarget = e.target; });
+
 function closeDlgIfOverlay(e, id) {
-  if (e.target === document.getElementById(id)) closeDlg(id);
+  const overlay = document.getElementById(id);
+  if (e.target === overlay && _dlgMousedownTarget === overlay) closeDlg(id);
 }
 
 // ── Тосты ─────────────────────────────────────────────────────────────────────
