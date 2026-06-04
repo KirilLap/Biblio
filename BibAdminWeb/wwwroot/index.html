@@ -625,34 +625,36 @@
       <p id="opWebUrl" class="op-url"></p>
     </div>
     
-    <div class="settings-card" style="max-width:560px;margin-bottom:20px">
-      <h3>Добавить оператора</h3>
-      <div class="form-row"><label>Отображаемое имя</label><input type="text" id="newOpName" placeholder="Иван Иванов"></div>
-      <div class="form-row"><label>Логин</label><input type="text" id="newOpLogin" placeholder="ivan"></div>
-      <div class="form-row"><label>Пароль</label><input type="password" id="newOpPwd" placeholder="••••••"></div>
-      <div class="form-row">
-        <label>Права доступа</label>
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="newOpReaders" style="width:15px;height:15px">
-            <span>👁 Просмотр читателей</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="newOpFinance" style="width:15px;height:15px">
-            <span>💰 История финансов</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="newOpStats" style="width:15px;height:15px">
-            <span>📊 Статистика</span>
-          </label>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <div class="settings-card" style="width:400px;flex-shrink:0">
+        <h3>Добавить оператора</h3>
+        <div class="form-row"><label>Отображаемое имя</label><input type="text" id="newOpName" placeholder="Иван Иванов"></div>
+        <div class="form-row"><label>Логин</label><input type="text" id="newOpLogin" placeholder="ivan"></div>
+        <div class="form-row"><label>Пароль</label><input type="password" id="newOpPwd" placeholder="••••••"></div>
+        <div class="form-row">
+          <label>Права доступа</label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="newOpReaders" style="width:15px;height:15px">
+              <span>👁 Просмотр читателей</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="newOpFinance" style="width:15px;height:15px">
+              <span>💰 История финансов</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="newOpStats" style="width:15px;height:15px">
+              <span>📊 Статистика</span>
+            </label>
+          </div>
         </div>
+        <button class="btn btn-primary" onclick="addOperator()">Добавить</button>
+        <span id="opSaved" class="saved-badge" style="display:none">✓ Сохранено</span>
       </div>
-      <button class="btn btn-primary" onclick="addOperator()">Добавить</button>
-      <span id="opSaved" class="saved-badge" style="display:none">✓ Сохранено</span>
-    </div>
-    <div class="settings-card" style="max-width:560px">
-      <h3>Список операторов</h3>
-      <div id="operatorsList"></div>
+      <div class="settings-card" style="flex:1;min-width:300px">
+        <h3>Список операторов</h3>
+        <div id="operatorsList"></div>
+      </div>
     </div>
   </div>
 
