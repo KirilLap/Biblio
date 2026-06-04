@@ -520,7 +520,8 @@ function openStartSession(pcNumber) {
   document.getElementById('dlgSsReader').value = '';
   document.getElementById('dlgSsReader').placeholder = '260500456';
   document.getElementById('dlgSsName').value = '';
-  document.getElementById('dlgSsMinutes').value = '';
+  document.getElementById('dlgSsHours').value = '';
+  document.getElementById('dlgSsMins').value = '';
   document.getElementById('dlgSsMoney').value = '';
   document.getElementById('dlgSsHint').textContent = '';
   document.getElementById('dlgSsReaderInfo').style.display = 'none';
@@ -554,23 +555,32 @@ function ssSelectType(type) {
   document.getElementById('ssBtnLimited').classList.toggle('active', isLimit);
   document.getElementById('ssBtnVip').classList.toggle('active', !isLimit);
   if (!isLimit) {
-    document.getElementById('dlgSsMinutes').value = '';
+    document.getElementById('dlgSsHours').value = '';
+    document.getElementById('dlgSsMins').value = '';
     document.getElementById('dlgSsMoney').value = '';
     document.getElementById('dlgSsHint').textContent = '';
   }
 }
 
-// Синхронизация минуты → деньги (как в WPF TxtMinutes_TextChanged)
+function _fmtHM(h, m) {
+  if (h > 0 && m > 0) return `${h} ч ${m} мин`;
+  if (h > 0) return `${h} ч`;
+  return `${m} мин`;
+}
+
+// Синхронизация часы/минуты → деньги
 function ssSyncMinutes() {
   if (_ssSyncing) return;
   _ssSyncing = true;
   try {
-    const mins = parseFloat(document.getElementById('dlgSsMinutes').value);
+    const h = parseInt(document.getElementById('dlgSsHours').value) || 0;
+    const m = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+    const totalMins = h * 60 + m;
     const t = GlobalSettings_Tariff();
-    if (mins > 0) {
-      const cost = Math.round((mins / 60) * t);
+    if (totalMins > 0) {
+      const cost = Math.round((totalMins / 60) * t);
       document.getElementById('dlgSsMoney').value = cost;
-      document.getElementById('dlgSsHint').textContent = `${mins} мин = ${cost.toLocaleString()} сум`;
+      document.getElementById('dlgSsHint').textContent = `${_fmtHM(h, m)} = ${cost.toLocaleString()} сум`;
     } else {
       document.getElementById('dlgSsMoney').value = '';
       document.getElementById('dlgSsHint').textContent = '';
@@ -578,7 +588,7 @@ function ssSyncMinutes() {
   } finally { _ssSyncing = false; }
 }
 
-// Синхронизация деньги → минуты (как в WPF TxtMoney_TextChanged)
+// Синхронизация деньги → часы/минуты
 function ssSyncMoney() {
   if (_ssSyncing) return;
   _ssSyncing = true;
@@ -586,11 +596,15 @@ function ssSyncMoney() {
     const money = parseFloat(document.getElementById('dlgSsMoney').value);
     const t = GlobalSettings_Tariff();
     if (money > 0) {
-      const mins = Math.round((money / t) * 60);
-      document.getElementById('dlgSsMinutes').value = mins;
-      document.getElementById('dlgSsHint').textContent = `${money.toLocaleString()} сум = ${mins} мин`;
+      const totalMins = Math.round((money / t) * 60);
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      document.getElementById('dlgSsHours').value = h || '';
+      document.getElementById('dlgSsMins').value  = m || '';
+      document.getElementById('dlgSsHint').textContent = `${money.toLocaleString()} сум = ${_fmtHM(h, m)}`;
     } else {
-      document.getElementById('dlgSsMinutes').value = '';
+      document.getElementById('dlgSsHours').value = '';
+      document.getElementById('dlgSsMins').value  = '';
       document.getElementById('dlgSsHint').textContent = '';
     }
   } finally { _ssSyncing = false; }
@@ -617,8 +631,10 @@ async function confirmStartSession() {
 
   let limitSeconds = 0, paidAmount = 0;
   if (_ssType === 'Лимит') {
-    const mins  = parseFloat(document.getElementById('dlgSsMinutes').value) || 0;
-    const money = parseFloat(document.getElementById('dlgSsMoney').value)   || 0;
+    const h     = parseInt(document.getElementById('dlgSsHours').value) || 0;
+    const m     = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+    const mins  = h * 60 + m;
+    const money = parseFloat(document.getElementById('dlgSsMoney').value) || 0;
     if (!mins && !money) { toast('Введите время или сумму', 'warn'); return; }
     const t = GlobalSettings_Tariff();
     if (mins > 0) {
@@ -1001,7 +1017,8 @@ function openExtend(pcNumber) {
   activePc = pcNumber;
   _extTariff = settings?.tariff || 0;
   document.getElementById('dlgExtPc').textContent = pcNumber;
-  document.getElementById('dlgExtMin').value = 30;
+  document.getElementById('dlgExtHours').value = 0;
+  document.getElementById('dlgExtMins').value  = 30;
   document.getElementById('dlgExtAmount').value = _extTariff ? Math.round(_extTariff * 30 / 60) : 0;
   document.getElementById('dlgExtend').style.display = 'flex';
 }
@@ -1009,7 +1026,8 @@ function openExtend(pcNumber) {
 function calcExtAmount() {
   if (_extSyncing || !_extTariff) return;
   _extSyncing = true;
-  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
   document.getElementById('dlgExtAmount').value = Math.round(_extTariff * min / 60);
   _extSyncing = false;
 }
@@ -1018,12 +1036,15 @@ function calcExtTime() {
   if (_extSyncing || !_extTariff) return;
   _extSyncing = true;
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
-  document.getElementById('dlgExtMin').value = Math.round(amount * 60 / _extTariff) || 0;
+  const totalMins = Math.round(amount * 60 / _extTariff) || 0;
+  document.getElementById('dlgExtHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgExtMins').value  = totalMins % 60;
   _extSyncing = false;
 }
 
 async function confirmExtend() {
-  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
   if (min <= 0) { toast('Укажите время', 'warn'); return; }
   closeDlg('dlgExtend');

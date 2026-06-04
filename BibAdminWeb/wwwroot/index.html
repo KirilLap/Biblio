@@ -740,8 +740,13 @@
     <!-- Поля для Лимит -->
     <div id="dlgSsLimitFields">
       <div class="form-row">
-        <label>Время (минуты)</label>
-        <input type="number" id="dlgSsMinutes" min="1" placeholder="60" oninput="ssSyncMinutes()">
+        <label>Время</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="dlgSsHours" min="0" max="23" placeholder="0" style="width:70px" oninput="ssSyncMinutes()">
+          <span style="color:#888;font-size:13px">ч</span>
+          <input type="number" id="dlgSsMins" min="0" max="59" placeholder="30" style="width:70px" oninput="ssSyncMinutes()">
+          <span style="color:#888;font-size:13px">мин</span>
+        </div>
       </div>
       <div class="form-row">
         <label>Сумма (сум)</label>
@@ -881,8 +886,13 @@
   <div class="dlg">
     <div class="dlg-title">⏱ Добавить время — <span id="dlgExtPc"></span></div>
     <div class="form-row">
-      <label>Добавить минут</label>
-      <input type="number" id="dlgExtMin" min="1" max="999" value="30" oninput="calcExtAmount()">
+      <label>Добавить время</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="dlgExtHours" min="0" max="23" value="0" style="width:70px" oninput="calcExtAmount()">
+        <span style="color:#888;font-size:13px">ч</span>
+        <input type="number" id="dlgExtMins" min="0" max="59" value="30" style="width:70px" oninput="calcExtAmount()">
+        <span style="color:#888;font-size:13px">мин</span>
+      </div>
     </div>
     <div class="form-row">
       <label>Добавить сумму (сум)</label>

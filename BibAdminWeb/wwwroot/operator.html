@@ -119,8 +119,13 @@
     <div class="dlg-title">⏱ Добавить время</div>
     <div class="dlg-pc-name" id="dlgExtPc"></div>
     <div class="field-row">
-      <label>Добавить минут</label>
-      <input id="dlgExtMin" type="number" min="1" max="999" value="30" oninput="calcExtAmount()">
+      <label>Добавить время</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="dlgExtHours" type="number" min="0" max="23" value="0" style="width:70px" oninput="calcExtAmount()">
+        <span style="color:#888;font-size:13px">ч</span>
+        <input id="dlgExtMins" type="number" min="0" max="59" value="30" style="width:70px" oninput="calcExtAmount()">
+        <span style="color:#888;font-size:13px">мин</span>
+      </div>
     </div>
     <div class="field-row">
       <label>Добавить сумму (сум)</label>

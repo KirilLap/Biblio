@@ -627,7 +627,8 @@ let _extSyncing = false;
 function openExtendDlg() {
   if (!selectedPc) return;
   document.getElementById('dlgExtPc').textContent = selectedPc;
-  document.getElementById('dlgExtMin').value = 30;
+  document.getElementById('dlgExtHours').value = 0;
+  document.getElementById('dlgExtMins').value  = 30;
   document.getElementById('dlgExtAmount').value = tariff ? Math.round(tariff * 30 / 60) : 0;
   openDlg('dlgExtend');
 }
@@ -635,7 +636,8 @@ function openExtendDlg() {
 function calcExtAmount() {
   if (_extSyncing || !tariff) return;
   _extSyncing = true;
-  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
   document.getElementById('dlgExtAmount').value = Math.round(tariff * min / 60);
   _extSyncing = false;
 }
@@ -644,12 +646,15 @@ function calcExtTime() {
   if (_extSyncing || !tariff) return;
   _extSyncing = true;
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
-  document.getElementById('dlgExtMin').value = Math.round(amount * 60 / tariff) || 0;
+  const totalMins = Math.round(amount * 60 / tariff) || 0;
+  document.getElementById('dlgExtHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgExtMins').value  = totalMins % 60;
   _extSyncing = false;
 }
 
 async function confirmExtend() {
-  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
   if (min <= 0) { toast('Укажите время', 'warn'); return; }
   closeDlg('dlgExtend');
