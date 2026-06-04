@@ -2720,9 +2720,15 @@ function buildAnalyticsTable(headers, rows, numericFromCol1 = true) {
     return `<td style="padding:7px 14px;border-bottom:${borderRow};font-size:13px;text-align:${align};color:${color};${bl}">${val}</td>`;
   };
   if (!rows.length) return '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+  // Hide columns where every numeric value is 0
+  const keep = headers.map((_, ci) =>
+    ci === 0 || rows.some(r => { const v = r[ci]; return typeof v === 'number' ? v !== 0 : v !== '0'; })
+  );
+  const hdr2 = headers.filter((_, ci) => keep[ci]);
+  const rows2 = rows.map(r => r.filter((_, ci) => keep[ci]));
   let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse">
-    <thead><tr>${headers.map((h, i) => th(h, i)).join('')}</tr></thead><tbody>`;
-  rows.forEach((row, ri) => {
+    <thead><tr>${hdr2.map((h, i) => th(h, i)).join('')}</tr></thead><tbody>`;
+  rows2.forEach((row, ri) => {
     const bg = ri % 2 === 1 ? 'background:#0e0e22;' : '';
     html += `<tr style="${bg}">${row.map((v, i) => td(v, i)).join('')}</tr>`;
   });

@@ -1286,10 +1286,16 @@ function opRenderPcStats(pc) {
 
 function opBuildTable(headers, rows) {
   if (!rows.length) return '<div class="op-empty" style="text-align:left;padding:10px 0">Нет данных</div>';
+  // Hide columns where every numeric value is 0
+  const keep = headers.map((_, ci) =>
+    ci === 0 || rows.some(r => { const v = r[ci]; return typeof v === 'number' ? v !== 0 : v !== '0'; })
+  );
+  const hdr2  = headers.filter((_, ci) => keep[ci]);
+  const rows2 = rows.map(r => r.filter((_, ci) => keep[ci]));
   let html = '<div class="anl-table-wrap"><table class="anl-table"><thead><tr>';
-  headers.forEach(h => { html += `<th>${opEsc(String(h))}</th>`; });
+  hdr2.forEach(h => { html += `<th>${opEsc(String(h))}</th>`; });
   html += '</tr></thead><tbody>';
-  rows.forEach(row => {
+  rows2.forEach(row => {
     html += '<tr>';
     row.forEach((v, i) => {
       const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : opEsc(String(v));
