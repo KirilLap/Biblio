@@ -32,6 +32,16 @@ let pvBgUrl = null;             // URL фона для предпросмотр�
   loadOperators();
   setInterval(tickTimers, 1000);
 
+  // Инициализируем дату для аналитики
+  const _today = new Date().toISOString().split('T')[0];
+  document.getElementById('anlDateDay').value     = _today;
+  document.getElementById('anlDateMonth').value   = _today.substring(0, 7);
+  document.getElementById('anlYearQuarter').value = _today.substring(0, 4);
+  document.getElementById('anlDateYear').value    = _today.substring(0, 4);
+  // Выделяем текущий квартал
+  const _curQ = Math.ceil((new Date().getMonth() + 1) / 3);
+  setQuarter(_curQ);
+
   // Загружаем последнюю доступную версию BibClient для сравнения на карточках
   fetch('/updates/bibclient-version.json').then(r => r.ok ? r.json() : null).then(v => {
     if (v?.Version) { latestClientVersion = v.Version; renderPcGrid(); }
@@ -119,10 +129,8 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`).classList.add('active');
-  if (name === 'readers') {
-    if (currentReadersTab === 'report') loadReport();
-    else loadReaders();
-  }
+  if (name === 'readers') loadReaders();
+  if (name === 'stats') initStatsPage();
 }
 
 // Event delegation для таблицы читателей — вешается один раз при загрузке
@@ -2458,28 +2466,156 @@ async function saveEditReader() {
   btn.disabled = false; btn.textContent = 'Сохранить';
 }
 
-// ─── Readers Report ───────────────────────────────────────────────────────────
-let currentReadersTab = 'list';
-let reportPeriod = 'day';
+// ─── Statistics Page ──────────────────────────────────────────────────────────
+let currentStatsTab  = 'analytics';
+let analyticsPeriod  = 'day';
+let analyticsQuarter = 1;
+let reportPeriod     = 'day';
 
-function switchReadersTab(tab) {
-  currentReadersTab = tab;
-  document.getElementById('readersTabList').style.display = tab === 'list' ? '' : 'none';
-  document.getElementById('readersTabReport').style.display = tab === 'report' ? '' : 'none';
-  document.getElementById('tabBtnList').classList.toggle('active', tab === 'list');
-  document.getElementById('tabBtnReport').classList.toggle('active', tab === 'report');
-  if (tab === 'report') {
+function initStatsPage() {
+  if (currentStatsTab === 'report') {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
-    const monthStr = dateStr.substring(0, 7);
-    if (!document.getElementById('rptDateDay').value)
-      document.getElementById('rptDateDay').value = dateStr;
-    if (!document.getElementById('rptDateMonth').value)
-      document.getElementById('rptDateMonth').value = monthStr;
+    if (!document.getElementById('rptDateDay').value)   document.getElementById('rptDateDay').value   = dateStr;
+    if (!document.getElementById('rptDateMonth').value) document.getElementById('rptDateMonth').value = dateStr.substring(0, 7);
     loadReport();
   }
 }
 
+function switchStatsTab(tab) {
+  currentStatsTab = tab;
+  document.getElementById('statsTabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
+  document.getElementById('statsTabReport').style.display    = tab === 'report'    ? '' : 'none';
+  document.getElementById('statsBtnAnalytics').classList.toggle('active', tab === 'analytics');
+  document.getElementById('statsBtnReport').classList.toggle('active',    tab === 'report');
+  if (tab === 'report') {
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    if (!document.getElementById('rptDateDay').value)   document.getElementById('rptDateDay').value   = dateStr;
+    if (!document.getElementById('rptDateMonth').value) document.getElementById('rptDateMonth').value = dateStr.substring(0, 7);
+    loadReport();
+  }
+}
+
+function setAnalyticsPeriod(period) {
+  analyticsPeriod = period;
+  ['day','month','quarter','year'].forEach(p => {
+    document.getElementById('anlBtn' + p.charAt(0).toUpperCase() + p.slice(1)).classList.toggle('active', p === period);
+  });
+  document.getElementById('anlDateDay').style.display     = period === 'day'     ? ''     : 'none';
+  document.getElementById('anlDateMonth').style.display   = period === 'month'   ? ''     : 'none';
+  document.getElementById('anlDateQuarter').style.display = period === 'quarter' ? 'flex' : 'none';
+  document.getElementById('anlDateYear').style.display    = period === 'year'    ? ''     : 'none';
+}
+
+function setQuarter(q) {
+  analyticsQuarter = q;
+  [1,2,3,4].forEach(i => document.getElementById('anlQ' + i).classList.toggle('active', i === q));
+}
+
+function getAnalyticsDateStr() {
+  switch (analyticsPeriod) {
+    case 'day':     return document.getElementById('anlDateDay').value;
+    case 'month':   return document.getElementById('anlDateMonth').value;
+    case 'quarter': return (document.getElementById('anlYearQuarter').value || new Date().getFullYear()) + '-Q' + analyticsQuarter;
+    case 'year':    return String(document.getElementById('anlDateYear').value || new Date().getFullYear());
+  }
+  return '';
+}
+
+async function loadAnalytics() {
+  const dateStr = getAnalyticsDateStr();
+  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+
+  const emptyEl = document.getElementById('anlEmpty');
+  emptyEl.style.display = '';
+  emptyEl.textContent = 'Загрузка…';
+  document.getElementById('anlSummary').style.display = 'none';
+  document.getElementById('anlContent').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/admin/readers/analytics?period=${analyticsPeriod}&date=${encodeURIComponent(dateStr)}`);
+    const data = await r.json();
+    if (!r.ok) { emptyEl.textContent = data.error || 'Ошибка'; return; }
+    renderAnalytics(data);
+  } catch {
+    emptyEl.textContent = 'Ошибка загрузки';
+  }
+}
+
+function renderAnalytics(data) {
+  const sumEl = document.getElementById('anlSummary');
+  sumEl.style.display = 'flex';
+  sumEl.innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Визитов всего</div><div class="stat-val">${data.totalVisits}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Уникальных читателей</div><div class="stat-val">${data.totalUniqueReaders}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Выручка (сум)</div><div class="stat-val blue">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
+    <div class="stat-card" style="flex:2;min-width:160px"><div class="stat-label">Период</div><div style="font-size:13px;color:#ccc;margin-top:4px">${esc(data.periodLabel)}</div></div>`;
+
+  const emptyEl = document.getElementById('anlEmpty');
+  if (!data.totalVisits) {
+    emptyEl.style.display = '';
+    emptyEl.textContent = 'Нет данных о посещениях зарегистрированных читателей за выбранный период';
+    document.getElementById('anlContent').style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  document.getElementById('anlContent').style.display = '';
+
+  document.getElementById('anlGenderTable').innerHTML = buildAnalyticsTable(
+    ['Пол', 'Визиты', 'Уникальных'],
+    data.gender.map(g => [g.name, g.visits, g.uniqueReaders]),
+    true
+  );
+
+  document.getElementById('anlCategoryTable').innerHTML = buildAnalyticsTable(
+    ['Категория', 'Визиты', 'Уникальных'],
+    data.categories.map(c => [c.name, c.visits, c.uniqueReaders]),
+    true
+  );
+
+  // Age groups: determine which genders appear in the data
+  const knownGenders = [...new Set(data.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
+  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...knownGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
+  const ageRows = data.ageGroups.map(g => {
+    const byG = g.byGender || {};
+    return [g.group, g.visits, g.uniqueReaders, ...knownGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+  });
+  document.getElementById('anlAgeTable').innerHTML = buildAnalyticsTable(ageHeaders, ageRows, true);
+
+  if (data.services.length) {
+    document.getElementById('anlServicesTable').innerHTML = buildAnalyticsTable(
+      ['Услуга', 'Кол-во', 'Сумма (сум)'],
+      data.services.map(s => [s.name, s.quantity, s.totalAmount.toLocaleString('ru-RU')]),
+      false
+    );
+  } else {
+    document.getElementById('anlServicesTable').innerHTML = '<div class="fin-empty" style="text-align:left;padding:12px 0">Услуги в данном периоде не использовались</div>';
+  }
+}
+
+function buildAnalyticsTable(headers, rows, numericFromCol1 = true) {
+  const th = h => `<th style="text-align:left;padding:6px 12px;white-space:nowrap;color:#888;font-weight:500;border-bottom:1px solid #2A2A4A;font-size:12px">${esc(String(h))}</th>`;
+  const td = (v, i) => {
+    const align = (numericFromCol1 && i > 0) ? 'right' : 'left';
+    const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : esc(String(v));
+    return `<td style="padding:6px 12px;border-bottom:1px solid #1A1A2E;font-size:13px;text-align:${align};color:${i === 0 ? '#ccc' : '#aaa'}">${val}</td>`;
+  };
+  if (!rows.length) return '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+  let html = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <thead><tr>${headers.map(h => th(h)).join('')}</tr></thead><tbody>`;
+  rows.forEach(row => { html += `<tr>${row.map((v, i) => td(v, i)).join('')}</tr>`; });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function exportAnalytics() {
+  const dateStr = getAnalyticsDateStr();
+  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+  window.open(`/api/admin/readers/analytics/export?period=${analyticsPeriod}&date=${encodeURIComponent(dateStr)}`, '_blank');
+}
+
+// ─── Readers Report ───────────────────────────────────────────────────────────
 function setReportPeriod(period) {
   reportPeriod = period;
   document.getElementById('rptBtnDay').classList.toggle('active', period === 'day');

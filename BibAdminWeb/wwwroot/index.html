@@ -29,6 +29,9 @@
     <button class="nav-btn" data-page="readers" onclick="showPage('readers')">
       <span>📖</span><span>Читатели</span>
     </button>
+    <button class="nav-btn" data-page="stats" onclick="showPage('stats')">
+      <span>📊</span><span>Статистика</span>
+    </button>
   </div>
   <div class="sidebar-footer">
     <div class="conn-status" id="connStatus">⚫ Подключение...</div>
@@ -515,29 +518,85 @@
   <div id="page-readers" class="page">
     <div class="page-header">
       <h1>Читатели</h1>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <p id="readersCount" class="page-sub" style="margin:0;flex:1">Загрузка...</p>
+      <input type="text" id="readersSearch" placeholder="Поиск по ФИО или ID…" style="padding:6px 10px;border:1px solid #3D3D6B;border-radius:6px;background:#1A1A2E;color:#ccc;font-size:13px;width:240px" oninput="searchReaders()">
+      <button class="btn btn-primary" onclick="openAddReader()">➕ Добавить</button>
+      <button class="btn btn-primary" onclick="openImportDlg()">📥 Импорт Excel</button>
+      <button class="btn btn-outline" onclick="exportReaderStats()">📊 Статистика Excel</button>
+      <button class="btn btn-outline" style="color:#F87171;border-color:#5D2A2A" onclick="deleteAllReaders()">🗑 Очистить базу</button>
+    </div>
+    <div id="readersTable" class="fin-table-wrap">
+      <div class="fin-empty">Выберите раздел «Читатели» для загрузки</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ STATISTICS PAGE ══════════════════════ -->
+  <div id="page-stats" class="page">
+    <div class="page-header">
+      <h1>Статистика</h1>
       <div class="tab-bar">
-        <button class="tab-btn active" id="tabBtnList" onclick="switchReadersTab('list')">Список</button>
-        <button class="tab-btn" id="tabBtnReport" onclick="switchReadersTab('report')">Отчёт</button>
+        <button class="tab-btn active" id="statsBtnAnalytics" onclick="switchStatsTab('analytics')">Аналитика</button>
+        <button class="tab-btn" id="statsBtnReport" onclick="switchStatsTab('report')">Отчёт</button>
       </div>
     </div>
 
-    <!-- Список -->
-    <div id="readersTabList">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-        <p id="readersCount" class="page-sub" style="margin:0;flex:1">Загрузка...</p>
-        <input type="text" id="readersSearch" placeholder="Поиск по ФИО или ID…" style="padding:6px 10px;border:1px solid #3D3D6B;border-radius:6px;background:#1A1A2E;color:#ccc;font-size:13px;width:240px" oninput="searchReaders()">
-        <button class="btn btn-primary" onclick="openAddReader()">➕ Добавить</button>
-        <button class="btn btn-primary" onclick="openImportDlg()">📥 Импорт Excel</button>
-        <button class="btn btn-outline" onclick="exportReaderStats()">📊 Статистика Excel</button>
-        <button class="btn btn-outline" style="color:#F87171;border-color:#5D2A2A" onclick="deleteAllReaders()">🗑 Очистить базу</button>
+    <!-- ── Аналитика ─────────────────────────────────────────────── -->
+    <div id="statsTabAnalytics">
+      <div class="fin-toolbar" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div class="tab-bar">
+          <button class="tab-btn active" id="anlBtnDay"     onclick="setAnalyticsPeriod('day')">День</button>
+          <button class="tab-btn"        id="anlBtnMonth"   onclick="setAnalyticsPeriod('month')">Месяц</button>
+          <button class="tab-btn"        id="anlBtnQuarter" onclick="setAnalyticsPeriod('quarter')">Квартал</button>
+          <button class="tab-btn"        id="anlBtnYear"    onclick="setAnalyticsPeriod('year')">Год</button>
+        </div>
+        <input type="date"  id="anlDateDay"   style="background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+        <input type="month" id="anlDateMonth" style="display:none;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+        <div id="anlDateQuarter" style="display:none;align-items:center;gap:8px">
+          <input type="number" id="anlYearQuarter" min="2020" max="2099" placeholder="Год" style="width:72px;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+          <div class="tab-bar" style="gap:4px">
+            <button class="tab-btn" id="anlQ1" onclick="setQuarter(1)">Q1<br><span style="font-size:10px;color:#888">Янв–Мар</span></button>
+            <button class="tab-btn" id="anlQ2" onclick="setQuarter(2)">Q2<br><span style="font-size:10px;color:#888">Апр–Июн</span></button>
+            <button class="tab-btn" id="anlQ3" onclick="setQuarter(3)">Q3<br><span style="font-size:10px;color:#888">Июл–Сен</span></button>
+            <button class="tab-btn" id="anlQ4" onclick="setQuarter(4)">Q4<br><span style="font-size:10px;color:#888">Окт–Дек</span></button>
+          </div>
+        </div>
+        <input type="number" id="anlDateYear" min="2020" max="2099" placeholder="Год" style="display:none;width:80px;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+        <button class="btn btn-primary" style="padding:6px 16px;font-size:13px" onclick="loadAnalytics()">Показать</button>
+        <button class="btn btn-outline" style="padding:6px 16px;font-size:13px" onclick="exportAnalytics()">📊 Экспорт Excel</button>
       </div>
-      <div id="readersTable" class="fin-table-wrap">
-        <div class="fin-empty">Выберите раздел «Читатели» для загрузки</div>
+
+      <!-- Summary cards -->
+      <div id="anlSummary" style="display:none;flex-wrap:wrap;gap:12px;margin-bottom:16px"></div>
+
+      <!-- Analytics content -->
+      <div id="anlContent" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По полу</div>
+            <div id="anlGenderTable"></div>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По категориям</div>
+            <div id="anlCategoryTable"></div>
+          </div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По возрастным группам (с разбивкой по полу)</div>
+          <div id="anlAgeTable"></div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По услугам</div>
+          <div id="anlServicesTable"></div>
+        </div>
       </div>
+
+      <div id="anlEmpty" class="fin-empty">Выберите период и нажмите «Показать»</div>
     </div>
 
-    <!-- Отчёт -->
-    <div id="readersTabReport" style="display:none">
+    <!-- ── Отчёт ──────────────────────────────────────────────────── -->
+    <div id="statsTabReport" style="display:none">
       <div class="fin-toolbar" style="margin-bottom:16px">
         <div class="tab-bar">
           <button class="tab-btn active" id="rptBtnDay" onclick="setReportPeriod('day')">День</button>
