@@ -245,10 +245,31 @@
 .op-table td{padding:7px 10px;border-top:1px solid #1E1E3A;color:#D8D8F0;background:#101022;white-space:nowrap}
 .op-table tr:nth-child(even) td{background:#0D0D1A}
 .op-table tr:hover td{background:#1A1A2E!important}
-.op-finance-tabs{display:flex;gap:6px;margin-bottom:12px}
-.op-finance-tab{padding:5px 14px;border-radius:6px;border:1px solid #3D3D6B;background:transparent;color:#888;font-size:12px;cursor:pointer}
+.op-finance-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.op-finance-tab{padding:5px 14px;border-radius:6px;border:1px solid #3D3D6B;background:transparent;color:#888;font-size:12px;cursor:pointer;transition:all .15s}
 .op-finance-tab.active{background:#1D9E75;color:#fff;border-color:#1D9E75}
-.op-empty{color:#888;padding:20px;text-align:center;font-size:13px}
+.op-empty{color:#555;padding:24px;text-align:center;font-size:13px}
+/* ── Аналитика ─────────────────────────────── */
+.anl-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;background:#111128;border:1px solid #2D2D5B;border-radius:10px;margin-bottom:16px}
+.anl-cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+.anl-card{background:#1A1A2E;border:1px solid #2D2D5B;border-radius:10px;padding:14px 20px;min-width:120px;flex:1}
+.anl-card-lbl{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.anl-card-val{font-size:22px;font-weight:700;color:#D8D8F0;line-height:1.2}
+.anl-card-val.green{color:#1D9E75}
+.anl-card-val.amber{color:#f59e0b}
+.anl-card-val.period{font-size:14px;color:#aaa;font-weight:500;margin-top:6px}
+.anl-sec-title{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2D2D5B}
+.anl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:700px){.anl-grid{grid-template-columns:1fr}}
+.anl-table-wrap{overflow-x:auto;border:1px solid #2D2D5B;border-radius:8px}
+.anl-table{width:100%;border-collapse:collapse;font-size:13px}
+.anl-table thead th{padding:8px 14px;background:#1E1E3A;color:#888;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2D2D5B;white-space:nowrap}
+.anl-table thead th:not(:first-child){text-align:center;border-left:1px solid #2D2D5B}
+.anl-table tbody td{padding:8px 14px;border-bottom:1px solid #181830;color:#C0C0E0}
+.anl-table tbody td:not(:first-child){text-align:center;border-left:1px solid #181830}
+.anl-table tbody tr:nth-child(even) td{background:#0D0D1A}
+.anl-table tbody tr:hover td{background:#1A1A2E!important}
+.anl-zero{color:#333!important}
 </style>
 
 <!-- Основная область -->
@@ -322,49 +343,51 @@
 
   <!-- ── Вкладка: Статистика ──────────────────────────────────────── -->
   <div id="panelStats" class="op-panel">
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px">
+    <div class="anl-toolbar">
       <div class="op-finance-tabs">
         <button class="op-finance-tab active" id="opAnlBtnDay"     onclick="opSetAnalyticsPeriod('day')">День</button>
         <button class="op-finance-tab"        id="opAnlBtnMonth"   onclick="opSetAnalyticsPeriod('month')">Месяц</button>
         <button class="op-finance-tab"        id="opAnlBtnQuarter" onclick="opSetAnalyticsPeriod('quarter')">Квартал</button>
         <button class="op-finance-tab"        id="opAnlBtnYear"    onclick="opSetAnalyticsPeriod('year')">Год</button>
       </div>
-      <input type="date"   id="opAnlDateDay"   style="background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
-      <input type="month"  id="opAnlDateMonth" style="display:none;background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+      <input type="date"   id="opAnlDateDay"
+             style="background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+      <input type="month"  id="opAnlDateMonth"
+             style="display:none;background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
       <div id="opAnlDateQuarter" style="display:none;align-items:center;gap:6px">
         <input type="number" id="opAnlYearQuarter" min="2020" max="2099" placeholder="Год"
-               style="width:72px;background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
-        <div class="op-finance-tabs" style="gap:4px">
-          <button class="op-finance-tab" id="opAnlQ1" onclick="opSetQuarter(1)">Q1<br><span style="font-size:10px;color:#888">Янв–Мар</span></button>
-          <button class="op-finance-tab" id="opAnlQ2" onclick="opSetQuarter(2)">Q2<br><span style="font-size:10px;color:#888">Апр–Июн</span></button>
-          <button class="op-finance-tab" id="opAnlQ3" onclick="opSetQuarter(3)">Q3<br><span style="font-size:10px;color:#888">Июл–Сен</span></button>
-          <button class="op-finance-tab" id="opAnlQ4" onclick="opSetQuarter(4)">Q4<br><span style="font-size:10px;color:#888">Окт–Дек</span></button>
+               style="width:72px;background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+        <div class="op-finance-tabs">
+          <button class="op-finance-tab" id="opAnlQ1" onclick="opSetQuarter(1)">Q1 <span style="font-size:10px;opacity:.7">Янв–Мар</span></button>
+          <button class="op-finance-tab" id="opAnlQ2" onclick="opSetQuarter(2)">Q2 <span style="font-size:10px;opacity:.7">Апр–Июн</span></button>
+          <button class="op-finance-tab" id="opAnlQ3" onclick="opSetQuarter(3)">Q3 <span style="font-size:10px;opacity:.7">Июл–Сен</span></button>
+          <button class="op-finance-tab" id="opAnlQ4" onclick="opSetQuarter(4)">Q4 <span style="font-size:10px;opacity:.7">Окт–Дек</span></button>
         </div>
       </div>
       <input type="number" id="opAnlDateYear" min="2020" max="2099" placeholder="Год"
-             style="display:none;width:80px;background:#111128;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
-      <button class="btn-primary" onclick="opLoadAnalytics()">Показать</button>
-      <button class="btn-service-top" onclick="opExportAnalytics()">📊 Экспорт Excel</button>
+             style="display:none;width:80px;background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+      <button class="btn-primary" onclick="opLoadAnalytics()" style="padding:7px 20px">Показать</button>
+      <button class="btn-service-top" onclick="opExportAnalytics()" style="margin-left:0">📊 Экспорт Excel</button>
     </div>
 
-    <div id="opAnlSummary" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:16px"></div>
+    <div id="opAnlSummary" style="display:none"></div>
     <div id="opAnlContent" style="display:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="anl-grid">
         <div>
-          <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По полу</div>
+          <div class="anl-sec-title">По полу</div>
           <div id="opAnlGenderTable"></div>
         </div>
         <div>
-          <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По категориям</div>
+          <div class="anl-sec-title">По категориям</div>
           <div id="opAnlCategoryTable"></div>
         </div>
       </div>
       <div style="margin-bottom:16px">
-        <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По возрастным группам (с разбивкой по полу)</div>
+        <div class="anl-sec-title">По возрастным группам (с разбивкой по полу)</div>
         <div id="opAnlAgeTable"></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A;text-transform:uppercase;letter-spacing:.4px">По услугам</div>
+        <div class="anl-sec-title">По услугам</div>
         <div id="opAnlServicesTable"></div>
       </div>
     </div>

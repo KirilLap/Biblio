@@ -420,11 +420,26 @@ body {
 .op-info { flex: 1; }
 .op-name { font-size: 14px; font-weight: 600; color: #e0e0f0; }
 .op-login { font-size: 12px; color: #555; }
-.op-active-badge { font-size: 11px; font-weight: 600; }
+.op-active-badge { font-size: 11px; font-weight: 600; white-space: nowrap; }
 .op-active-badge.active { color: #1d9e75; }
 .op-active-badge.inactive { color: #555; }
-.op-actions { display: flex; gap: 8px; align-items: center; }
+.op-actions { display: flex; gap: 6px; align-items: center; }
 .op-actions .btn { padding: 4px 10px; font-size: 11px; }
+.op-perms {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #111128; border: 1px solid #222244; border-radius: 8px;
+  padding: 6px 12px;
+}
+.op-perm-chk {
+  display: flex; align-items: center; gap: 5px;
+  cursor: pointer; font-size: 12px; color: #777;
+  white-space: nowrap; user-select: none; transition: color .15s;
+}
+.op-perm-chk:hover { color: #ccc; }
+.op-perm-chk input[type=checkbox] { width: 14px; height: 14px; accent-color: #1d9e75; cursor: pointer; }
+.op-perm-divider { width: 1px; height: 18px; background: #2A2A4A; flex-shrink: 0; }
+.op-perm-apply { font-size: 11px !important; padding: 4px 12px !important; }
+.op-perm-saved { display: none; color: #1d9e75; font-size: 12px; font-weight: 600; white-space: nowrap; }
 
 /* ── Dialogs ─────────────────────────────────────────── */
 .dlg-overlay {

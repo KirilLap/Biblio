@@ -1184,13 +1184,14 @@ async function opLoadAnalytics() {
 
 function opRenderAnalytics(data) {
   const sumEl = document.getElementById('opAnlSummary');
-  sumEl.style.display = 'flex';
-  sumEl.innerHTML = `
-    <div class="fin-stat-card"><div class="fin-stat-label">Визитов всего</div><div class="fin-stat-val">${data.totalVisits}</div></div>
-    <div class="fin-stat-card"><div class="fin-stat-label">Анонимных визитов</div><div class="fin-stat-val" style="color:#f59e0b">${data.anonymousVisits}</div></div>
-    <div class="fin-stat-card"><div class="fin-stat-label">Уникальных читателей</div><div class="fin-stat-val">${data.totalUniqueReaders}</div></div>
-    <div class="fin-stat-card"><div class="fin-stat-label">Выручка (сум)</div><div class="fin-stat-val" style="color:#1d9e75">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
-    <div class="fin-stat-card" style="flex:2;min-width:140px"><div class="fin-stat-label">Период</div><div style="font-size:13px;color:#ccc;margin-top:4px">${opEsc(data.periodLabel)}</div></div>`;
+  sumEl.style.display = '';
+  sumEl.innerHTML = `<div class="anl-cards">
+    <div class="anl-card"><div class="anl-card-lbl">Визитов всего</div><div class="anl-card-val">${data.totalVisits}</div></div>
+    <div class="anl-card"><div class="anl-card-lbl">Анонимных</div><div class="anl-card-val amber">${data.anonymousVisits}</div></div>
+    <div class="anl-card"><div class="anl-card-lbl">Уникальных читателей</div><div class="anl-card-val">${data.totalUniqueReaders}</div></div>
+    <div class="anl-card"><div class="anl-card-lbl">Выручка (сум)</div><div class="anl-card-val green">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
+    <div class="anl-card" style="flex:2;min-width:160px"><div class="anl-card-lbl">Период</div><div class="anl-card-val period">${opEsc(data.periodLabel)}</div></div>
+  </div>`;
 
   const emptyEl = document.getElementById('opAnlEmpty');
   if (!data.totalVisits) {
@@ -1226,26 +1227,18 @@ function opRenderAnalytics(data) {
 }
 
 function opBuildTable(headers, rows) {
-  const borderCol = '1px solid #2A2A4A';
-  const borderRow = '1px solid #1E1E38';
-  const th = (h, i) => {
-    const align = i > 0 ? 'center' : 'left';
-    const bl = i > 0 ? `border-left:${borderCol};` : '';
-    return `<th style="padding:7px 12px;white-space:nowrap;color:#777;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;text-align:${align};${bl}background:#111128">${opEsc(String(h))}</th>`;
-  };
-  const td = (v, i) => {
-    const align = i > 0 ? 'center' : 'left';
-    const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : opEsc(String(v));
-    const color = i === 0 ? '#d0d0e8' : (typeof v === 'number' && v === 0 ? '#444' : '#b0b0cc');
-    const bl = i > 0 ? `border-left:${borderCol};` : '';
-    return `<td style="padding:6px 12px;border-bottom:${borderRow};font-size:13px;text-align:${align};color:${color};${bl}">${val}</td>`;
-  };
-  if (!rows.length) return '<div class="op-empty">Нет данных</div>';
-  let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse">
-    <thead><tr>${headers.map((h, i) => th(h, i)).join('')}</tr></thead><tbody>`;
-  rows.forEach((row, ri) => {
-    const bg = ri % 2 === 1 ? 'background:#0e0e22;' : '';
-    html += `<tr style="${bg}">${row.map((v, i) => td(v, i)).join('')}</tr>`;
+  if (!rows.length) return '<div class="op-empty" style="text-align:left;padding:10px 0">Нет данных</div>';
+  let html = '<div class="anl-table-wrap"><table class="anl-table"><thead><tr>';
+  headers.forEach(h => { html += `<th>${opEsc(String(h))}</th>`; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(row => {
+    html += '<tr>';
+    row.forEach((v, i) => {
+      const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : opEsc(String(v));
+      const cls = (typeof v === 'number' && v === 0 && i > 0) ? ' class="anl-zero"' : '';
+      html += `<td${cls}>${val}</td>`;
+    });
+    html += '</tr>';
   });
   html += '</tbody></table></div>';
   return html;
