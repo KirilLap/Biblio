@@ -419,8 +419,11 @@ function renderAdminActionBar() {
       const pauseCls   = pc.isPaused ? 'green' : 'amber';
       btns.push(`<button class="ab-btn ${pauseCls}" onclick="togglePause('${esc(p)}')">${pauseLabel}</button>`);
       btns.push(`<button class="ab-btn blue" onclick="openTransfer('${esc(p)}')">↔ Пересадить</button>`);
-      if (pc.sessionType === 'Лимит')
+      if (pc.sessionType === 'Лимит') {
         btns.push(`<button class="ab-btn blue" onclick="openExtend('${esc(p)}')">+⏱ Время</button>`);
+        btns.push(`<button class="ab-btn red" onclick="openSubtract('${esc(p)}')">−⏱ Убрать</button>`);
+      }
+      btns.push(`<button class="ab-btn red" onclick="openPenalty('${esc(p)}')">⚠ Штраф</button>`);
       btns.push(`<button class="ab-btn red" onclick="endSession('${esc(p)}')">⏹ Завершить</button>`);
     }
   }
@@ -1120,6 +1123,96 @@ async function confirmExtend() {
   await conn.invoke('ExtendSession', activePc, min * 60, amount);
 }
 
+let _subSyncing = false;
+
+function openSubtract(pcNumber) {
+  activePc = pcNumber;
+  _extTariff = settings?.tariff || 0;
+  document.getElementById('dlgSubPc').textContent = pcNumber;
+  document.getElementById('dlgSubHours').value = 0;
+  document.getElementById('dlgSubMins').value  = 10;
+  document.getElementById('dlgSubAmount').value = _extTariff ? Math.round(_extTariff * 10 / 60) : 0;
+  document.getElementById('dlgSubtract').style.display = 'flex';
+}
+
+function calcSubAmount() {
+  if (_subSyncing || !_extTariff) return;
+  _subSyncing = true;
+  const h = parseInt(document.getElementById('dlgSubHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgSubMins').value) || 0);
+  document.getElementById('dlgSubAmount').value = Math.round(_extTariff * min / 60);
+  _subSyncing = false;
+}
+
+function calcSubTime() {
+  if (_subSyncing || !_extTariff) return;
+  _subSyncing = true;
+  const amount = parseInt(document.getElementById('dlgSubAmount').value) || 0;
+  const totalMins = Math.round(amount * 60 / _extTariff) || 0;
+  document.getElementById('dlgSubHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgSubMins').value  = totalMins % 60;
+  _subSyncing = false;
+}
+
+async function confirmSubtract() {
+  const h = parseInt(document.getElementById('dlgSubHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgSubMins').value) || 0);
+  const amount = parseInt(document.getElementById('dlgSubAmount').value) || 0;
+  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  closeDlg('dlgSubtract');
+  await conn.invoke('SubtractTime', activePc, min * 60, amount);
+}
+
+let _penSyncing = false;
+
+function openPenalty(pcNumber) {
+  activePc = pcNumber;
+  _extTariff = settings?.tariff || 0;
+  const pc = pcs[pcNumber];
+  const isVip = pc?.sessionType === 'VIP';
+  document.getElementById('dlgPenPc').textContent = pcNumber;
+  document.getElementById('penTimeRow').style.display = isVip ? 'none' : '';
+  document.getElementById('dlgPenHours').value = 0;
+  document.getElementById('dlgPenMins').value = 10;
+  document.getElementById('dlgPenAmount').value = (!isVip && _extTariff) ? Math.round(_extTariff * 10 / 60) : 0;
+  document.getElementById('dlgPenalty').style.display = 'flex';
+}
+
+function calcPenAmount() {
+  if (_penSyncing || !_extTariff) return;
+  const pc = pcs[activePc];
+  if (pc?.sessionType === 'VIP') return;
+  _penSyncing = true;
+  const h = parseInt(document.getElementById('dlgPenHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgPenMins').value) || 0);
+  document.getElementById('dlgPenAmount').value = Math.round(_extTariff * min / 60);
+  _penSyncing = false;
+}
+
+function calcPenTime() {
+  if (_penSyncing || !_extTariff) return;
+  const pc = pcs[activePc];
+  if (pc?.sessionType === 'VIP') return;
+  _penSyncing = true;
+  const amount = parseInt(document.getElementById('dlgPenAmount').value) || 0;
+  const totalMins = Math.round(amount * 60 / _extTariff) || 0;
+  document.getElementById('dlgPenHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgPenMins').value = totalMins % 60;
+  _penSyncing = false;
+}
+
+async function confirmPenalty() {
+  const pc = pcs[activePc];
+  const isVip = pc?.sessionType === 'VIP';
+  const h = isVip ? 0 : (parseInt(document.getElementById('dlgPenHours').value) || 0);
+  const min = isVip ? 0 : (h * 60 + (parseInt(document.getElementById('dlgPenMins').value) || 0));
+  const amount = parseInt(document.getElementById('dlgPenAmount').value) || 0;
+  if (!isVip && min <= 0) { toast('Укажите время штрафа', 'warn'); return; }
+  if (isVip && amount <= 0) { toast('Укажите сумму штрафа', 'warn'); return; }
+  closeDlg('dlgPenalty');
+  await conn.invoke('ApplyPenalty', activePc, min * 60, amount);
+}
+
 let _adminSummaryReaderId = '';
 let _adminSummaryPcNumber = '';
 
@@ -1525,21 +1618,22 @@ function renderFinance() {
   if (statusF === 'unpaid') services = services.filter(t => !t.isPaid);
 
   // Stats
-  const today = new Date(); today.setHours(0,0,0,0);
-  const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay() + 1);
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const periodLabels = { today: 'За сегодня', week: 'За неделю', month: 'За месяц', year: 'За год' };
+  document.getElementById('statTotalLabel').textContent = periodLabels[period] || 'Итого';
 
-  if (finTab === 'sessions' || finTab === 'all') {
-    document.getElementById('statToday').textContent = fmt(finSessions.filter(s => new Date(s.endTime) >= today).reduce((a,s)=>a+s.earnedAmount,0));
-    document.getElementById('statWeek').textContent  = fmt(finSessions.filter(s => new Date(s.endTime) >= weekStart).reduce((a,s)=>a+s.earnedAmount,0));
-    document.getElementById('statMonth').textContent = fmt(finSessions.filter(s => new Date(s.endTime) >= monthStart).reduce((a,s)=>a+s.earnedAmount,0));
-    document.getElementById('statCount').textContent = finSessions.length;
+  let statTotal, statCount;
+  if (finTab === 'sessions') {
+    statTotal = sessions.reduce((a, s) => a + s.earnedAmount, 0);
+    statCount = sessions.length;
+  } else if (finTab === 'services') {
+    statTotal = services.reduce((a, t) => a + t.totalAmount, 0);
+    statCount = services.length;
   } else {
-    document.getElementById('statToday').textContent = fmt(finServices.filter(t => new Date(t.createdAt) >= today).reduce((a,t)=>a+t.totalAmount,0));
-    document.getElementById('statWeek').textContent  = fmt(finServices.filter(t => new Date(t.createdAt) >= weekStart).reduce((a,t)=>a+t.totalAmount,0));
-    document.getElementById('statMonth').textContent = fmt(finServices.filter(t => new Date(t.createdAt) >= monthStart).reduce((a,t)=>a+t.totalAmount,0));
-    document.getElementById('statCount').textContent = finServices.length;
+    statTotal = sessions.reduce((a, s) => a + s.earnedAmount, 0) + services.reduce((a, t) => a + t.totalAmount, 0);
+    statCount = sessions.length + services.length;
   }
+  document.getElementById('statTotal').textContent = fmt(statTotal);
+  document.getElementById('statCount').textContent = statCount;
 
   const table = document.getElementById('finTable');
   if (finTab === 'sessions')  table.innerHTML = renderSessionsTable(sessions);
@@ -2296,6 +2390,7 @@ function periodFrom(p) {
   if (p === 'today') return t;
   if (p === 'week')  { const w = new Date(t); w.setDate(t.getDate() - t.getDay() + 1); return w; }
   if (p === 'month') return new Date(t.getFullYear(), t.getMonth(), 1);
+  if (p === 'year')  return new Date(t.getFullYear(), 0, 1);
   return null;
 }
 

@@ -60,8 +60,7 @@ namespace BibAdminWeb
             }
             if (path == "/api/admin/finance/sessions" && method == "DELETE")
             {
-                FinanceStore.Sessions.Clear();
-                FinanceStore.SaveHistory();
+                FinanceStore.ClearAll();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
                 return;
             }

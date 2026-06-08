@@ -46,6 +46,7 @@ namespace BibClient
         public static event Action<string, int, int, int>? StartSessionRequested;
         public static event Action<bool>? SessionPaused;
         public static event Action<int>? ExtendSessionRequested;
+        public static event Action<int>? PenaltySessionRequested;
         public static event Action? EndSessionRequested;
         public static event Action<int>? UpdateSessionElapsedTime;
 
@@ -108,8 +109,13 @@ namespace BibClient
                         break;
 
                     case "EXTEND_SESSION":
-                        if (int.TryParse(value, out int extSecs) && extSecs > 0)
+                        if (int.TryParse(value, out int extSecs) && extSecs != 0)
                             ExtendSessionRequested?.Invoke(extSecs);
+                        break;
+
+                    case "PENALTY_SESSION":
+                        if (int.TryParse(value, out int penSecs) && penSecs > 0)
+                            PenaltySessionRequested?.Invoke(penSecs);
                         break;
 
                     case "END_SESSION":

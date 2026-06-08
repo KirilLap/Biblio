@@ -96,10 +96,8 @@
 
     <!-- Stats -->
     <div class="stats-row" id="finStats">
-      <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-val green" id="statToday">0 сум</div></div>
-      <div class="stat-card"><div class="stat-label">За неделю</div><div class="stat-val blue" id="statWeek">0 сум</div></div>
-      <div class="stat-card"><div class="stat-label">За месяц</div><div class="stat-val orange" id="statMonth">0 сум</div></div>
-      <div class="stat-card"><div class="stat-label">Записей</div><div class="stat-val" id="statCount">0</div></div>
+      <div class="stat-card"><div class="stat-label" id="statTotalLabel">Итого</div><div class="stat-val green" id="statTotal">0 сум</div></div>
+      <div class="stat-card"><div class="stat-label" id="statCountLabel">Записей</div><div class="stat-val" id="statCount">0</div></div>
     </div>
 
     <!-- Tab + filter -->
@@ -111,10 +109,10 @@
         <button class="tab-btn" id="tabDebts" onclick="setFinTab('debts')">⚠ Долги</button>
       </div>
       <div class="filter-row">
-        <label><input type="radio" name="finPeriod" value="all" checked onchange="renderFinance()"> Все</label>
-        <label><input type="radio" name="finPeriod" value="today" onchange="renderFinance()"> Сегодня</label>
+        <label><input type="radio" name="finPeriod" value="today" checked onchange="renderFinance()"> Сегодня</label>
         <label><input type="radio" name="finPeriod" value="week" onchange="renderFinance()"> Неделя</label>
         <label><input type="radio" name="finPeriod" value="month" onchange="renderFinance()"> Месяц</label>
+        <label><input type="radio" name="finPeriod" value="year" onchange="renderFinance()"> Год</label>
         <select id="finTypeFilter" onchange="renderFinance()" style="display:none">
           <option value="">Все типы</option>
           <option value="VIP">VIP</option>
@@ -960,6 +958,54 @@
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgExtend')">Отмена</button>
       <button class="btn btn-primary" onclick="confirmExtend()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Убрать время (с возвратом, только Лимит) -->
+<div id="dlgSubtract" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">−⏱ Убрать время — <span id="dlgSubPc"></span></div>
+    <div class="form-row">
+      <label>Убрать время</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="dlgSubHours" min="0" max="23" value="0" style="width:70px" oninput="calcSubAmount()">
+        <span style="color:#888;font-size:13px">ч</span>
+        <input type="number" id="dlgSubMins" min="0" max="59" value="10" style="width:70px" oninput="calcSubAmount()">
+        <span style="color:#888;font-size:13px">мин</span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Сумма возврата (сум)</label>
+      <input type="number" id="dlgSubAmount" min="0" value="0" oninput="calcSubTime()">
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgSubtract')">Отмена</button>
+      <button class="btn" style="background:#e67e22;color:#fff" onclick="confirmSubtract()">Убрать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Штраф (Лимит: время+сумма авто; VIP: только сумма) -->
+<div id="dlgPenalty" class="dlg-overlay" style="display:none">
+  <div class="dlg">
+    <div class="dlg-title">⚠ Штраф — <span id="dlgPenPc"></span></div>
+    <div class="form-row" id="penTimeRow">
+      <label>Убрать время</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="dlgPenHours" min="0" max="23" value="0" style="width:70px" oninput="calcPenAmount()">
+        <span style="color:#888;font-size:13px">ч</span>
+        <input type="number" id="dlgPenMins" min="0" max="59" value="10" style="width:70px" oninput="calcPenAmount()">
+        <span style="color:#888;font-size:13px">мин</span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Сумма штрафа (сум)</label>
+      <input type="number" id="dlgPenAmount" min="0" value="0" oninput="calcPenTime()">
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeDlg('dlgPenalty')">Отмена</button>
+      <button class="btn" style="background:#c0392b;color:#fff" onclick="confirmPenalty()">Штраф</button>
     </div>
   </div>
 </div>

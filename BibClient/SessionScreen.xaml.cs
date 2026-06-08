@@ -193,7 +193,7 @@ namespace BibClient
             _trayIcon = trayIcon; _elapsedSeconds = initialElapsedSeconds; _sessionId = Guid.NewGuid().ToString();
             _popup = new SessionPopup(); _popup.UpdateSession(sessionType, initialElapsedSeconds, limitSeconds, tariff, false);
             _trayIcon.ShowPopupRequested += ShowPopup;
-            PolicyEngine.ExtendSessionRequested += OnExtend; PolicyEngine.EndSessionRequested += OnEnd;
+            PolicyEngine.ExtendSessionRequested += OnExtend; PolicyEngine.PenaltySessionRequested += OnPenalty; PolicyEngine.EndSessionRequested += OnEnd;
             PolicyEngine.UpdateSessionElapsedTime += UpdateElapsedTimeFromServer; PolicyEngine.SessionPaused += SetPaused;
             _timer.Interval = TimeSpan.FromSeconds(1); _timer.Tick += Timer_Tick; _timer.Start();
             ShowPopup(); UpdateTrayTooltip(); SaveSessionState();
@@ -242,7 +242,44 @@ namespace BibClient
 
         private void OnExtend(int addSeconds)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() => { _limitSeconds += addSeconds; int remaining = _limitSeconds - _elapsedSeconds; if (remaining > 300) { _warningShown5 = _warningShown4 = _warningShown3 = _warningShown2 = _warningShown1 = false; } _trayIcon?.ShowNotification("Сессия продлена", $"Добавлено {addSeconds / 60} мин"); UpdateTrayTooltip(); SaveSessionState(); });
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                _limitSeconds = Math.Max(60, _limitSeconds + addSeconds);
+                int remaining = _limitSeconds - _elapsedSeconds;
+                if (addSeconds > 0)
+                {
+                    if (remaining > 300) { _warningShown5 = _warningShown4 = _warningShown3 = _warningShown2 = _warningShown1 = false; }
+                    _trayIcon?.ShowNotification("Сессия продлена", $"Добавлено {addSeconds / 60} мин");
+                }
+                else
+                {
+                    _warningShown5 = remaining > 300;
+                    _warningShown4 = remaining > 240;
+                    _warningShown3 = remaining > 180;
+                    _warningShown2 = remaining > 120;
+                    _warningShown1 = remaining > 60;
+                    _trayIcon?.ShowNotification("Время скорректировано", $"Убрано {Math.Abs(addSeconds) / 60} мин");
+                }
+                UpdateTrayTooltip();
+                SaveSessionState();
+            });
+        }
+
+        private void OnPenalty(int penaltySeconds)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                _limitSeconds = Math.Max(60, _limitSeconds - penaltySeconds);
+                int remaining = _limitSeconds - _elapsedSeconds;
+                // Сбрасываем флаги предупреждений под новый остаток — без уведомления читателю
+                _warningShown5 = remaining > 300;
+                _warningShown4 = remaining > 240;
+                _warningShown3 = remaining > 180;
+                _warningShown2 = remaining > 120;
+                _warningShown1 = remaining > 60;
+                UpdateTrayTooltip();
+                SaveSessionState();
+            });
         }
 
         private void OnEnd()
@@ -263,7 +300,7 @@ namespace BibClient
         public void Dispose()
         {
             _timer.Stop(); SaveSessionState();
-            PolicyEngine.ExtendSessionRequested -= OnExtend; PolicyEngine.EndSessionRequested -= OnEnd;
+            PolicyEngine.ExtendSessionRequested -= OnExtend; PolicyEngine.PenaltySessionRequested -= OnPenalty; PolicyEngine.EndSessionRequested -= OnEnd;
             PolicyEngine.UpdateSessionElapsedTime -= UpdateElapsedTimeFromServer; PolicyEngine.SessionPaused -= SetPaused;
             if (_trayIcon != null) _trayIcon.ShowPopupRequested -= ShowPopup;
             System.Windows.Application.Current.Dispatcher.Invoke(() => { _popup?.Close(); _popup = null; });

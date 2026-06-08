@@ -52,6 +52,7 @@ namespace BibAdminWeb
             client.Status = sessionType;
             client.LimitSeconds = limitSeconds;
             client.PaidAmount = paidAmount;
+            client.PenaltyAmount = 0;
             client.ElapsedSeconds = 0;
             client.AccumulatedSeconds = 0;
             client.SessionStart = serverStart;
@@ -76,8 +77,9 @@ namespace BibAdminWeb
 
             string sessionType = string.IsNullOrEmpty(client.SessionType) ? client.Status : client.SessionType;
             int tariff = GlobalSettings.Load().Tariff;
-            int earned = (int)(tariff * client.ElapsedSeconds / 3600.0);
+            int earned = (int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount;
             int paidAmount = client.PaidAmount;
+            if (sessionType == "Лимит") earned = Math.Min(earned, paidAmount);
             int refund = Math.Max(0, paidAmount - earned);
             int duration = client.ElapsedSeconds;
             var startTime = client.SessionStart ?? DateTime.Now;
@@ -112,6 +114,7 @@ namespace BibAdminWeb
             client.ElapsedSeconds = 0;
             client.LimitSeconds = 0;
             client.PaidAmount = 0;
+            client.PenaltyAmount = 0;
             client.SessionStart = null;
             client.IsPaused = false;
             client.AccumulatedSeconds = 0;
@@ -136,6 +139,11 @@ namespace BibAdminWeb
                 pcNumber, sessionType, duration, earned, paidAmount, refund,
                 readerId, serviceDebts = debtItems, totalServiceDebt = totalDebt
             });
+
+            // Уведомить всех остальных о завершении сессии
+            string displayName = string.IsNullOrWhiteSpace(client.UserName) ? (client.ReaderId ?? "—") : client.UserName;
+            OperatorBroadcaster.Instance?.NotifySessionEndedByStaff(pcNumber, displayName, duration, earned);
+            AdminBroadcaster.Instance?.NotifySessionEndedByStaff(pcNumber, displayName, duration, earned);
         }
 
         public async Task TogglePause(string pcNumber)
@@ -340,6 +348,51 @@ namespace BibAdminWeb
                 await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
             else
                 AdminHub.AddPendingCommand(pcNumber, "EXTEND_SESSION", addSeconds.ToString());
+            AdminHub.RaiseClientUpdated(client);
+        }
+
+        // Убрать время с возвратом денег (только Лимит)
+        public async Task SubtractTime(string pcNumber, int subSeconds, int subAmount)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession || client.SessionType != "Лимит") return;
+            var actualSub = Math.Min(subSeconds, client.LimitSeconds - 60);
+            if (actualSub <= 0) return;
+            client.LimitSeconds -= actualSub;
+            client.PaidAmount = Math.Max(0, client.PaidAmount - subAmount);
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            var cmd = new { Type = "EXTEND_SESSION", Value = (-actualSub).ToString(), LimitSeconds = -actualSub };
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+            else
+                AdminHub.AddPendingCommand(pcNumber, "EXTEND_SESSION", (-actualSub).ToString());
+            AdminHub.RaiseClientUpdated(client);
+        }
+
+        // Штраф: для Лимит — убрать время без возврата; для VIP — добавить денежный штраф
+        public async Task ApplyPenalty(string pcNumber, int penaltySeconds, int penaltyAmount)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession) return;
+            client.PenaltyAmount += penaltyAmount;
+            if (client.SessionType == "Лимит" && penaltySeconds > 0)
+            {
+                var actualSub = Math.Min(penaltySeconds, client.LimitSeconds - 60);
+                if (actualSub > 0)
+                {
+                    client.LimitSeconds -= actualSub;
+                    var cmd = new { Type = "PENALTY_SESSION", Value = actualSub.ToString() };
+                    if (client.IsOnline)
+                        await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+                    else
+                        AdminHub.AddPendingCommand(pcNumber, "PENALTY_SESSION", actualSub.ToString());
+                }
+            }
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
             AdminHub.RaiseClientUpdated(client);
         }
 

@@ -29,6 +29,10 @@ namespace BibAdminWeb
         public void NotifyOfflineResolved(string pcNumber, string decision)
             => _ = _ctx.Clients.All.SendAsync("offlineResolved", new { pcNumber, decision });
 
+        public void NotifySessionEndedByStaff(string pcNumber, string userName, int durationSeconds, int earned)
+            => _ = _ctx.Clients.All.SendAsync("sessionEndedByStaff",
+                new { pcNumber, userName, durationSeconds, earned });
+
         public Task NotifyServerRestartingAsync(string reason)
             => _ctx.Clients.All.SendAsync("serverRestarting", new { reason });
 

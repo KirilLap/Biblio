@@ -29,9 +29,9 @@ namespace BibAdminWeb
             AdminHub.LoadRegistry();
             AdminHub.LoadActiveSessions();
             AdminHub.LoadDeletedPcs();
+            ReaderStore.Init();
             FinanceStore.LoadHistory();
             ServiceTransaction.LoadHistory();
-            ReaderStore.Init();
 
             var server = new ServerHost();
             try

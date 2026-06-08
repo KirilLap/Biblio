@@ -1,422 +1,615 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BibOperator</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/operator.css">
+<link rel="stylesheet" href="/themes.css">
 </head>
 <body>
+<div class="app">
 
-<!-- Шапка -->
-<header>
-  <div class="logo">BibOperator</div>
-  <div class="header-right">
-    <span id="opName" class="op-name"></span>
-    <button id="opNotifBtn" onclick="opRequestNotifications()" title="Браузерные уведомления"
-      style="background:none;border:1px solid #3D3D6B;border-radius:6px;color:#888;font-size:14px;padding:4px 9px;cursor:pointer;transition:all .15s;display:none">🔔</button>
-    <div id="connDot" class="conn-dot offline" title="Нет связи с сервером"></div>
-    <button class="btn-logout" onclick="doLogout()">Выйти</button>
+<!-- ═══ TOPBAR ═══ -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">Bib<span>Lib</span></div>
+      <div class="brand-sub">Оператор</div>
+    </div>
+  </div>
+
+  <nav class="tabnav" id="opTabNav">
+    <button class="tab on" id="tabBtnPcs" onclick="switchOpTab('pcs')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <span>ПК</span>
+    </button>
+    <button class="tab" id="tabBtnReaders" onclick="switchOpTab('readers')" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span>Читатели</span>
+    </button>
+    <button class="tab" id="tabBtnFinance" onclick="switchOpTab('finance')" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <span>История</span>
+    </button>
+    <button class="tab" id="tabBtnStats" onclick="switchOpTab('stats')" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Статистика</span>
+    </button>
+  </nav>
+
+  <div class="topclock mono" id="topClock">--:--:--</div>
+
+  <div class="topbar-right">
+    <button id="opNotifBtn" class="icbtn" onclick="opRequestNotifications()" title="Браузерные уведомления" style="display:none">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </button>
+
+    <div class="theme-wrap" id="themeWrap">
+      <button class="theme-btn" id="themeBtn" onclick="toggleThemeMenu()" title="Тема оформления">
+        <span class="swatch-dot"></span>
+      </button>
+      <div class="theme-menu" id="themeMenu"></div>
+    </div>
+
+    <div class="op-chip">
+      <div class="op-ava" id="opAva">О</div>
+      <div class="op-meta">
+        <span class="op-name" id="opName"></span>
+        <span class="op-role">
+          <span class="op-online" id="connDot"></span>
+          Оператор
+        </span>
+      </div>
+    </div>
+    <button class="exit-btn" onclick="doLogout()">Выйти</button>
   </div>
 </header>
 
-<!-- Тосты -->
-<div id="toasts"></div>
-
-<!-- Диалог: Начать сессию -->
-<div id="dlgSession" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgSession')">
-  <div class="dlg">
-    <div class="dlg-title">Начать сессию</div>
-    <div class="dlg-pc-name" id="dlgSessionPc"></div>
-
-    <div class="field-row">
-      <label>Тип сессии</label>
-      <div class="radio-group">
-        <label class="radio-opt"><input type="radio" name="stype" value="Лимит" checked> Лимит</label>
-        <label class="radio-opt"><input type="radio" name="stype" value="VIP"> VIP (безлимит)</label>
-      </div>
-    </div>
-
-    <div id="limitFields">
-      <div class="field-row">
-        <label>Время</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input id="dlgLimitHours" type="number" min="0" max="23" value="1" style="width:70px" oninput="calcAmount()">
-          <span style="color:#888;font-size:13px">ч</span>
-          <input id="dlgLimitMins" type="number" min="0" max="59" value="0" style="width:70px" oninput="calcAmount()">
-          <span style="color:#888;font-size:13px">мин</span>
-        </div>
-      </div>
-      <div class="field-row">
-        <label>Сумма (сум)</label>
-        <input id="dlgAmount" type="number" min="0" value="0" oninput="calcTime()">
-      </div>
-    </div>
-
-    <div id="rowReaderId" class="field-row">
-      <label id="lblReaderId">Читательский билет</label>
-      <div class="radio-group" style="margin-bottom:6px">
-        <label class="radio-opt"><input type="radio" name="cardType" value="regular" checked onchange="onCardTypeChanged()"> Постоянный (3 года)</label>
-        <label class="radio-opt"><input type="radio" name="cardType" value="temp" onchange="onCardTypeChanged()"> Временный (1 день)</label>
-      </div>
-      <div style="display:flex;gap:0;border:1px solid #3D3D6B;border-radius:8px;overflow:hidden;background:#1A1A2E">
-        <span id="dlgReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B;white-space:nowrap;line-height:1.5">FAA</span>
-        <input id="dlgReaderId" type="text" inputmode="numeric" placeholder="260500456" maxlength="9"
-               style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px"
-               oninput="onReaderInput()"
-               onblur="lookupReader()" onkeydown="if(event.key==='Enter'){lookupReader();}">
-      </div>
-      <div id="dlgReaderInfo" style="display:none;margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px"></div>
-    </div>
-    <div id="rowUserName" class="field-row">
-      <label id="lblUserName">Имя читателя <span class="opt">(заполняется автоматически)</span></label>
-      <input id="dlgUserName" type="text" placeholder="Или введите вручную">
-    </div>
-
-    <div class="dlg-actions">
-      <button class="btn-cancel" onclick="closeDlg('dlgSession')">Отмена</button>
-      <button class="btn-primary" onclick="confirmStartSession()">Начать</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Итог сессии -->
-<div id="dlgSummary" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgSummary')">
-  <div class="dlg">
-    <div class="dlg-title">Сессия завершена</div>
-    <div id="dlgSummaryBody" class="summary-body"></div>
-    <div class="dlg-actions">
-      <button class="btn-primary" onclick="closeDlg('dlgSummary')">Закрыть</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Обрыв связи ПК -->
-<div id="dlgOffline" class="dlg-overlay">
-  <div class="dlg dlg-warn">
-    <div class="dlg-title">⚠ Потеря связи с ПК</div>
-    <div id="dlgOfflineBody" class="summary-body"></div>
-    <div class="dlg-actions">
-      <button class="btn-pause" onclick="resolveOffline('Pause')">⏸ Поставить на паузу</button>
-      <button class="btn-continue" onclick="resolveOffline('Continue')">▶ Продолжить</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Пересадка -->
-<div id="dlgTransfer" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgTransfer')">
-  <div class="dlg">
-    <div class="dlg-title">↔ Пересадить сессию</div>
-    <div class="dlg-pc-name" id="dlgTransferFrom"></div>
-    <div class="field-row">
-      <label>Выберите ПК назначения</label>
-      <select id="dlgTransferTarget"></select>
-    </div>
-    <div id="dlgTransferError" style="color:#E24B4A;font-size:12px;margin-top:8px;display:none"></div>
-    <div class="dlg-actions">
-      <button class="btn-cancel" onclick="closeDlg('dlgTransfer')">Отмена</button>
-      <button class="btn-primary" onclick="confirmTransfer()">Пересадить</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Добавить время -->
-<div id="dlgExtend" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgExtend')">
-  <div class="dlg">
-    <div class="dlg-title">⏱ Добавить время</div>
-    <div class="dlg-pc-name" id="dlgExtPc"></div>
-    <div class="field-row">
-      <label>Добавить время</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="dlgExtHours" type="number" min="0" max="23" value="0" style="width:70px" oninput="calcExtAmount()">
-        <span style="color:#888;font-size:13px">ч</span>
-        <input id="dlgExtMins" type="number" min="0" max="59" value="30" style="width:70px" oninput="calcExtAmount()">
-        <span style="color:#888;font-size:13px">мин</span>
-      </div>
-    </div>
-    <div class="field-row">
-      <label>Добавить сумму (сум)</label>
-      <input id="dlgExtAmount" type="number" min="0" value="0" oninput="calcExtTime()">
-    </div>
-    <div class="dlg-actions">
-      <button class="btn-cancel" onclick="closeDlg('dlgExtend')">Отмена</button>
-      <button class="btn-primary" onclick="confirmExtend()">Добавить</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Услуга -->
-<div id="dlgService" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgService')">
-  <div class="dlg">
-    <div class="dlg-title">Оказать услугу</div>
-
-    <div class="field-row">
-      <label>Привязать к сессии</label>
-      <select id="dlgSvcPc" onchange="onSvcPcChanged()">
-        <option value="">— Без привязки —</option>
-      </select>
-    </div>
-    <div id="dlgSvcSessionInfo" style="font-size:12px;color:#1D9E75;margin:4px 0 8px;display:none"></div>
-
-    <div id="dlgSvcReaderRow" class="field-row" style="display:none">
-      <label>Читатель <span class="opt">(необязательно)</span></label>
-      <input type="text" id="dlgSvcReaderId" placeholder="Номер читательского билета">
-    </div>
-
-    <div style="border-top:1px solid #2D2D5B;margin:8px 0 10px"></div>
-    <div id="dlgSvcList"></div>
-    <button id="btnAddSvcRow" class="btn-sm" onclick="addSvcRow()" style="margin-bottom:12px;font-size:12px;padding:5px 12px">+ Добавить услугу</button>
-
-    <div class="field-row">
-      <label>Итого</label>
-      <div id="dlgSvcTotal" class="total-display">—</div>
-    </div>
-    <div class="field-row">
-      <label>Оплата</label>
-      <div class="radio-group">
-        <label class="radio-opt"><input type="radio" name="svcPay" value="now" checked onclick="onSvcPayChanged()"> Сейчас</label>
-        <label class="radio-opt"><input type="radio" name="svcPay" value="later" id="rbSvcLater" onclick="onSvcPayChanged()"> Позже</label>
-      </div>
-    </div>
-    <div id="dlgSvcDeferNote" style="font-size:12px;color:#E09000;display:none;margin-top:-4px;margin-bottom:8px">
-      ⓘ Выберите активную сессию, чтобы отложить оплату
-    </div>
-
-    <div class="dlg-actions">
-      <button class="btn-cancel" onclick="closeDlg('dlgService')">Отмена</button>
-      <button class="btn-primary" onclick="confirmService()">Создать</button>
-    </div>
-  </div>
-</div>
-
-<!-- Диалог: Управление долгами -->
-<div id="dlgDebts" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgDebts')">
-  <div class="dlg dlg-wide">
-    <div class="dlg-title">⚠ Задолженности по услугам</div>
-    <div id="dlgDebtsBody" style="max-height:60vh;overflow-y:auto"></div>
-    <div class="dlg-actions">
-      <button class="btn-primary" onclick="closeDlg('dlgDebts')">Закрыть</button>
-    </div>
-  </div>
-</div>
-
-<!-- Модальное окно: просмотр экрана ПК -->
-<div id="dlgScreenView" class="dlg-overlay" onclick="closeDlgIfOverlay(event,'dlgScreenView')">
-  <div class="dlg dlg-wide">
-    <div class="dlg-title" id="dlgScreenViewTitle">Экран ПК</div>
-    <div style="text-align:center;background:#000;border-radius:6px;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center">
-      <img id="screenViewImg" style="max-width:100%;max-height:65vh;display:block" src="" alt="Загрузка...">
-    </div>
-    <div style="font-size:12px;color:#777;margin-top:8px;text-align:center" id="screenViewStatus">Подключение...</div>
-    <div class="dlg-actions">
-      <button class="btn-primary" onclick="closeScreenView()">Закрыть</button>
-    </div>
-  </div>
-</div>
-
-<!-- Оверлей: перезапуск сервера -->
-<div id="overlayRestart" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px">
-  <div style="font-size:48px">🔄</div>
-  <div style="color:#fff;font-size:22px;font-weight:700">Сервер перезапускается</div>
-  <div id="overlayRestartReason" style="color:#aaa;font-size:15px">Обновление системы</div>
-  <div style="color:#ccc;font-size:13px;margin-top:8px">Страница обновится автоматически после запуска сервера</div>
-  <div style="width:48px;height:48px;border:4px solid #444;border-top-color:#1d9e75;border-radius:50%;animation:spin 1s linear infinite;margin-top:8px"></div>
-</div>
-<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-
-<!-- Стили вкладок и таблиц -->
-<style>
-.op-tab-nav{display:flex;gap:4px;padding:10px 16px 0;background:#0D0D1A;border-bottom:1px solid #2D2D5B}
-.op-tab-btn{padding:8px 18px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:#888;transition:all .18s}
-.op-tab-btn:hover{color:#ccc;background:#1A1A2E}
-.op-tab-btn.active{background:#1A1A2E;color:#1D9E75;border-bottom:2px solid #1D9E75}
-.op-panel{display:none;padding:24px 16px 16px}
-.op-panel.active{display:block}
-/* Кнопки действий в stats-bar */
-.btn-op-debts   {margin-left:8px;background:#D97706}
-.btn-op-restart {margin-left:8px;background:#6B7280}
-.btn-op-shutdown{margin-left:8px;background:#EF4444}
-/* Подписи статистики чуть темнее */
-.stats-bar .stat-item small{color:#666}
-.op-search-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.op-search-row input{flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid #3D3D6B;background:#1A1A2E;color:#fff;font-size:13px}
-.op-search-row button{padding:8px 16px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:13px;font-weight:600;cursor:pointer}
-.op-table-wrap{overflow-x:auto;border-radius:8px;border:1px solid #2D2D5B;background:#101022}
-.op-table{width:100%;border-collapse:collapse;font-size:12px;background:#101022}
-.op-table th{padding:8px 10px;background:#1E1E3A;color:#C0C0E0;text-align:left;font-weight:600;white-space:nowrap}
-.op-table td{padding:7px 10px;border-top:1px solid #1E1E3A;color:#D8D8F0;background:#101022;white-space:nowrap}
-.op-table tr:nth-child(even) td{background:#0D0D1A}
-.op-table tr:hover td{background:#1A1A2E!important}
-.op-finance-tabs{display:flex;gap:6px;flex-wrap:wrap}
-.op-finance-tab{padding:5px 14px;border-radius:6px;border:1px solid #3D3D6B;background:transparent;color:#888;font-size:12px;cursor:pointer;transition:all .15s}
-.op-finance-tab.active{background:#1D9E75;color:#fff;border-color:#1D9E75}
-.op-empty{color:#555;padding:24px;text-align:center;font-size:13px}
-/* ── Аналитика ─────────────────────────────── */
-.anl-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;background:#111128;border:1px solid #2D2D5B;border-radius:10px;margin-bottom:16px}
-.anl-cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
-.anl-card{background:#1A1A2E;border:1px solid #2D2D5B;border-radius:10px;padding:14px 20px;min-width:120px;flex:1}
-.anl-card-lbl{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
-.anl-card-val{font-size:22px;font-weight:700;color:#D8D8F0;line-height:1.2}
-.anl-card-val.green{color:#1D9E75}
-.anl-card-val.amber{color:#f59e0b}
-.anl-card-val.period{font-size:14px;color:#aaa;font-weight:500;margin-top:6px}
-.anl-sec-title{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2D2D5B}
-.anl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-@media(max-width:700px){.anl-grid{grid-template-columns:1fr}}
-.anl-table-wrap{overflow-x:auto;border:1px solid #2D2D5B;border-radius:8px}
-.anl-table{width:100%;border-collapse:collapse;font-size:13px}
-.anl-table thead th{padding:8px 14px;background:#1E1E3A;color:#888;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2D2D5B;white-space:nowrap}
-.anl-table thead th:not(:first-child){text-align:center;border-left:1px solid #2D2D5B}
-.anl-table tbody td{padding:8px 14px;border-bottom:1px solid #181830;color:#C0C0E0}
-.anl-table tbody td:not(:first-child){text-align:center;border-left:1px solid #181830}
-.anl-table tbody tr:nth-child(even) td{background:#0D0D1A}
-.anl-table tbody tr:hover td{background:#1A1A2E!important}
-.anl-zero{color:#333!important}
-</style>
-
-<!-- Основная область -->
-<main>
-  <!-- Навигация по вкладкам (показывается только при наличии прав) -->
-  <div class="op-tab-nav" id="opTabNav">
-    <button class="op-tab-btn active" id="tabBtnPcs" onclick="switchOpTab('pcs')">🖥 ПК</button>
-    <button class="op-tab-btn" id="tabBtnReaders" onclick="switchOpTab('readers')" style="display:none">📋 Читатели</button>
-    <button class="op-tab-btn" id="tabBtnFinance" onclick="switchOpTab('finance')" style="display:none">💰 История</button>
-    <button class="op-tab-btn" id="tabBtnStats"   onclick="switchOpTab('stats')"   style="display:none">📊 Статистика</button>
-  </div>
-
-  <!-- ── Вкладка: ПК ────────────────────────────────────────────────── -->
-  <div id="panelPcs" class="op-panel active">
-    <!-- Статистика -->
-    <div class="stats-bar" style="margin:0 -16px 20px;padding:10px 16px">
-      <div class="stat-item"><span id="stTotal">0</span><small>ПК всего</small></div>
-      <div class="stat-item"><span id="stOnline">0</span><small>онлайн</small></div>
-      <div class="stat-item stat-green"><span id="stSessions">0</span><small>сессий</small></div>
-      <div class="stat-item stat-amber"><span id="stLocked">0</span><small>заблок.</small></div>
-      <button class="btn-service-top" onclick="openServiceDlg()">🛎 Услуга</button>
-      <button class="btn-service-top btn-op-debts" onclick="openDebtsDlg()">⚠ Долги</button>
-      <button class="btn-service-top btn-op-restart" onclick="restartAll()">🔄 Перезагрузить</button>
-      <button class="btn-service-top btn-op-shutdown" onclick="shutdownAll()">⏻ Выкл. все</button>
-    </div>
-    <!-- Грид ПК -->
-    <div id="grid" class="pc-grid"></div>
-    <!-- Панель действий -->
-    <div id="actionBar" class="action-bar hidden">
-      <div id="abPcName" class="ab-pc-name"></div>
-      <div id="abStatus" class="ab-status"></div>
-      <div id="abActions" class="ab-actions"></div>
-    </div>
-  </div>
-
-  <!-- ── Вкладка: Читатели ─────────────────────────────────────────── -->
-  <div id="panelReaders" class="op-panel">
-    <div class="op-search-row">
-      <input type="text" id="readersSearchInput" placeholder="Поиск по ФИО или номеру билета…"
-             onkeydown="if(event.key==='Enter') searchReaders()">
-      <button onclick="searchReaders()">🔍 Найти</button>
-    </div>
-    <div id="readersResult">
-      <div class="op-empty">Введите запрос и нажмите «Найти»</div>
-    </div>
-  </div>
-
-  <!-- ── Вкладка: История финансов ────────────────────────────────── -->
-  <div id="panelFinance" class="op-panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-      <div class="op-finance-tabs">
-        <button class="op-finance-tab active" id="finTabSessions" onclick="switchFinanceTab('sessions')">Сессии</button>
-        <button class="op-finance-tab" id="finTabServices" onclick="switchFinanceTab('services')">Услуги</button>
-      </div>
-      <button onclick="exportFinanceXlsx()"
-        style="padding:6px 14px;border-radius:6px;border:none;background:#217F5A;color:#fff;font-size:12px;font-weight:600;cursor:pointer">
-        ⬇ Скачать Excel
+<!-- ═══ TOOLBAR (ПК tab) ═══ -->
+<div class="toolbar" id="toolbar">
+  <div class="toolbar-row">
+    <div class="filters">
+      <button class="fchip active" id="chipAll" onclick="setFilterState('all')" style="--fc:var(--ink-2)">
+        <span class="fchip-n mono" id="chipAllN">0</span>
+        <span class="fchip-l">Все</span>
+      </button>
+      <button class="fchip" id="chipFree" onclick="setFilterState('free')" style="--fc:var(--free)">
+        <span class="fchip-n mono" id="chipFreeN">0</span>
+        <span class="fchip-l">Свободно</span>
+      </button>
+      <button class="fchip" id="chipSession" onclick="setFilterState('session')" style="--fc:var(--limit)">
+        <span class="fchip-n mono" id="chipSessionN">0</span>
+        <span class="fchip-l">Сессии</span>
+      </button>
+      <button class="fchip" id="chipOffline" onclick="setFilterState('offline')" style="--fc:var(--offline)">
+        <span class="fchip-n mono" id="chipOfflineN">0</span>
+        <span class="fchip-l">Оффлайн</span>
       </button>
     </div>
-    <div id="financeSessionsPanel">
-      <div id="financeSessionsResult" class="op-table-wrap">
-        <div class="op-empty">Загрузка…</div>
-      </div>
-    </div>
-    <div id="financeServicesPanel" style="display:none">
-      <div id="financeServicesResult" class="op-table-wrap">
-        <div class="op-empty">Загрузка…</div>
-      </div>
+    <div class="toolbar-right">
+      <label class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Поиск ПК…" oninput="setSearchQuery(this.value)">
+      </label>
     </div>
   </div>
+  <div class="toolbar-row toolbar-actions">
+    <button class="gbtn" onclick="openServiceDlg()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+      Услуга
+    </button>
+    <button class="gbtn" id="btnDebts" onclick="openDebtsDlg()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Долги
+      <span class="gbtn-badge" id="debtsBadge" style="display:none">0</span>
+    </button>
+    <div class="gbtn-spacer"></div>
+    <button class="gbtn gbtn-warn" onclick="restartAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Перезагрузить
+    </button>
+    <button class="gbtn gbtn-danger" onclick="shutdownAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+      Выкл. все
+    </button>
+  </div>
+</div>
 
-  <!-- ── Вкладка: Статистика ──────────────────────────────────────── -->
-  <div id="panelStats" class="op-panel">
-    <div class="anl-toolbar">
-      <div class="op-finance-tabs">
-        <button class="op-finance-tab active" id="opAnlBtnDay"     onclick="opSetAnalyticsPeriod('day')">День</button>
-        <button class="op-finance-tab"        id="opAnlBtnMonth"   onclick="opSetAnalyticsPeriod('month')">Месяц</button>
-        <button class="op-finance-tab"        id="opAnlBtnQuarter" onclick="opSetAnalyticsPeriod('quarter')">Квартал</button>
-        <button class="op-finance-tab"        id="opAnlBtnYear"    onclick="opSetAnalyticsPeriod('year')">Год</button>
-      </div>
-      <input type="date"   id="opAnlDateDay"
-             style="background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
-      <input type="month"  id="opAnlDateMonth"
-             style="display:none;background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
-      <div id="opAnlDateQuarter" style="display:none;align-items:center;gap:6px">
-        <input type="number" id="opAnlYearQuarter" min="2020" max="2099" placeholder="Год"
-               style="width:72px;background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
-        <div class="op-finance-tabs">
-          <button class="op-finance-tab" id="opAnlQ1" onclick="opSetQuarter(1)">Q1 <span style="font-size:10px;opacity:.7">Янв–Мар</span></button>
-          <button class="op-finance-tab" id="opAnlQ2" onclick="opSetQuarter(2)">Q2 <span style="font-size:10px;opacity:.7">Апр–Июн</span></button>
-          <button class="op-finance-tab" id="opAnlQ3" onclick="opSetQuarter(3)">Q3 <span style="font-size:10px;opacity:.7">Июл–Сен</span></button>
-          <button class="op-finance-tab" id="opAnlQ4" onclick="opSetQuarter(4)">Q4 <span style="font-size:10px;opacity:.7">Окт–Дек</span></button>
-        </div>
-      </div>
-      <input type="number" id="opAnlDateYear" min="2020" max="2099" placeholder="Год"
-             style="display:none;width:80px;background:#0D0D1A;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
-      <button class="btn-primary" onclick="opLoadAnalytics()" style="padding:7px 20px">Показать</button>
-      <button class="btn-service-top" onclick="opExportAnalytics()" style="margin-left:0">📊 Экспорт Excel</button>
+<!-- ═══ BOARD ПК ═══ -->
+<div class="board active" id="boardPcs">
+  <div class="grid" id="grid"></div>
+  <div class="board-pad"></div>
+</div>
+
+<!-- ═══ PAGE: Читатели ═══ -->
+<div class="page-body" id="panelReaders">
+  <div class="page-head">
+    <div class="page-title">Читатели</div>
+    <div class="page-sub">Поиск по базе читателей библиотеки</div>
+  </div>
+  <div class="readers-search-row">
+    <input type="text" id="readersSearchInput" placeholder="Поиск по ФИО или номеру билета…" onkeydown="if(event.key==='Enter') searchReaders()">
+    <button onclick="searchReaders()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Найти
+    </button>
+  </div>
+  <div id="readersResult"><div class="op-empty">Введите запрос и нажмите «Найти»</div></div>
+</div>
+
+<!-- ═══ PAGE: История ═══ -->
+<div class="page-body" id="panelFinance">
+  <div class="page-head">
+    <div class="page-title">История</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div class="tab-filters">
+      <button class="tab-filter active" id="finTabSessions" onclick="switchFinanceTab('sessions')">Сессии</button>
+      <button class="tab-filter" id="finTabServices" onclick="switchFinanceTab('services')">Услуги</button>
     </div>
+    <button class="gbtn" onclick="exportFinanceXlsx()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Скачать Excel
+    </button>
+  </div>
+  <div id="financeSessionsPanel">
+    <div id="financeSessionsResult" class="dtable-wrap"><div class="op-empty">Загрузка…</div></div>
+  </div>
+  <div id="financeServicesPanel" style="display:none">
+    <div id="financeServicesResult" class="dtable-wrap"><div class="op-empty">Загрузка…</div></div>
+  </div>
+</div>
 
-    <div id="opAnlSummary" style="display:none"></div>
-    <div id="opAnlContent" style="display:none">
-      <div class="anl-grid">
-        <div>
-          <div class="anl-sec-title">По полу</div>
-          <div id="opAnlGenderTable"></div>
-        </div>
-        <div>
-          <div class="anl-sec-title">По категориям</div>
-          <div id="opAnlCategoryTable"></div>
-        </div>
+<!-- ═══ PAGE: Статистика ═══ -->
+<div class="page-body" id="panelStats">
+  <div class="page-head">
+    <div class="page-title">Статистика</div>
+  </div>
+  <div class="anl-toolbar-row">
+    <div class="tab-filters">
+      <button class="tab-filter active" id="opAnlBtnDay"     onclick="opSetAnalyticsPeriod('day')">День</button>
+      <button class="tab-filter"        id="opAnlBtnMonth"   onclick="opSetAnalyticsPeriod('month')">Месяц</button>
+      <button class="tab-filter"        id="opAnlBtnQuarter" onclick="opSetAnalyticsPeriod('quarter')">Квартал</button>
+      <button class="tab-filter"        id="opAnlBtnYear"    onclick="opSetAnalyticsPeriod('year')">Год</button>
+    </div>
+    <input type="date"  id="opAnlDateDay"   class="tinput" style="width:auto;flex:0;padding:6px 10px;font-size:13px">
+    <input type="month" id="opAnlDateMonth" class="tinput" style="display:none;width:auto;flex:0;padding:6px 10px;font-size:13px">
+    <div id="opAnlDateQuarter" style="display:none;align-items:center;gap:6px">
+      <input type="number" id="opAnlYearQuarter" min="2020" max="2099" placeholder="Год" class="tinput" style="width:80px;padding:6px 10px;font-size:13px">
+      <div class="tab-filters">
+        <button class="tab-filter" id="opAnlQ1" onclick="opSetQuarter(1)">Q1</button>
+        <button class="tab-filter" id="opAnlQ2" onclick="opSetQuarter(2)">Q2</button>
+        <button class="tab-filter" id="opAnlQ3" onclick="opSetQuarter(3)">Q3</button>
+        <button class="tab-filter" id="opAnlQ4" onclick="opSetQuarter(4)">Q4</button>
+      </div>
+    </div>
+    <input type="number" id="opAnlDateYear" min="2020" max="2099" placeholder="Год" class="tinput" style="display:none;width:80px;padding:6px 10px;font-size:13px">
+    <button class="mbtn primary" onclick="opLoadAnalytics()">Показать</button>
+    <button class="gbtn" onclick="opExportAnalytics()">Экспорт Excel</button>
+  </div>
+  <div id="opAnlSummary" style="display:none"></div>
+  <div id="opAnlContent" style="display:none">
+    <div class="anl-grid">
+      <div><div class="anl-sec">По полу</div><div id="opAnlGenderTable"></div></div>
+      <div><div class="anl-sec">По категориям</div><div id="opAnlCategoryTable"></div></div>
+    </div>
+    <div style="margin-bottom:16px">
+      <div class="anl-sec">По возрастным группам (с разбивкой по полу)</div>
+      <div id="opAnlAgeTable"></div>
+    </div>
+    <div><div class="anl-sec">По услугам</div><div id="opAnlServicesTable"></div></div>
+    <div id="opAnlPcSection" style="margin-top:28px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--line)">
+        <span style="font-size:15px;font-weight:700">Компьютеры</span>
+        <span style="font-size:11px;color:var(--ink-3)">— статистика сессий за ПК</span>
+      </div>
+      <div id="opAnlPcSummary" class="kpi-grid"></div>
+      <div class="anl-grid" style="margin-bottom:16px">
+        <div><div class="anl-sec">По полу</div><div id="opAnlPcGenderTable"></div></div>
+        <div><div class="anl-sec">По категориям</div><div id="opAnlPcCategoryTable"></div></div>
       </div>
       <div style="margin-bottom:16px">
-        <div class="anl-sec-title">По возрастным группам (с разбивкой по полу)</div>
-        <div id="opAnlAgeTable"></div>
+        <div class="anl-sec">По возрастным группам</div>
+        <div id="opAnlPcAgeTable"></div>
       </div>
-      <div>
-        <div class="anl-sec-title">По услугам</div>
-        <div id="opAnlServicesTable"></div>
+      <div class="anl-grid">
+        <div><div class="anl-sec">Топ 10 по визитам</div><div id="opAnlPcTopVisits"></div></div>
+        <div><div class="anl-sec">Топ 10 по часам</div><div id="opAnlPcTopHours"></div></div>
+      </div>
+    </div>
+  </div>
+  <div id="opAnlEmpty" class="op-empty">Выберите период и нажмите «Показать»</div>
+</div>
+
+</div><!-- /.app -->
+
+<!-- ═══ BOTTOMBAR ═══ -->
+<div class="bottombar" id="bottomBar" style="display:none"></div>
+
+<!-- ═══ TOASTS ═══ -->
+<div class="toasts" id="toasts"></div>
+
+<!-- ═══ THEME EDITOR ═══ -->
+<div class="theme-editor" id="themeEditor" style="display:none">
+  <div class="ce-head">
+    <div class="ce-ic">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+    </div>
+    <div class="ce-title"><b>Конструктор темы</b><span>Свои цвета панели</span></div>
+    <button class="ce-x" onclick="closeThemeEditor()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="ce-body" id="ceBody"></div>
+  <div class="ce-foot">
+    <button class="pbtn pbtn-ghost" onclick="resetCustomTheme()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+      Сбросить
+    </button>
+    <button class="pbtn pbtn-accent" onclick="saveCustomTheme();closeThemeEditor()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Готово
+    </button>
+  </div>
+</div>
+
+<!-- ═══ RESTART OVERLAY ═══ -->
+<div class="restart-overlay" id="overlayRestart">
+  <div style="font-size:56px;line-height:1">🔄</div>
+  <div style="color:#fff;font-size:22px;font-weight:700">Сервер перезапускается</div>
+  <div id="overlayRestartReason" style="color:#aaa;font-size:15px">Обновление системы</div>
+  <div style="color:#ccc;font-size:13px;margin-top:4px">Страница обновится автоматически</div>
+  <div class="restart-spinner"></div>
+</div>
+
+<!-- ════════════════ DIALOGS ════════════════ -->
+
+<!-- Начать сессию -->
+<div id="dlgSession" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgSession')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <div><div class="modal-title">Начать сессию</div><div class="modal-sub" id="dlgSessionPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgSession')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label>Тип сессии</label>
+        <div class="seg">
+          <label class="seg-opt on" id="segLimit" onclick="onSegStypeClick(this,'Лимит')">
+            <input type="radio" name="stype" value="Лимит" checked style="display:none">
+            Лимит<span class="seg-rate" id="segLimitRate"></span>
+          </label>
+          <label class="seg-opt" id="segVip" onclick="onSegStypeClick(this,'VIP')">
+            <input type="radio" name="stype" value="VIP" style="display:none">
+            VIP<span class="seg-rate">безлимит</span>
+          </label>
+        </div>
       </div>
 
-      <!-- ── Блок: Компьютеры ────────────────────────────────────── -->
-      <div id="opAnlPcSection" style="margin-top:28px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2D2D5B">
-          <span style="font-size:15px;font-weight:700;color:#D8D8F0">🖥 Компьютеры</span>
-          <span style="font-size:11px;color:#444">— статистика сессий за ПК</span>
+      <div id="limitFields">
+        <div class="field">
+          <label>Предустановки</label>
+          <div class="presets" id="timePresets">
+            <button type="button" class="preset" onclick="applyTimePreset(30)">30 мин</button>
+            <button type="button" class="preset" onclick="applyTimePreset(60)">1 ч</button>
+            <button type="button" class="preset on" onclick="applyTimePreset(90)">1.5 ч</button>
+            <button type="button" class="preset" onclick="applyTimePreset(120)">2 ч</button>
+          </div>
         </div>
-        <div id="opAnlPcSummary" class="anl-cards"></div>
-        <div class="anl-grid" style="margin-bottom:16px">
-          <div><div class="anl-sec-title">По полу</div><div id="opAnlPcGenderTable"></div></div>
-          <div><div class="anl-sec-title">По категориям</div><div id="opAnlPcCategoryTable"></div></div>
+        <div class="field">
+          <label>Время</label>
+          <div class="dur-field">
+            <div class="dur-cell">
+              <button type="button" onclick="stepDur('dlgLimitHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+              <div class="dur-val"><input id="dlgLimitHours" type="number" min="0" max="23" value="1" oninput="calcAmount()"><span>ч</span></div>
+              <button type="button" onclick="stepDur('dlgLimitHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            </div>
+            <div class="dur-cell">
+              <button type="button" onclick="stepDur('dlgLimitMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+              <div class="dur-val"><input id="dlgLimitMins" type="number" min="0" max="59" value="0" oninput="calcAmount()"><span>мин</span></div>
+              <button type="button" onclick="stepDur('dlgLimitMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            </div>
+          </div>
         </div>
-        <div style="margin-bottom:16px">
-          <div class="anl-sec-title">По возрастным группам</div>
-          <div id="opAnlPcAgeTable"></div>
+        <div class="field">
+          <label>Сумма</label>
+          <div class="amount-input">
+            <input id="dlgAmount" type="number" min="0" value="0" oninput="calcTime()">
+            <span class="unit">сум</span>
+          </div>
+          <div class="time-cost" id="dlgAmountHint" style="display:none"></div>
         </div>
-        <div class="anl-grid">
-          <div><div class="anl-sec-title">Топ 10 по визитам</div><div id="opAnlPcTopVisits"></div></div>
-          <div><div class="anl-sec-title">Топ 10 по часам</div><div id="opAnlPcTopHours"></div></div>
+      </div>
+
+      <div id="rowReaderId" class="field">
+        <label id="lblReaderId">Читательский билет</label>
+        <div class="card-type-toggle">
+          <input type="radio" name="cardType" value="regular" checked style="display:none" id="rbCardRegular">
+          <input type="radio" name="cardType" value="temp"    style="display:none" id="rbCardTemp">
+          <button type="button" class="card-type-btn on" id="cardTypeBtnRegular" onclick="onCardTypeChanged('regular')">Постоянный (3 года)</button>
+          <button type="button" class="card-type-btn" id="cardTypeBtnTemp" onclick="onCardTypeChanged('temp')">Временный (1 день)</button>
+        </div>
+        <div class="reader-field">
+          <span id="dlgReaderPrefix" class="reader-prefix">FAA</span>
+          <input id="dlgReaderId" type="text" inputmode="numeric" placeholder="260500456" maxlength="9"
+                 oninput="onReaderInput()" onblur="lookupReader()" onkeydown="if(event.key==='Enter'){lookupReader();}">
+        </div>
+        <div id="dlgReaderInfo" class="reader-info"></div>
+      </div>
+
+      <div id="rowUserName" class="field">
+        <label id="lblUserName">Имя читателя <span style="font-weight:500;color:var(--ink-3)">(заполняется автоматически)</span></label>
+        <input id="dlgUserName" class="tinput" type="text" placeholder="Или введите вручную">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgSession')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmStartSession()">Начать сессию</button>
+    </div>
+  </div>
+</div>
+
+<!-- Итог сессии -->
+<div id="dlgSummary" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgSummary')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Сессия завершена</div></div>
+      <button class="modal-x" onclick="closeDlg('dlgSummary')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="dlgSummaryBody"></div>
+    <div class="modal-foot">
+      <button class="mbtn primary" onclick="closeDlg('dlgSummary')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Обрыв связи -->
+<div id="dlgOffline" class="modal-scrim">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Потеря связи с ПК</div><div class="modal-sub">Выберите, что сделать с сессией</div></div>
+    </div>
+    <div class="modal-body" id="dlgOfflineBody"></div>
+    <div class="modal-foot">
+      <button class="mbtn warn" onclick="resolveOffline('Pause')">Поставить на паузу</button>
+      <button class="mbtn primary" onclick="resolveOffline('Continue')">Продолжить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Пересадка -->
+<div id="dlgTransfer" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgTransfer')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-head">
+      <div><div class="modal-title">Пересадить сессию</div><div class="modal-sub" id="dlgTransferFrom"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgTransfer')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Выберите ПК назначения</label>
+        <select id="dlgTransferTarget" style="display:none"></select>
+        <div class="move-grid" id="dlgTransferGrid"></div>
+      </div>
+      <div id="dlgTransferError" style="color:var(--locked);font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgTransfer')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmTransfer()">Пересадить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Добавить время -->
+<div id="dlgExtend" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgExtend')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Добавить время</div><div class="modal-sub" id="dlgExtPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgExtend')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Время</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgExtHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgExtHours" type="number" min="0" max="23" value="0" oninput="calcExtAmount()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('dlgExtHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgExtMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgExtMins" type="number" min="0" max="59" value="30" oninput="calcExtAmount()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('dlgExtMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Сумма</label>
+        <div class="amount-input">
+          <input id="dlgExtAmount" type="number" min="0" value="0" oninput="calcExtTime()">
+          <span class="unit">сум</span>
+        </div>
+        <div class="time-cost" id="dlgExtAmountHint" style="display:none"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgExtend')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmExtend()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Убрать время -->
+<div id="dlgSubtract" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgSubtract')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Убрать время</div><div class="modal-sub" id="dlgSubPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgSubtract')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Убрать время</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgSubHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgSubHours" type="number" min="0" max="23" value="0" oninput="calcSubAmount()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('dlgSubHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgSubMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgSubMins" type="number" min="0" max="59" value="10" oninput="calcSubAmount()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('dlgSubMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Сумма возврата</label>
+        <div class="amount-input">
+          <input id="dlgSubAmount" type="number" min="0" value="0" oninput="calcSubTime()">
+          <span class="unit">сум</span>
+        </div>
+        <div class="time-cost refund" id="dlgSubAmountHint" style="display:none"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgSubtract')">Отмена</button>
+      <button class="mbtn warn" onclick="confirmSubtract()">Убрать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Штраф -->
+<div id="dlgPenalty" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgPenalty')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Штраф</div><div class="modal-sub" id="dlgPenPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgPenalty')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="penalty-note">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Штраф снимет время (при Лимите) и дополнительно спишет сумму из баланса сессии.</span>
+      </div>
+      <div class="field" id="penTimeRow">
+        <label>Убрать время</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgPenHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgPenHours" type="number" min="0" max="23" value="0" oninput="calcPenAmount()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('dlgPenHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgPenMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgPenMins" type="number" min="0" max="59" value="10" oninput="calcPenAmount()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('dlgPenMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Сумма штрафа</label>
+        <div class="amount-input">
+          <input id="dlgPenAmount" type="number" min="0" value="0" oninput="calcPenTime()">
+          <span class="unit">сум</span>
         </div>
       </div>
     </div>
-    <div id="opAnlEmpty" class="op-empty">Выберите период и нажмите «Показать»</div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgPenalty')">Отмена</button>
+      <button class="mbtn danger" onclick="confirmPenalty()">Применить штраф</button>
+    </div>
   </div>
-</main>
+</div>
+
+<!-- Услуга -->
+<div id="dlgService" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgService')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <div><div class="modal-title">Оказать услугу</div></div>
+      <button class="modal-x" onclick="closeDlg('dlgService')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Привязать к сессии</label>
+        <select id="dlgSvcPc" class="tinput" onchange="onSvcPcChanged()">
+          <option value="">— Без привязки —</option>
+        </select>
+      </div>
+      <div id="dlgSvcSessionInfo" style="font-size:12px;color:var(--free);margin:-4px 0 10px;display:none"></div>
+      <div id="dlgSvcReaderRow" class="field" style="display:none">
+        <label>Читатель <span style="font-weight:500;color:var(--ink-3)">(необязательно)</span></label>
+        <input type="text" id="dlgSvcReaderId" class="tinput" placeholder="Номер читательского билета">
+      </div>
+      <div style="border-top:1px solid var(--line);margin:10px 0 12px"></div>
+      <div id="dlgSvcList"></div>
+      <button id="btnAddSvcRow" class="btn-add-svc" onclick="addSvcRow()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Добавить услугу
+      </button>
+      <div class="svc-total-row" style="margin-top:12px">
+        <span>Итого</span>
+        <span class="svc-total-val mono" id="dlgSvcTotal">—</span>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Оплата</label>
+        <div class="seg">
+          <label class="seg-opt on" id="segSvcNow" onclick="onSegSvcPayClick(this,'now')">
+            <input type="radio" name="svcPay" value="now" checked style="display:none" onclick="onSvcPayChanged()">Сейчас
+          </label>
+          <label class="seg-opt" id="segSvcLater" onclick="onSegSvcPayClick(this,'later')">
+            <input type="radio" name="svcPay" value="later" id="rbSvcLater" style="display:none" onclick="onSvcPayChanged()">Позже
+          </label>
+        </div>
+      </div>
+      <div id="dlgSvcDeferNote" style="font-size:12px;color:var(--warn);display:none;margin:-4px 0 8px">
+        Выберите активную сессию, чтобы отложить оплату
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgService')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmService()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Задолженности -->
+<div id="dlgDebts" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgDebts')">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-head">
+      <div><div class="modal-title">Задолженности по услугам</div></div>
+      <button class="modal-x" onclick="closeDlg('dlgDebts')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="dlgDebtsBody" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-foot">
+      <button class="mbtn primary" onclick="closeDlg('dlgDebts')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Просмотр экрана -->
+<div id="dlgScreenView" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgScreenView')">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-head">
+      <div><div class="modal-title" id="dlgScreenViewTitle">Экран ПК</div></div>
+      <button class="modal-x" onclick="closeScreenView()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="screen-view-box">
+        <img id="screenViewImg" style="max-width:100%;max-height:65vh;display:block" src="" alt="Загрузка...">
+      </div>
+      <div class="screen-view-status" id="screenViewStatus">Подключение...</div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn primary" onclick="closeScreenView()">Закрыть</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
 <script src="/operator.js"></script>

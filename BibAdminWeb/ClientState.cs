@@ -69,6 +69,7 @@ namespace BibAdminWeb
 
         public bool IsPaused { get; set; } = false;
         public int AccumulatedSeconds { get; set; } = 0;
+        public int PenaltyAmount { get; set; } = 0;
 
         public string BackgroundFileName { get; set; } = "";
         public string SessionId { get; set; } = "";
