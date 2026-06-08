@@ -357,6 +357,15 @@ function buildCardHtml(pc) {
            <span class="sess-cost mono" data-pc-cost="${esc(n)}">${fmt(cost)} сум</span>
          </div>`;
 
+    const pauseIco = pc.isPaused
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="none"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor"/></svg>`;
+    const cardActions = `<div class="pccard-actions">
+      <button class="qbtn qbtn-ghost" title="Экран" onclick="cardAction(event,'${esc(n)}',()=>openScreenView('${esc(n)}'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="qbtn qbtn-ghost" title="${pc.isPaused ? 'Продолжить' : 'Пауза'}" onclick="cardAction(event,'${esc(n)}',doTogglePause)">${pauseIco}</button>
+      <button class="qbtn qbtn-danger qbtn-grow" onclick="cardAction(event,'${esc(n)}',doEndSession)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Завершить</button>
+    </div>`;
+
     return head + `<div class="pccard-body">
       ${nameLabel ? `<div class="sess-user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="sess-user-name">${esc(nameLabel)}</span>${tariffChip}${clientBadge}</div>` : `<div style="margin-bottom:4px">${tariffChip}${clientBadge}</div>`}
       <div class="sess-timer">
@@ -364,6 +373,7 @@ function buildCardHtml(pc) {
         <span class="sess-clock-cap">${pc.isPaused ? 'пауза' : 'прошло'}</span>
       </div>
       ${limMetaBlock}
+      ${cardActions}
     </div>`;
   }
 
@@ -376,9 +386,15 @@ function buildCardHtml(pc) {
     icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="4 12 9 17 20 6"/></svg>`;
   }
 
+  const freeActions = pc.isOnline ? `<div class="pccard-actions">
+    <button class="qbtn qbtn-ghost" title="Экран" onclick="cardAction(event,'${esc(n)}',()=>openScreenView('${esc(n)}'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="qbtn qbtn-accent qbtn-grow" onclick="cardAction(event,'${esc(n)}',openSessionDlg)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Начать сессию</button>
+  </div>` : '';
+
   return head + `<div class="pccard-body pccard-body-state">
     <div class="${stMark}">${icon}</div>
-    <span class="state-text">${esc(getStatusLabel(pc))}</span>
+    <span class="state-text">${pc.isOnline ? 'Готов к работе' : 'Нет связи'}</span>
+    ${freeActions}
   </div>`;
 }
 
@@ -470,24 +486,32 @@ function renderActionBar() {
 
   const ico = (path, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 
+  const receiptSvg = '<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>';
+  const rebootSvg  = '<path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 4v4h-4"/>';
+  const swapSvg    = '<path d="M7 4 3.5 7.5 7 11"/><path d="M3.5 7.5H17a3.5 3.5 0 0 1 0 7h-1"/><path d="M17 20l3.5-3.5L17 13"/><path d="M20.5 16.5H7"/>';
+  const warnSvg    = '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
+  const playSvg    = '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/>';
+  const stopSvg    = '<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" stroke="none"/>';
+
   let btns = '';
-  if (pc.isOnline) {
-    btns += `<button class="abtn" onclick="openScreenView('${esc(pc.pcNumber)}')">${ico('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>')}Экран</button>`;
-  }
   if (pc.isOnline && !pc.isSession) {
-    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico('<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>')}Услуга</button>`;
-    btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico('<polygon points="5 3 19 12 5 21 5 3"/>')}Начать сессию</button>`;
+    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico(receiptSvg)}Услуга</button>`;
+    btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
+    btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico(playSvg)}Начать сессию</button>`;
   }
   if (pc.isSession) {
-    btns += `<button class="abtn" onclick="doTogglePause()">${pc.isPaused ? ico('<polygon points="5 3 19 12 5 21 5 3"/>') : ico('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>')}${pc.isPaused ? 'Продолжить' : 'Пауза'}</button>`;
-    btns += `<button class="abtn" onclick="openTransferDlg()">${ico('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>')}Пересадить</button>`;
+    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico(receiptSvg)}Услуга</button>`;
     if (pc.sessionType === 'Лимит') {
-      btns += `<button class="abtn" onclick="openExtendDlg()">${ico('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><line x1="12" y1="22" x2="12" y2="22.01"/>')}+Время</button>`;
-      btns += `<button class="abtn" onclick="openSubtractDlg()">−Время</button>`;
+      btns += `<div class="abtn-stepper">
+        <button onclick="openSubtractDlg()" title="Убрать время">${ico('<path d="M5 12h14"/>', 15)}</button>
+        <span>Время</span>
+        <button onclick="openExtendDlg()" title="Добавить время">${ico('<path d="M12 5v14M5 12h14"/>', 15)}</button>
+      </div>`;
     }
-    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico('<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>')}Услуга</button>`;
-    btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>')}Штраф</button>`;
-    btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>')}Завершить</button>`;
+    btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico(warnSvg)}Штраф</button>`;
+    btns += `<button class="abtn" onclick="openTransferDlg()">${ico(swapSvg)}Пересадить</button>`;
+    btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
+    btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico(stopSvg)}Завершить</button>`;
   }
 
   bar.innerHTML = `
@@ -768,6 +792,12 @@ async function _lookupReaderImpl() {
 
 const _opManuallyEndedPcs = new Set();
 
+function cardAction(e, pcNum, fn) {
+  e.stopPropagation();
+  selectedPc = pcNum;
+  fn();
+}
+
 async function doEndSession() {
   if (!selectedPc) return;
   _opManuallyEndedPcs.add(selectedPc);
@@ -927,6 +957,13 @@ async function shutdownAll() {
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
+async function restartPc(pcNum) {
+  try {
+    await connection.invoke('RestartPc', pcNum || selectedPc);
+    toast('Команда перезагрузки отправлена на ' + (pcNum || selectedPc));
+  } catch (e) { toast('Ошибка перезагрузки: ' + e, 'warn'); }
+}
+
 async function restartAll() {
   if (!confirm('Перезагрузить все ПК?')) return;
   try {
@@ -1000,28 +1037,33 @@ function openServiceDlg(pcNum) {
   _svcQty = {};
 
   // Заголовок диалога
-  const titleEl = document.getElementById('dlgSvcTitle');
-  const subEl   = document.getElementById('dlgSvcSub');
+  const titleEl  = document.getElementById('dlgSvcTitle');
+  const subEl    = document.getElementById('dlgSvcSub');
+  const pcRowEl  = document.getElementById('dlgSvcPcRow');
+  const pcSel    = document.getElementById('dlgSvcPc');
+
   if (pcNum) {
+    // Вызван из панели ПК — фиксируем ПК, скрываем селектор
     if (titleEl) titleEl.textContent = 'Продажа услуги';
     if (subEl)   subEl.textContent   = 'Привязать к ' + pcNum;
+    if (pcRowEl) pcRowEl.style.display = 'none';
+    pcSel.innerHTML = `<option value="${esc(pcNum)}">${esc(pcNum)}</option>`;
+    pcSel.value = pcNum;
   } else {
+    // Вызван из верхней панели — без привязки
     if (titleEl) titleEl.textContent = 'Продажа услуги';
     if (subEl)   subEl.textContent   = '';
+    if (pcRowEl) pcRowEl.style.display = '';
+    pcSel.innerHTML = '<option value="">— Без привязки —</option>';
+    Object.values(pcs)
+      .filter(pc => pc.isSession)
+      .sort((a, b) => (a.pcNumberValue || 0) - (b.pcNumberValue || 0))
+      .forEach(pc => {
+        const reader = pc.userName || pc.readerId || '(анонимный)';
+        pcSel.innerHTML += `<option value="${esc(pc.pcNumber)}">${esc(pc.pcNumber)} — ${esc(reader)}</option>`;
+      });
+    pcSel.value = '';
   }
-
-  // Заполняем список активных сессий
-  const pcSel = document.getElementById('dlgSvcPc');
-  pcSel.innerHTML = '<option value="">— Без привязки —</option>';
-  Object.values(pcs)
-    .filter(pc => pc.isSession)
-    .sort((a, b) => (a.pcNumberValue || 0) - (b.pcNumberValue || 0))
-    .forEach(pc => {
-      const reader = pc.userName || pc.readerId || '(анонимный)';
-      pcSel.innerHTML += `<option value="${esc(pc.pcNumber)}">${esc(pc.pcNumber)} — ${esc(reader)}</option>`;
-    });
-
-  pcSel.value = pcNum || '';
 
   // Сброс поля читателя и оплаты
   const readerInput = document.getElementById('dlgSvcReaderId');
@@ -1128,13 +1170,11 @@ function onSvcPcChanged() {
   updateDeferNote();
 }
 
-function onSvcPayChanged() { updateDeferNote(); }
+function onSvcPayChanged() { }
 
 function updateDeferNote() {
-  const pcVal = document.getElementById('dlgSvcPc').value;
-  const wantLater = document.getElementById('rbSvcLater')?.checked;
-  document.getElementById('dlgSvcDeferNote').style.display =
-    (wantLater && !pcVal) ? 'block' : 'none';
+  const noteEl = document.getElementById('dlgSvcDeferNote');
+  if (noteEl) noteEl.style.display = 'none';
 }
 
 async function confirmService() {

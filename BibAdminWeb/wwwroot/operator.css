@@ -241,7 +241,24 @@ a { text-decoration: none; color: inherit; }
 .state-mark.free { background: var(--free-bg); color: var(--free); }
 .state-mark.locked { background: var(--locked-bg); color: var(--locked); }
 .state-text { font-size: 13px; font-weight: 700; color: var(--ink-2); }
-.pccard-body-state .pccard-actions { margin-top: auto; padding-top: 8px; }
+.pccard-body-state .pccard-actions { margin-top: auto; padding-top: 8px; width: 100%; }
+
+/* быстрые кнопки внутри карточки */
+.pccard-actions { display: flex; gap: 7px; margin-top: 12px; }
+.qbtn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 34px; padding: 0 11px; border-radius: 9px; font-size: 12.5px; font-weight: 700; transition: .14s; white-space: nowrap; }
+.qbtn-ghost { background: var(--card-muted); color: var(--ink-2); border: 1px solid var(--line); }
+.qbtn-ghost:hover { background: var(--surface-hover); color: var(--ink); }
+.qbtn-accent { background: var(--accent); color: #fff; }
+.qbtn-accent:hover { filter: brightness(1.06); }
+.qbtn-danger { background: var(--locked-bg); color: var(--locked); border: 1px solid var(--locked-ring); }
+.qbtn-danger:hover { background: var(--locked); color: #fff; }
+.qbtn-grow { flex: 1; }
+
+/* stepper времени в нижней панели */
+.abtn-stepper { display: inline-flex; align-items: center; gap: 2px; height: 42px; padding: 0 4px; border-radius: 11px; background: rgba(255,255,255,.07); flex: 0 0 auto; }
+.abtn-stepper > span { font-size: 12.5px; font-weight: 700; color: #dbe2ee; padding: 0 6px; }
+.abtn-stepper button { width: 32px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: #aeb8c8; background: transparent; transition: .14s; }
+.abtn-stepper button:hover { background: rgba(255,255,255,.14); color: #fff; }
 
 /* сессия */
 .sess-user { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12px; }
