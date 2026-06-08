@@ -27,6 +27,7 @@
   --locked: #f87171;    --locked-bg: rgba(239,68,68,.16);  --locked-ring: rgba(239,68,68,.36);
   --limit: #60a5fa;     --limit-bg: rgba(59,130,246,.17);  --limit-ring: rgba(59,130,246,.36);
   --vip: #e6b13e;       --vip-bg: rgba(217,160,30,.16);    --vip-ring: rgba(217,160,30,.36);
+  --pause: #fbbf24;     --pause-bg: rgba(251,191,36,.16);  --pause-ring: rgba(251,191,36,.36);
   --offline: #7e8ca0;   --offline-bg: rgba(125,139,158,.16); --offline-ring: rgba(125,139,158,.3);
   --warn: #fbbf24;      --warn-bg: rgba(217,119,6,.16);
 
@@ -65,6 +66,7 @@
   --locked: #e0413b;    --locked-bg: #fdeceb; --locked-ring: #f5c4c1;
   --limit: #0aa89f;     --limit-bg: #d6f2ef;  --limit-ring: #aae2dd;
   --vip: #b8860b;       --vip-bg: #fbf3df;    --vip-ring: #ecdba6;
+  --pause: #d97706;     --pause-bg: #fef3c7;  --pause-ring: #fde68a;
   --offline: #87a39d;   --offline-bg: #e7f0ee; --offline-ring: #d2e4e0;
   --warn: #c2790a;      --warn-bg: #fbf0db;
 
@@ -103,6 +105,7 @@
   --locked: #f87171;    --locked-bg: rgba(239,68,68,.16);  --locked-ring: rgba(239,68,68,.36);
   --limit: #2dd4bf;     --limit-bg: rgba(45,212,191,.16);  --limit-ring: rgba(45,212,191,.36);
   --vip: #e6b13e;       --vip-bg: rgba(217,160,30,.16);    --vip-ring: rgba(217,160,30,.36);
+  --pause: #fbbf24;     --pause-bg: rgba(251,191,36,.16);  --pause-ring: rgba(251,191,36,.36);
   --offline: #7e9a90;   --offline-bg: rgba(125,158,144,.16); --offline-ring: rgba(125,158,144,.3);
   --warn: #fbbf24;      --warn-bg: rgba(217,119,6,.16);
 
@@ -142,6 +145,7 @@
   --locked: #bb4430;    --locked-bg: #f7e3dd; --locked-ring: #e9bfb4;
   --limit: #2f6f9e;     --limit-bg: #dde9f2;  --limit-ring: #b6cfe2;
   --vip: #b07d12;       --vip-bg: #f6ead0;    --vip-ring: #e6cf9c;
+  --pause: #b5710c;     --pause-bg: #f7ead2;  --pause-ring: #e9c990;
   --offline: #9c8e72;   --offline-bg: #ece3d2; --offline-ring: #dacdb1;
   --warn: #b5710c;      --warn-bg: #f7ead2;
 
@@ -180,6 +184,7 @@
   --locked: #f87171;    --locked-bg: rgba(239,68,68,.16);  --locked-ring: rgba(239,68,68,.36);
   --limit: #b794f6;     --limit-bg: rgba(167,139,250,.18); --limit-ring: rgba(167,139,250,.4);
   --vip: #e6b13e;       --vip-bg: rgba(217,160,30,.16);    --vip-ring: rgba(217,160,30,.36);
+  --pause: #fbbf24;     --pause-bg: rgba(251,191,36,.16);  --pause-ring: rgba(251,191,36,.36);
   --offline: #8d83a6;   --offline-bg: rgba(141,131,166,.16); --offline-ring: rgba(141,131,166,.3);
   --warn: #fbbf24;      --warn-bg: rgba(217,119,6,.16);
 

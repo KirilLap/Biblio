@@ -15,6 +15,7 @@ let _readerLookupInFlight = null;  // deduplicate concurrent lookups
 let _readerLookupTimer = null;     // debounce timer for auto-lookup on input
 let latestClientVersion = '';
 let _svcRows = [];
+let _svcQty = {};   // serviceTypeId → qty
 
 // ── Фильтры и поиск ───────────────────────────────────────────────────────────
 let _filterState = 'all';
@@ -366,16 +367,13 @@ function buildCardHtml(pc) {
     </div>`;
   }
 
-  // Свободен / оффлайн / заблокирован
+  // Свободен / оффлайн
   let stMark = 'state-mark', icon = '';
-  if (pc.isFree) {
-    stMark += ' free';
-    icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
-  } else if (!pc.isOnline) {
-    icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`;
+  if (!pc.isOnline) {
+    icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8.8C5 6 8.3 4.7 11.8 4.8M22 8.8a13 13 0 0 0-3.3-2.6M5.5 12.4a8 8 0 0 1 3-1.8M18.5 12.4a8 8 0 0 0-2.3-1.5M9 16a4 4 0 0 1 5 0M12 20h.01M3 3l18 18"/></svg>`;
   } else {
-    stMark += ' locked';
-    icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+    stMark += ' free';
+    icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="4 12 9 17 20 6"/></svg>`;
   }
 
   return head + `<div class="pccard-body pccard-body-state">
@@ -425,7 +423,7 @@ function tickTimers() {
 function updateStats() {
   const vals = Object.values(pcs);
   const cAll     = vals.length;
-  const cFree    = vals.filter(p => p.isFree).length;
+  const cFree    = vals.filter(p => p.isOnline && !p.isSession).length;
   const cSession = vals.filter(p => p.isSession).length;
   const cOffline = vals.filter(p => !p.isOnline).length;
   const setN = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -477,6 +475,7 @@ function renderActionBar() {
     btns += `<button class="abtn" onclick="openScreenView('${esc(pc.pcNumber)}')">${ico('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>')}Экран</button>`;
   }
   if (pc.isOnline && !pc.isSession) {
+    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico('<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>')}Услуга</button>`;
     btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico('<polygon points="5 3 19 12 5 21 5 3"/>')}Начать сессию</button>`;
   }
   if (pc.isSession) {
@@ -486,6 +485,7 @@ function renderActionBar() {
       btns += `<button class="abtn" onclick="openExtendDlg()">${ico('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><line x1="12" y1="22" x2="12" y2="22.01"/>')}+Время</button>`;
       btns += `<button class="abtn" onclick="openSubtractDlg()">−Время</button>`;
     }
+    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico('<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>')}Услуга</button>`;
     btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>')}Штраф</button>`;
     btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>')}Завершить</button>`;
   }
@@ -554,6 +554,7 @@ function openSessionDlg() {
   document.getElementById('dlgLimitHours').value = 1;
   document.getElementById('dlgLimitMins').value  = 0;
   document.getElementById('dlgAmount').value = tariff;
+  _syncPresets(60);
   document.getElementById('dlgUserName').value = '';
   document.getElementById('dlgReaderId').value = '';
   document.getElementById('dlgReaderId').placeholder = '260500456';
@@ -992,8 +993,22 @@ async function confirmTransfer() {
   } catch (e) { errEl.textContent = String(e); errEl.style.display = 'block'; }
 }
 
-function openServiceDlg() {
+function openServiceDlg(pcNum) {
   if (serviceTypes.length === 0) { toast('Нет доступных услуг', 'warn'); return; }
+
+  // Инициализируем количества
+  _svcQty = {};
+
+  // Заголовок диалога
+  const titleEl = document.getElementById('dlgSvcTitle');
+  const subEl   = document.getElementById('dlgSvcSub');
+  if (pcNum) {
+    if (titleEl) titleEl.textContent = 'Продажа услуги';
+    if (subEl)   subEl.textContent   = 'Привязать к ' + pcNum;
+  } else {
+    if (titleEl) titleEl.textContent = 'Продажа услуги';
+    if (subEl)   subEl.textContent   = '';
+  }
 
   // Заполняем список активных сессий
   const pcSel = document.getElementById('dlgSvcPc');
@@ -1003,23 +1018,22 @@ function openServiceDlg() {
     .sort((a, b) => (a.pcNumberValue || 0) - (b.pcNumberValue || 0))
     .forEach(pc => {
       const reader = pc.userName || pc.readerId || '(анонимный)';
-      pcSel.innerHTML += `<option value="${esc(pc.pcNumber)}">${esc(pc.pcNumber)}  —  ${esc(reader)}</option>`;
+      pcSel.innerHTML += `<option value="${esc(pc.pcNumber)}">${esc(pc.pcNumber)} — ${esc(reader)}</option>`;
     });
 
-  // Если есть выбранный ПК с сессией — предвыбираем его
-  if (selectedPc && pcs[selectedPc]?.isSession) pcSel.value = selectedPc;
-  else pcSel.value = '';
-
-  // Инициализируем строки услуг
-  _svcRows = [{ id: Date.now(), typeId: serviceTypes[0]?.id || '', qty: 1 }];
+  pcSel.value = pcNum || '';
 
   // Сброс поля читателя и оплаты
   const readerInput = document.getElementById('dlgSvcReaderId');
   if (readerInput) readerInput.value = '';
-  const payNowRadio = document.querySelector('[name="svcPay"][value="now"]');
-  if (payNowRadio) payNowRadio.checked = true;
+  const payNowEl = document.querySelector('[name="svcPay"][value="now"]');
+  if (payNowEl) { payNowEl.checked = true; }
+  const segNow = document.getElementById('segSvcNow');
+  const segLater = document.getElementById('segSvcLater');
+  if (segNow) segNow.classList.add('on');
+  if (segLater) segLater.classList.remove('on');
 
-  renderSvcRows();
+  renderSvcList();
   updateSvcTotal();
   onSvcPcChanged();
   openDlg('dlgService');
@@ -1055,41 +1069,43 @@ function onSvcRowQtyChange(rowId, qty) {
   updateSvcTotal();
 }
 
-function renderSvcRows() {
+function renderSvcList() {
   const container = document.getElementById('dlgSvcList');
-  const usedTypes = new Set(_svcRows.map(r => r.typeId));
-
-  container.innerHTML = _svcRows.map(row => {
-    const opts = serviceTypes.map(s => {
-      const disabled = s.id !== row.typeId && usedTypes.has(s.id) ? 'disabled' : '';
-      const selected = s.id === row.typeId ? 'selected' : '';
-      return `<option value="${esc(s.id)}" ${disabled} ${selected}>${esc(s.name)} — ${fmt(s.price)} сум/${esc(s.unit)}</option>`;
-    }).join('');
-    const canRemove = _svcRows.length > 1;
-    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;min-width:0">
-      <select class="field-select" style="flex:1;min-width:0"
-        onchange="onSvcRowTypeChange(${row.id}, this.value)">${opts}</select>
-      <input type="number" class="field-input" min="1" max="999" value="${row.qty}"
-        style="width:60px;flex-shrink:0;text-align:center"
-        oninput="onSvcRowQtyChange(${row.id}, this.value)">
-      ${canRemove
-        ? `<button class="mbtn mbtn-danger" onclick="removeSvcRow(${row.id})" style="flex-shrink:0;width:28px;height:28px;padding:0;font-size:13px">✕</button>`
-        : '<div style="width:28px;flex-shrink:0"></div>'}
+  if (!container) return;
+  if (!serviceTypes.length) {
+    container.innerHTML = '<div style="color:var(--ink-3);font-size:13px;padding:12px 0">Нет доступных услуг</div>';
+    return;
+  }
+  container.innerHTML = serviceTypes.map(s => {
+    const qty = _svcQty[s.id] || 0;
+    const iconSvg = svgIcon(_svcIconName(s), 18);
+    const safeId = CSS.escape(s.id);
+    return `<div class="svc-row${qty > 0 ? ' on' : ''}" id="svc-row-${esc(s.id)}">
+      <span class="svc-ic">${iconSvg}</span>
+      <div class="svc-info">
+        <span class="svc-name">${esc(s.name)}</span>
+        <span class="svc-sub">${fmt(s.price)} сум / ${esc(s.unit)}</span>
+      </div>
+      <div class="svc-step">
+        <button onclick="stepSvcQty('${esc(s.id)}',-1)" ${!qty ? 'disabled' : ''}>${svgIcon('minus', 14)}</button>
+        <span class="mono" id="svc-qty-${esc(s.id)}">${qty}</span>
+        <button onclick="stepSvcQty('${esc(s.id)}',1)">${svgIcon('plus', 14)}</button>
+      </div>
     </div>`;
   }).join('');
-
-  // Прячем кнопку «Добавить», если все типы уже выбраны
-  const btnAdd = document.getElementById('btnAddSvcRow');
-  if (btnAdd) btnAdd.style.display = usedTypes.size >= serviceTypes.length ? 'none' : '';
 }
+
+// Оставляем renderSvcRows как псевдоним для обратной совместимости
+function renderSvcRows() { renderSvcList(); }
 
 function updateSvcTotal() {
   let total = 0;
-  _svcRows.forEach(row => {
-    const svc = serviceTypes.find(s => s.id === row.typeId);
-    if (svc) total += svc.price * row.qty;
-  });
-  document.getElementById('dlgSvcTotal').textContent = total > 0 ? fmt(total) + ' сум' : '—';
+  for (const [id, qty] of Object.entries(_svcQty)) {
+    const svc = serviceTypes.find(s => s.id === id);
+    if (svc) total += svc.price * qty;
+  }
+  const el = document.getElementById('dlgSvcTotal');
+  if (el) el.textContent = total > 0 ? fmt(total) + ' сум' : '0 сум';
 }
 
 function onSvcPcChanged() {
@@ -1122,10 +1138,11 @@ function updateDeferNote() {
 }
 
 async function confirmService() {
-  if (_svcRows.length === 0) { toast('Добавьте хотя бы одну услугу', 'warn'); return; }
+  const items = Object.entries(_svcQty).filter(([, q]) => q > 0);
+  if (items.length === 0) { toast('Выберите хотя бы одну услугу', 'warn'); return; }
 
-  const typeIds    = _svcRows.map(r => r.typeId).filter(Boolean);
-  const quantities = _svcRows.map(r => r.qty);
+  const typeIds    = items.map(([id]) => id);
+  const quantities = items.map(([, q]) => q);
   const pcNumber   = document.getElementById('dlgSvcPc').value;
   const payNow     = document.querySelector('[name="svcPay"]:checked')?.value === 'now';
 
@@ -1137,8 +1154,6 @@ async function confirmService() {
   } else {
     readerId = (document.getElementById('dlgSvcReaderId')?.value || '').trim();
   }
-
-  if (typeIds.length === 0) { toast('Выберите услугу', 'warn'); return; }
 
   closeDlg('dlgService');
   try {
@@ -1328,13 +1343,12 @@ function getStatusClass(pc) {
 }
 
 function getStatusLabel(pc) {
-  if (!pc.isOnline && pc.isSession) return '🔴 Оффлайн (сессия)';
+  if (!pc.isOnline && pc.isSession) return 'Оффлайн (сессия)';
   if (!pc.isOnline) return 'Оффлайн';
-  if (pc.isPaused) return '⏸ Пауза';
-  if (pc.sessionType === 'VIP') return '⭐ VIP';
-  if (pc.isSession) return '⏱ Лимит';
-  if (pc.isFree) return '🔓 Свободен';
-  return '🔒 Заблокирован';
+  if (pc.isPaused) return 'Пауза';
+  if (pc.sessionType === 'VIP') return 'VIP';
+  if (pc.isSession) return 'Лимит';
+  return 'Свободен';
 }
 
 function getDisplayTime(pc) {
@@ -1695,8 +1709,8 @@ function exportFinanceXlsx() {
 
 function _stKey(pc) {
   if (!pc.isOnline) return 'offline';
-  if (pc.isLocked) return 'locked';
-  if (!pc.isSession && !pc.isFree) return 'offline';
+  if (pc.isPaused) return 'pause';
+  // if (pc.isLocked) return 'locked';  // статус «Заблокирован» отключён
   if (!pc.isSession) return 'free';
   if (pc.sessionType === 'VIP' || pc.sessionType === 'vip') return 'vip';
   return 'limit';
@@ -1729,7 +1743,7 @@ function _filterCards() {
     if (!pc) { card.style.display = 'none'; return; }
 
     let show = true;
-    if (_filterState === 'free') show = pc.isFree && pc.isOnline;
+    if (_filterState === 'free') show = pc.isOnline && !pc.isSession;
     else if (_filterState === 'session') show = pc.isSession;
     else if (_filterState === 'offline') show = !pc.isOnline;
 
@@ -1753,15 +1767,21 @@ function stepDur(id, delta, min, max) {
 }
 
 function applyTimePreset(mins) {
-  const el = document.getElementById('dlgDuration');
-  if (!el) return;
-  el.value = mins;
-  el.dispatchEvent(new Event('input'));
-  const extEl = document.getElementById('dlgExtDuration');
-  if (extEl) {
-    extEl.value = mins;
-    extEl.dispatchEvent(new Event('input'));
-  }
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const hEl = document.getElementById('dlgLimitHours');
+  const mEl = document.getElementById('dlgLimitMins');
+  if (hEl) hEl.value = h;
+  if (mEl) mEl.value = m;
+  calcAmount();
+  _syncPresets(mins);
+}
+
+function _syncPresets(activeMins) {
+  document.querySelectorAll('#timePresets .preset').forEach(btn => {
+    const match = btn.getAttribute('onclick')?.match(/applyTimePreset\((\d+)\)/);
+    btn.classList.toggle('on', !!match && parseInt(match[1]) === activeMins);
+  });
 }
 
 // ── Переключатели seg-opt ────────────────────────────────────────────────────
@@ -2055,4 +2075,54 @@ function resetCustomTheme() {
   _customPalette = { ...DEFAULT_CUSTOM };
   applyCustomTheme(_customPalette);
   _renderThemeEditor();
+}
+
+// ── Услуги: шаговые кнопки ───────────────────────────────────────────────────
+
+function stepSvcQty(id, delta) {
+  const cur = _svcQty[id] || 0;
+  const next = Math.max(0, cur + delta);
+  if (next === 0) delete _svcQty[id]; else _svcQty[id] = next;
+
+  const row = document.getElementById('svc-row-' + id);
+  const qtyEl = document.getElementById('svc-qty-' + id);
+  if (row) row.classList.toggle('on', next > 0);
+  if (qtyEl) qtyEl.textContent = next;
+  if (row) {
+    const minusBtn = row.querySelector('.svc-step button:first-child');
+    if (minusBtn) minusBtn.disabled = next === 0;
+  }
+  updateSvcTotal();
+}
+
+// ── SVG-иконки ───────────────────────────────────────────────────────────────
+
+const _SVG_PATHS = {
+  print:   '<path d="M6 9V3h12v6"/><rect x="3.5" y="9" width="17" height="7" rx="2"/><path d="M7 16h10v5H7z"/><circle cx="17" cy="12" r=".6" fill="currentColor"/>',
+  scan:    '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M4 12h16"/>',
+  copy:    '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  usb:     '<path d="M12 21V7"/><circle cx="12" cy="4" r="1.6"/><path d="M9 13l3 3 3-3M9 13V9h6v4"/>',
+  layers:  '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5"/>',
+  receipt: '<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  plus:    '<path d="M12 5v14M5 12h14"/>',
+  minus:   '<path d="M5 12h14"/>',
+  check:   '<polyline points="4 12 9 17 20 6"/>',
+  x:       '<path d="M6 6l12 12M18 6 6 18"/>',
+};
+
+function svgIcon(name, size) {
+  const sz = size || 18;
+  const d = _SVG_PATHS[name] || _SVG_PATHS.receipt;
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+}
+
+function _svcIconName(svc) {
+  const id   = (svc.id   || '').toLowerCase();
+  const name = (svc.name || '').toLowerCase();
+  if (id.includes('print') || name.includes('печат'))          return 'print';
+  if (id.includes('scan')  || name.includes('скан'))           return 'scan';
+  if (id.includes('copy')  || name.includes('ксер') || name.includes('копир')) return 'copy';
+  if (id.includes('usb')   || name.includes('usb'))            return 'usb';
+  if (id.includes('lamin') || name.includes('ламин'))          return 'layers';
+  return 'receipt';
 }

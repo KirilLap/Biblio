@@ -299,8 +299,8 @@
           <label>Предустановки</label>
           <div class="presets" id="timePresets">
             <button type="button" class="preset" onclick="applyTimePreset(30)">30 мин</button>
-            <button type="button" class="preset" onclick="applyTimePreset(60)">1 ч</button>
-            <button type="button" class="preset on" onclick="applyTimePreset(90)">1.5 ч</button>
+            <button type="button" class="preset on" onclick="applyTimePreset(60)">1 ч</button>
+            <button type="button" class="preset" onclick="applyTimePreset(90)">1.5 ч</button>
             <button type="button" class="preset" onclick="applyTimePreset(120)">2 ч</button>
           </div>
         </div>
@@ -531,39 +531,37 @@
 <div id="dlgService" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgService')">
   <div class="modal" style="max-width:480px">
     <div class="modal-head">
-      <div><div class="modal-title">Оказать услугу</div></div>
+      <div>
+        <div class="modal-title" id="dlgSvcTitle">Продажа услуги</div>
+        <div class="modal-sub" id="dlgSvcSub"></div>
+      </div>
       <button class="modal-x" onclick="closeDlg('dlgService')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
-      <div class="field">
+      <div class="field" id="dlgSvcPcRow">
         <label>Привязать к сессии</label>
         <select id="dlgSvcPc" class="tinput" onchange="onSvcPcChanged()">
           <option value="">— Без привязки —</option>
         </select>
       </div>
       <div id="dlgSvcSessionInfo" style="font-size:12px;color:var(--free);margin:-4px 0 10px;display:none"></div>
-      <div id="dlgSvcReaderRow" class="field" style="display:none">
+      <div class="field">
         <label>Читатель <span style="font-weight:500;color:var(--ink-3)">(необязательно)</span></label>
         <input type="text" id="dlgSvcReaderId" class="tinput" placeholder="Номер читательского билета">
       </div>
-      <div style="border-top:1px solid var(--line);margin:10px 0 12px"></div>
-      <div id="dlgSvcList"></div>
-      <button id="btnAddSvcRow" class="btn-add-svc" onclick="addSvcRow()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Добавить услугу
-      </button>
-      <div class="svc-total-row" style="margin-top:12px">
+      <div class="svc-list" id="dlgSvcList"></div>
+      <div class="svc-total-row">
         <span>Итого</span>
-        <span class="svc-total-val mono" id="dlgSvcTotal">—</span>
+        <span class="svc-total-val mono" id="dlgSvcTotal">0 сум</span>
       </div>
       <div class="field" style="margin-top:12px">
         <label>Оплата</label>
         <div class="seg">
           <label class="seg-opt on" id="segSvcNow" onclick="onSegSvcPayClick(this,'now')">
-            <input type="radio" name="svcPay" value="now" checked style="display:none" onclick="onSvcPayChanged()">Сейчас
+            <input type="radio" name="svcPay" value="now" checked style="display:none">Сейчас
           </label>
           <label class="seg-opt" id="segSvcLater" onclick="onSegSvcPayClick(this,'later')">
-            <input type="radio" name="svcPay" value="later" id="rbSvcLater" style="display:none" onclick="onSvcPayChanged()">Позже
+            <input type="radio" name="svcPay" value="later" id="rbSvcLater" style="display:none">Позже
           </label>
         </div>
       </div>
@@ -573,7 +571,10 @@
     </div>
     <div class="modal-foot">
       <button class="mbtn ghost" onclick="closeDlg('dlgService')">Отмена</button>
-      <button class="mbtn primary" onclick="confirmService()">Создать</button>
+      <button class="mbtn primary" onclick="confirmService()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Оформить
+      </button>
     </div>
   </div>
 </div>
