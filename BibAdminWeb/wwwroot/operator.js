@@ -1216,10 +1216,13 @@ async function confirmService() {
 
 let _summaryReaderId = '';
 let _summaryPcNumber = '';
+let _summaryTotalDebt = 0;
 
 function showSessionSummary(s) {
-  _summaryReaderId = s.readerId || '';
-  _summaryPcNumber = s.pcNumber || '';
+  _summaryReaderId  = s.readerId || '';
+  _summaryPcNumber  = s.pcNumber || '';
+  const debtsForTotal = s.serviceDebts || [];
+  _summaryTotalDebt = s.totalServiceDebt || debtsForTotal.reduce((a, d) => a + d.debt, 0);
 
   let html = `
     <div class="summary-row"><span>ПК</span><span class="val">${esc(s.pcNumber)}</span></div>
@@ -1261,10 +1264,10 @@ async function paySessionDebts() {
     // Заменяем секцию долгов на сообщение об успешной оплате
     const debtSection = document.getElementById('dlgSummaryDebtSection');
     if (debtSection) {
-      const paid = result?.totalPaid ?? result ?? 0;
+      const paid = result?.totalPaid ?? (typeof result === 'number' ? result : 0) || _summaryTotalDebt;
       debtSection.innerHTML = `
         <div style="margin-top:14px;padding:14px 16px;background:var(--free-bg);border:1px solid var(--free-ring);border-radius:10px;color:var(--free);font-weight:600;font-size:14px">
-          ✓ Долги оплачены${paid > 0 ? ': ' + fmt(paid) + ' сум' : ''}
+          ✓ Долги оплачены: ${fmt(paid)} сум
         </div>`;
     } else {
       toast('Долги оплачены', 'good');
