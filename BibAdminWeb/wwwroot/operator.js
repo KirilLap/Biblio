@@ -495,7 +495,6 @@ function renderActionBar() {
 
   let btns = '';
   if (pc.isOnline && !pc.isSession) {
-    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico(receiptSvg)}Услуга</button>`;
     btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
     btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico(playSvg)}Начать сессию</button>`;
   }
