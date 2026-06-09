@@ -1,45 +1,107 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BibAdmin</title>
+<!-- Apply saved theme before CSS renders to prevent flash -->
+<script>document.documentElement.setAttribute('data-theme',localStorage.getItem('bibTheme')||'light')</script>
 <link rel="stylesheet" href="/admin.css">
+<link rel="stylesheet" href="/themes.css">
 </head>
 <body>
-<!-- Sidebar -->
+
+<!-- ══════════════════════ SIDEBAR ══════════════════════ -->
 <nav class="sidebar">
   <div class="sidebar-logo">
-    <span class="logo-icon">📚</span>
+    <span class="logo-icon">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+    </span>
     <span class="logo-text">BibAdmin</span>
   </div>
+
   <div class="nav-items">
     <button class="nav-btn active" data-page="computers" onclick="showPage('computers')">
-      <span>🖥️</span><span>Компьютеры</span>
+      <span class="nav-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </span>
+      <span>Компьютеры</span>
     </button>
     <button class="nav-btn" data-page="finance" onclick="showPage('finance')">
-      <span>💰</span><span>Финансы</span>
+      <span class="nav-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+      </span>
+      <span>Финансы</span>
     </button>
     <button class="nav-btn" data-page="settings" onclick="showPage('settings')">
-      <span>⚙️</span><span>Настройки</span>
+      <span class="nav-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </span>
+      <span>Настройки</span>
     </button>
     <button class="nav-btn" data-page="operators" onclick="showPage('operators')">
-      <span>👥</span><span>Операторы</span>
+      <span class="nav-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </span>
+      <span>Операторы</span>
     </button>
     <button class="nav-btn" data-page="readers" onclick="showPage('readers')">
-      <span>📖</span><span>Читатели</span>
+      <span class="nav-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </span>
+      <span>Читатели</span>
     </button>
     <button class="nav-btn" data-page="stats" onclick="showPage('stats')">
-      <span>📊</span><span>Статистика</span>
+      <span class="nav-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      </span>
+      <span>Статистика</span>
     </button>
   </div>
+
   <div class="sidebar-footer">
-    <div class="conn-status" id="connStatus">⚫ Подключение...</div>
-    <button class="logout-btn" onclick="logout()">Выйти</button>
+    <div class="conn-status" id="connStatus">Подключение…</div>
+
+    <!-- Theme switcher -->
+    <div class="admin-theme-wrap" id="adminThemeWrap">
+      <button class="admin-theme-btn" onclick="adminToggleTheme()" title="Сменить тему">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/>
+          <circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/>
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+        </svg>
+        <span id="adminThemeNameEl">Светлая</span>
+      </button>
+      <div class="admin-theme-menu" id="adminThemeMenu" style="display:none"></div>
+    </div>
+
+    <button class="logout-btn" onclick="logout()">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      Выйти
+    </button>
   </div>
 </nav>
 
-<!-- Main content -->
+<!-- ══════════════════════ MAIN CONTENT ══════════════════════ -->
 <main class="main">
 
   <!-- ══════════════════════ COMPUTERS PAGE ══════════════════════ -->
@@ -54,15 +116,15 @@
           <option value="ByNumber">По номеру</option>
           <option value="ByName">По имени</option>
         </select>
-        <button class="btn btn-primary" onclick="openAdminServiceDlg('')">🛎 Услуга</button>
-        <button class="btn btn-outline" onclick="lockAll()">🔒 Заблокировать всех</button>
-        <button class="btn btn-outline" onclick="unlockAll()">🔓 Разблокировать всех</button>
+        <button class="btn btn-primary" onclick="openAdminServiceDlg('')">Услуга</button>
+        <button class="btn btn-outline" onclick="lockAll()">Заблокировать всех</button>
+        <button class="btn btn-outline" onclick="unlockAll()">Разблокировать всех</button>
       </div>
     </div>
-    <!-- Панель прогресса обновлений — скрыта когда нет активных обновлений -->
+
     <div id="updateProgressPanel" class="update-progress-panel" style="display:none">
       <div class="update-progress-header">
-        <span id="updateProgressTitle">⬆️ Обновление клиентов</span>
+        <span id="updateProgressTitle">Обновление клиентов</span>
         <button class="update-progress-close" onclick="closeUpdatePanel()">✕</button>
       </div>
       <div class="update-progress-bar-wrap">
@@ -70,14 +132,15 @@
       </div>
       <div id="updateProgressList" class="update-progress-list"></div>
     </div>
+
     <div id="pcGrid" class="pc-grid"></div>
 
-    <!-- Нижняя панель действий для выбранного ПК -->
+    <!-- Bottom action bar -->
     <div id="adminActionBar" class="action-bar hidden">
       <div id="aabPcName" class="ab-pc-name"></div>
       <div id="aabStatus" class="ab-status"></div>
       <div id="aabActions" class="ab-actions"></div>
-      <button class="ab-btn" style="margin-left:auto;background:#2A2A3E;border:1px solid #3D3D6B;color:#888" onclick="selectAdminPc(null)">✕</button>
+      <button class="ab-close" onclick="selectAdminPc(null)">✕</button>
     </div>
   </div>
 
@@ -89,31 +152,29 @@
         <p id="finDate" class="page-sub"></p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-primary" onclick="exportCsv()">📊 Экспорт Excel</button>
-        <button class="btn btn-outline" onclick="clearFinance()">🗑 Очистить</button>
+        <button class="btn btn-primary" onclick="exportCsv()">Экспорт Excel</button>
+        <button class="btn btn-outline" onclick="clearFinance()">Очистить</button>
       </div>
     </div>
 
-    <!-- Stats -->
     <div class="stats-row" id="finStats">
       <div class="stat-card"><div class="stat-label" id="statTotalLabel">Итого</div><div class="stat-val green" id="statTotal">0 сум</div></div>
       <div class="stat-card"><div class="stat-label" id="statCountLabel">Записей</div><div class="stat-val" id="statCount">0</div></div>
     </div>
 
-    <!-- Tab + filter -->
     <div class="fin-toolbar">
       <div class="tab-bar">
-        <button class="tab-btn active" id="tabSessions" onclick="setFinTab('sessions')">📋 Сессии</button>
-        <button class="tab-btn" id="tabServices" onclick="setFinTab('services')">🛎 Услуги</button>
-        <button class="tab-btn" id="tabAll" onclick="setFinTab('all')">📊 Всё</button>
-        <button class="tab-btn" id="tabDebts" onclick="setFinTab('debts')">⚠ Долги</button>
+        <button class="tab-btn active" id="tabSessions" onclick="setFinTab('sessions')">Сессии</button>
+        <button class="tab-btn" id="tabServices" onclick="setFinTab('services')">Услуги</button>
+        <button class="tab-btn" id="tabAll" onclick="setFinTab('all')">Всё</button>
+        <button class="tab-btn" id="tabDebts" onclick="setFinTab('debts')">Долги</button>
       </div>
       <div class="filter-row">
         <label><input type="radio" name="finPeriod" value="today" checked onchange="renderFinance()"> Сегодня</label>
-        <label><input type="radio" name="finPeriod" value="week" onchange="renderFinance()"> Неделя</label>
+        <label><input type="radio" name="finPeriod" value="week"  onchange="renderFinance()"> Неделя</label>
         <label><input type="radio" name="finPeriod" value="month" onchange="renderFinance()"> Месяц</label>
-        <label><input type="radio" name="finPeriod" value="year" onchange="renderFinance()"> Год</label>
-        <select id="finTypeFilter" onchange="renderFinance()" style="display:none">
+        <label><input type="radio" name="finPeriod" value="year"  onchange="renderFinance()"> Год</label>
+        <select id="finTypeFilter"   onchange="renderFinance()" style="display:none">
           <option value="">Все типы</option>
           <option value="VIP">VIP</option>
           <option value="Лимит">Лимит</option>
@@ -126,7 +187,6 @@
       </div>
     </div>
 
-    <!-- Table -->
     <div class="fin-table-wrap">
       <div id="finTable"></div>
     </div>
@@ -142,31 +202,29 @@
       </div>
     </div>
 
-    <!-- Вкладки -->
     <div class="settings-tabs">
-      <button class="stab active" onclick="showSettingsTab('main')">⚙️ Основные</button>
-      <button class="stab" onclick="showSettingsTab('screen')">🖥️ Экран ПК</button>
-      <button class="stab" onclick="showSettingsTab('services')">📋 Услуги</button>
-      <button class="stab" onclick="showSettingsTab('system')">🔧 Система</button>
+      <button class="stab active" onclick="showSettingsTab('main')">Основные</button>
+      <button class="stab" onclick="showSettingsTab('screen')">Экран ПК</button>
+      <button class="stab" onclick="showSettingsTab('services')">Услуги</button>
+      <button class="stab" onclick="showSettingsTab('system')">Система</button>
     </div>
 
-    <!-- ── Вкладка: Основные ── -->
+    <!-- ── Основные ── -->
     <div class="stab-panel active" id="stab-main">
 
-      <!-- Уведомления браузера -->
       <div class="settings-card" style="max-width:560px;margin-bottom:20px">
-        <h3>🔔 Браузерные уведомления</h3>
-        <p style="color:#888;font-size:13px;margin-bottom:14px">Всплывают поверх экрана даже когда браузер свёрнут или открыта другая вкладка. Срабатывают при потере связи с ПК и при завершении сессии.</p>
+        <h3>Браузерные уведомления</h3>
+        <p class="settings-hint">Всплывают поверх экрана даже когда браузер свёрнут или открыта другая вкладка. Срабатывают при потере связи с ПК и при завершении сессии.</p>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button class="btn btn-outline" id="notifPermBtn" onclick="requestNotifications()" style="display:none">Включить уведомления</button>
-          <span id="notifPermStatus" style="font-size:13px"></span>
+          <span id="notifPermStatus" style="font-size:13px;color:var(--ink-2)"></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
-          <label style="font-size:13px;color:#888">Длительность уведомления:</label>
+          <label style="font-size:13px;color:var(--ink-2)">Длительность уведомления:</label>
           <input type="number" id="notifDurationInput" min="1" max="60" value="8"
-            style="width:60px;padding:4px 8px;background:#1a1a2e;border:1px solid #3D3D6B;color:#fff;border-radius:6px;font-size:13px;text-align:center"
+            class="tinput" style="width:65px;text-align:center"
             onchange="saveNotifDuration()">
-          <span style="font-size:13px;color:#888">сек</span>
+          <span style="font-size:13px;color:var(--ink-3)">сек</span>
         </div>
       </div>
 
@@ -187,7 +245,7 @@
 
           <div class="settings-card">
             <h3>Поля при старте сессии</h3>
-            <p class="settings-hint">Если поле обязательно — отображается и включается в отчёт. Если нет — скрывается.</p>
+            <p class="settings-hint">Если поле обязательно — отображается и включается в отчёт.</p>
             <div class="form-check"><label><input type="checkbox" id="sRequireReaderId"> Обязательно: ID читателя</label></div>
             <div class="form-check"><label><input type="checkbox" id="sRequireUserName"> Обязательно: Имя пользователя</label></div>
           </div>
@@ -210,22 +268,22 @@
             <div class="form-check"><label><input type="checkbox" id="sBlockPs"> Блокировать PowerShell</label></div>
             <div class="form-check"><label><input type="checkbox" id="sHideDrive"> Скрыть диск C:</label></div>
             <div class="form-check"><label><input type="checkbox" id="sBlockInstall"> Запретить установку программ</label></div>
-            <div class="form-check" style="margin-top:12px;padding-top:12px;border-top:1px solid #222240">
+            <div class="form-check" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
               <label><input type="checkbox" id="sLockOnOffline"> Блокировать ПК при потере связи</label>
             </div>
             <p class="settings-hint" style="margin-top:6px;margin-left:20px">Если выкл — сессия продолжается при обрыве сети</p>
           </div>
 
         </div>
-        <div class="form-row" style="margin-top:16px;border-top:1px solid #2A2A4A;padding-top:14px">
+        <div class="form-row" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
           <label>Префикс читательского билета</label>
           <input type="text" id="sReaderCardPrefix" placeholder="FAA" style="width:100px;text-transform:uppercase">
         </div>
-        <p style="color:#555;font-size:12px;margin-top:4px">Оператор вводит только цифры — буквы подставляются автоматически.</p>
+        <p class="settings-hint">Оператор вводит только цифры — буквы подставляются автоматически.</p>
       </div>
     </div>
 
-    <!-- ── Вкладка: Экран ПК ── -->
+    <!-- ── Экран ПК ── -->
     <div class="stab-panel" id="stab-screen">
       <div class="settings-2col">
         <div class="settings-col">
@@ -260,7 +318,7 @@
                 <span class="unit">px</span>
               </div>
             </div>
-            <p class="settings-hint">Отступ применяется к прижатым краям (лево/право/верх/низ). Центрированные элементы не смещаются.</p>
+            <p class="settings-hint">Отступ применяется к прижатым краям. Центрированные элементы не смещаются.</p>
 
             <div class="lock-section-sep"></div>
             <div class="lock-section-title">Номер ПК</div>
@@ -362,10 +420,10 @@
             </div>
             <div class="form-row">
               <label>Загрузить новый файл</label>
-              <input type="file" id="sBgFileInput" accept="image/*" style="color:#ccc;font-size:13px">
+              <input type="file" id="sBgFileInput" accept="image/*">
             </div>
-            <button class="btn btn-outline" style="margin-top:8px" onclick="uploadBgFile()">📤 Загрузить и отправить всем</button>
-            <span id="bgUploadStatus" style="display:none;color:#1d9e75;font-size:12px;margin-left:10px">✓ Отправлено</span>
+            <button class="btn btn-outline" style="margin-top:8px" onclick="uploadBgFile()">Загрузить и отправить всем</button>
+            <span id="bgUploadStatus" style="display:none;color:var(--free);font-size:12px;margin-left:10px">✓ Отправлено</span>
           </div>
 
           <div class="settings-card">
@@ -388,7 +446,7 @@
       </div>
     </div>
 
-    <!-- ── Вкладка: Услуги ── -->
+    <!-- ── Услуги ── -->
     <div class="stab-panel" id="stab-services">
       <div class="settings-card">
         <h3>Услуги <button class="btn-sm" onclick="addService()">+ Добавить</button></h3>
@@ -396,15 +454,14 @@
       </div>
     </div>
 
-    <!-- ── Вкладка: Система ── -->
+    <!-- ── Система ── -->
     <div class="stab-panel" id="stab-system">
       <div class="settings-2col">
         <div class="settings-col">
 
           <div class="settings-card">
-            <h3>🖥️ Обновление сервера (BibAdminWeb)</h3>
+            <h3>Обновление сервера (BibAdminWeb)</h3>
 
-            <!-- exe-установщик -->
             <p class="settings-hint" style="margin-bottom:6px">Через exe-установщик:</p>
             <p id="updateCurrentVer" class="settings-hint" style="margin-bottom:6px">Нажмите кнопку для проверки</p>
             <div class="form-row">
@@ -413,96 +470,91 @@
             </div>
             <p class="settings-hint" style="margin-bottom:8px">Локальный или сетевой путь, например \\server\updates</p>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">🔄 Проверить обновления</button>
-              <span id="updateStatus" style="display:none;font-size:12px"></span>
+              <button class="btn btn-outline" id="btnCheckUpdate" onclick="checkUpdates()">Проверить обновления</button>
+              <span id="updateStatus" style="display:none;font-size:12px;color:var(--ink-2)"></span>
             </div>
 
-            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
 
-            <!-- Без установщика: вкладки -->
             <p class="settings-hint" style="margin-bottom:8px">Без установщика:</p>
-            <div style="display:flex;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid #3d3d6b">
-              <button id="srvTabZip"    onclick="setSrvMode('zip')"    style="flex:1;padding:6px 4px;font-size:12px;background:#3d3d6b;color:white;border:none;cursor:pointer">📤 Zip из браузера</button>
-              <button id="srvTabFolder" onclick="setSrvMode('folder')" style="flex:1;padding:6px 4px;font-size:12px;background:transparent;color:#aaa;border:none;border-left:1px solid #3d3d6b;cursor:pointer">📁 Локальная папка</button>
+            <div class="mode-tab-wrap">
+              <button id="srvTabZip"    onclick="setSrvMode('zip')"    class="mode-tab on">Zip из браузера</button>
+              <button id="srvTabFolder" onclick="setSrvMode('folder')" class="mode-tab">Локальная папка</button>
             </div>
 
             <div id="srvPanelZip">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <label class="btn btn-outline" style="cursor:pointer;border-color:#5b7fa6;color:#5b7fa6">
-                  📂 Выбрать zip...
+                <label class="btn btn-outline" style="cursor:pointer">
+                  Выбрать zip...
                   <input type="file" id="serverZipFile" accept=".zip" style="display:none" onchange="onServerZipSelected(this)">
                 </label>
-                <span id="serverZipFileName" style="font-size:12px;font-family:monospace;color:#aaa">файл не выбран</span>
-                <button class="btn btn-primary" id="btnUploadServerZip" onclick="uploadServerZip()" disabled>📤 Загрузить и применить</button>
+                <span id="serverZipFileName" style="font-size:12px;font-family:monospace;color:var(--ink-3)">файл не выбран</span>
+                <button class="btn btn-primary" id="btnUploadServerZip" onclick="uploadServerZip()" disabled>Загрузить и применить</button>
               </div>
             </div>
 
             <div id="srvPanelFolder" style="display:none">
               <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
                 <input type="text" id="updateFolderPath" placeholder="C:\...\BibAdminWeb\bin\Publish\win-x64"
-                  style="flex:1;font-size:12px;font-family:monospace">
-                <button onclick="openFolderPicker('updateFolderPath')"
-                  style="padding:6px 10px;background:transparent;border:1px solid #3d3d6b;border-radius:4px;color:#aaa;cursor:pointer;white-space:nowrap">📂 Обзор</button>
+                  class="tinput" style="flex:1;font-family:monospace;font-size:12px">
+                <button onclick="openFolderPicker('updateFolderPath')" class="folder-browse-btn">Обзор</button>
               </div>
-              <button class="btn btn-primary" onclick="applyFolderUpdate()">🔄 Применить обновление</button>
+              <button class="btn btn-primary" onclick="applyFolderUpdate()">Применить обновление</button>
             </div>
 
             <div style="min-height:20px;margin-top:8px">
-              <span id="serverZipUploadStatus" style="font-size:13px;color:#666"></span>
-              <span id="folderUpdateStatus"    style="font-size:13px;color:#666"></span>
+              <span id="serverZipUploadStatus" style="font-size:13px;color:var(--ink-2)"></span>
+              <span id="folderUpdateStatus"    style="font-size:13px;color:var(--ink-2)"></span>
             </div>
           </div>
 
           <div class="settings-card">
-            <h3>💻 Обновление клиентов (BibClient)</h3>
+            <h3>Обновление клиентов (BibClient)</h3>
 
-            <!-- exe -->
             <p class="settings-hint" style="margin-bottom:8px">Через exe-установщик — клиенты скачают и установят автоматически:</p>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="btn btn-outline" id="btnUpdateClients" onclick="updateAllClients()" style="border-color:#1d9e75;color:#1d9e75">⬆️ Обновить все клиенты (exe)</button>
-              <span id="updateStatusClients" style="display:none;font-size:12px"></span>
+              <button class="btn btn-outline" id="btnUpdateClients" onclick="updateAllClients()" style="border-color:var(--free);color:var(--free)">Обновить все клиенты (exe)</button>
+              <span id="updateStatusClients" style="display:none;font-size:12px;color:var(--ink-2)"></span>
             </div>
 
-            <hr style="border:none;border-top:1px solid #2a2a4a;margin:14px 0">
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
 
-            <!-- Без установщика: вкладки -->
             <p class="settings-hint" style="margin-bottom:8px">Без установщика (zip):</p>
-            <div style="display:flex;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid #3d3d6b">
-              <button id="cliTabZip"    onclick="setCliMode('zip')"    style="flex:1;padding:6px 4px;font-size:12px;background:#3d3d6b;color:white;border:none;cursor:pointer">📤 Zip из браузера</button>
-              <button id="cliTabServer" onclick="setCliMode('server')" style="flex:1;padding:6px 4px;font-size:12px;background:transparent;color:#aaa;border:none;border-left:1px solid #3d3d6b;cursor:pointer">📡 Уже на сервере</button>
-              <button id="cliTabFolder" onclick="setCliMode('folder')" style="flex:1;padding:6px 4px;font-size:12px;background:transparent;color:#aaa;border:none;border-left:1px solid #3d3d6b;cursor:pointer">📁 Локальная папка</button>
+            <div class="mode-tab-wrap">
+              <button id="cliTabZip"    onclick="setCliMode('zip')"    class="mode-tab on">Zip из браузера</button>
+              <button id="cliTabServer" onclick="setCliMode('server')" class="mode-tab">Уже на сервере</button>
+              <button id="cliTabFolder" onclick="setCliMode('folder')" class="mode-tab">Локальная папка</button>
             </div>
 
             <div id="cliPanelZip">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <label class="btn btn-outline" style="cursor:pointer;border-color:#5b7fa6;color:#5b7fa6">
-                  📂 Выбрать zip...
+                <label class="btn btn-outline" style="cursor:pointer">
+                  Выбрать zip...
                   <input type="file" id="clientZipFile" accept=".zip" style="display:none" onchange="onClientZipSelected(this)">
                 </label>
-                <span id="clientZipFileName" style="font-size:12px;font-family:monospace;color:#aaa">файл не выбран</span>
-                <button class="btn btn-primary" id="btnUploadClientZip" onclick="uploadClientZip()" disabled>📤 Загрузить и разослать</button>
+                <span id="clientZipFileName" style="font-size:12px;font-family:monospace;color:var(--ink-3)">файл не выбран</span>
+                <button class="btn btn-primary" id="btnUploadClientZip" onclick="uploadClientZip()" disabled>Загрузить и разослать</button>
               </div>
             </div>
 
             <div id="cliPanelServer" style="display:none">
-              <p class="settings-hint" style="margin-bottom:8px">Zip уже скопирован на сервер (например, через deploy-update.cmd).</p>
-              <button class="btn btn-outline" onclick="sendClientZipCommand()" style="border-color:#e09f3e;color:#e09f3e">📡 Разослать команду клиентам</button>
+              <p class="settings-hint" style="margin-bottom:8px">Zip уже скопирован на сервер.</p>
+              <button class="btn btn-outline" onclick="sendClientZipCommand()" style="border-color:var(--vip);color:var(--vip)">Разослать команду клиентам</button>
             </div>
 
             <div id="cliPanelFolder" style="display:none">
               <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
                 <input type="text" id="clientFolderPath" placeholder="C:\...\BibClient\bin\Publish\win-x64"
-                  style="flex:1;font-size:12px;font-family:monospace">
-                <button onclick="openFolderPicker('clientFolderPath')"
-                  style="padding:6px 10px;background:transparent;border:1px solid #3d3d6b;border-radius:4px;color:#aaa;cursor:pointer;white-space:nowrap">📂 Обзор</button>
+                  class="tinput" style="flex:1;font-family:monospace;font-size:12px">
+                <button onclick="openFolderPicker('clientFolderPath')" class="folder-browse-btn">Обзор</button>
               </div>
-              <button class="btn btn-primary" onclick="applyClientFolderUpdate()">📁 Упаковать и разослать</button>
+              <button class="btn btn-primary" onclick="applyClientFolderUpdate()">Упаковать и разослать</button>
             </div>
 
             <div style="min-height:20px;margin-top:8px">
-              <span id="clientZipUploadStatus"   style="font-size:13px;color:#666"></span>
-              <span id="clientZipCmdStatus"       style="font-size:13px;color:#666"></span>
-              <span id="clientFolderUpdateStatus" style="font-size:13px;color:#666"></span>
+              <span id="clientZipUploadStatus"   style="font-size:13px;color:var(--ink-2)"></span>
+              <span id="clientZipCmdStatus"       style="font-size:13px;color:var(--ink-2)"></span>
+              <span id="clientFolderUpdateStatus" style="font-size:13px;color:var(--ink-2)"></span>
             </div>
           </div>
 
@@ -513,15 +565,15 @@
             <h3>Управление ПК</h3>
             <p class="settings-hint">Команды рассылаются всем подключённым ПК</p>
             <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-              <button class="btn btn-outline" onclick="restartAll()" style="text-align:left">🔄 Перезагрузить все ПК</button>
-              <button class="btn btn-outline" onclick="shutdownAll()" style="border-color:#E24B4A;color:#E24B4A;text-align:left">⏻ Выключить все ПК</button>
+              <button class="btn btn-outline" onclick="restartAll()" style="text-align:left">Перезагрузить все ПК</button>
+              <button class="btn btn-outline" onclick="shutdownAll()" style="border-color:var(--locked);color:var(--locked);text-align:left">Выключить все ПК</button>
             </div>
           </div>
 
           <div class="settings-card">
             <h3>Управление сервером</h3>
             <p class="settings-hint">Остановите сервер перед удалением программы или изменением настроек.</p>
-            <a href="/uninstall.html" target="_blank" class="btn btn-danger">🗑️ Остановить и удалить</a>
+            <a href="/uninstall.html" target="_blank" class="btn btn-danger">Остановить и удалить</a>
           </div>
 
         </div>
@@ -537,11 +589,12 @@
     </div>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
       <p id="readersCount" class="page-sub" style="margin:0;flex:1">Загрузка...</p>
-      <input type="text" id="readersSearch" placeholder="Поиск по ФИО или ID…" style="padding:6px 10px;border:1px solid #3D3D6B;border-radius:6px;background:#1A1A2E;color:#ccc;font-size:13px;width:240px" oninput="searchReaders()">
-      <button class="btn btn-primary" onclick="openAddReader()">➕ Добавить</button>
-      <button class="btn btn-primary" onclick="openImportDlg()">📥 Импорт Excel</button>
-      <button class="btn btn-outline" onclick="exportReaderStats()">📊 Статистика Excel</button>
-      <button class="btn btn-outline" style="color:#F87171;border-color:#5D2A2A" onclick="deleteAllReaders()">🗑 Очистить базу</button>
+      <input type="text" id="readersSearch" placeholder="Поиск по ФИО или ID…"
+        class="tinput" style="width:240px" oninput="searchReaders()">
+      <button class="btn btn-primary" onclick="openAddReader()">Добавить</button>
+      <button class="btn btn-primary" onclick="openImportDlg()">Импорт Excel</button>
+      <button class="btn btn-outline" onclick="exportReaderStats()">Статистика Excel</button>
+      <button class="btn btn-danger" onclick="deleteAllReaders()">Очистить базу</button>
     </div>
     <div id="readersTable" class="fin-table-wrap">
       <div class="fin-empty">Выберите раздел «Читатели» для загрузки</div>
@@ -558,7 +611,7 @@
       </div>
     </div>
 
-    <!-- ── Аналитика ─────────────────────────────────────────────── -->
+    <!-- Аналитика -->
     <div id="statsTabAnalytics">
       <div class="fin-toolbar" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div class="tab-bar">
@@ -567,75 +620,73 @@
           <button class="tab-btn"        id="anlBtnQuarter" onclick="setAnalyticsPeriod('quarter')">Квартал</button>
           <button class="tab-btn"        id="anlBtnYear"    onclick="setAnalyticsPeriod('year')">Год</button>
         </div>
-        <input type="date"  id="anlDateDay"   style="background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
-        <input type="month" id="anlDateMonth" style="display:none;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+        <input type="date"  id="anlDateDay"   class="tinput" style="width:auto">
+        <input type="month" id="anlDateMonth" class="tinput" style="display:none;width:auto">
         <div id="anlDateQuarter" style="display:none;align-items:center;gap:8px">
-          <input type="number" id="anlYearQuarter" min="2020" max="2099" placeholder="Год" style="width:72px;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
+          <input type="number" id="anlYearQuarter" min="2020" max="2099" placeholder="Год" class="tinput" style="width:72px">
           <div class="tab-bar" style="gap:4px">
-            <button class="tab-btn" id="anlQ1" onclick="setQuarter(1)">Q1<br><span style="font-size:10px;color:#888">Янв–Мар</span></button>
-            <button class="tab-btn" id="anlQ2" onclick="setQuarter(2)">Q2<br><span style="font-size:10px;color:#888">Апр–Июн</span></button>
-            <button class="tab-btn" id="anlQ3" onclick="setQuarter(3)">Q3<br><span style="font-size:10px;color:#888">Июл–Сен</span></button>
-            <button class="tab-btn" id="anlQ4" onclick="setQuarter(4)">Q4<br><span style="font-size:10px;color:#888">Окт–Дек</span></button>
+            <button class="tab-btn" id="anlQ1" onclick="setQuarter(1)">Q1<br><span style="font-size:10px;color:var(--ink-3)">Янв–Мар</span></button>
+            <button class="tab-btn" id="anlQ2" onclick="setQuarter(2)">Q2<br><span style="font-size:10px;color:var(--ink-3)">Апр–Июн</span></button>
+            <button class="tab-btn" id="anlQ3" onclick="setQuarter(3)">Q3<br><span style="font-size:10px;color:var(--ink-3)">Июл–Сен</span></button>
+            <button class="tab-btn" id="anlQ4" onclick="setQuarter(4)">Q4<br><span style="font-size:10px;color:var(--ink-3)">Окт–Дек</span></button>
           </div>
         </div>
-        <input type="number" id="anlDateYear" min="2020" max="2099" placeholder="Год" style="display:none;width:80px;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 8px;font-size:13px">
-        <button class="btn btn-primary" style="padding:6px 16px;font-size:13px" onclick="loadAnalytics()">Показать</button>
-        <button class="btn btn-outline" style="padding:6px 16px;font-size:13px" onclick="exportAnalytics()">📊 Экспорт Excel</button>
+        <input type="number" id="anlDateYear" min="2020" max="2099" placeholder="Год" class="tinput" style="display:none;width:80px">
+        <button class="btn btn-primary"  style="padding:6px 16px;font-size:13px" onclick="loadAnalytics()">Показать</button>
+        <button class="btn btn-outline"  style="padding:6px 16px;font-size:13px" onclick="exportAnalytics()">Экспорт Excel</button>
       </div>
 
-      <!-- Summary cards -->
       <div id="anlSummary" style="display:none;flex-wrap:wrap;gap:12px;margin-bottom:16px"></div>
 
-      <!-- Analytics content -->
       <div id="anlContent" style="display:none">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div>
-            <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По полу</div>
+            <div class="anl-head">По полу</div>
             <div id="anlGenderTable"></div>
           </div>
           <div>
-            <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По категориям</div>
+            <div class="anl-head">По категориям</div>
             <div id="anlCategoryTable"></div>
           </div>
         </div>
         <div style="margin-bottom:16px">
-          <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По возрастным группам (с разбивкой по полу)</div>
+          <div class="anl-head">По возрастным группам (с разбивкой по полу)</div>
           <div id="anlAgeTable"></div>
         </div>
         <div>
-          <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По услугам</div>
+          <div class="anl-head">По услугам</div>
           <div id="anlServicesTable"></div>
         </div>
 
-        <!-- ── Блок: Компьютеры (внутри anlContent) ───────────────────── -->
+        <!-- Компьютеры -->
         <div id="anlPcSection" style="margin-top:28px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2A2A4A">
-            <span style="font-size:16px;font-weight:700;color:#e0e0f0">🖥 Компьютеры</span>
-            <span style="font-size:12px;color:#555">— статистика сессий за ПК</span>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid var(--line)">
+            <span class="anl-section-title">Компьютеры</span>
+            <span class="anl-section-sub">— статистика сессий за ПК</span>
           </div>
           <div id="anlPcSummary" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px"></div>
           <div id="anlPcBreakdowns">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
               <div>
-                <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По полу</div>
+                <div class="anl-head">По полу</div>
                 <div id="anlPcGenderTable"></div>
               </div>
               <div>
-                <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По категориям</div>
+                <div class="anl-head">По категориям</div>
                 <div id="anlPcCategoryTable"></div>
               </div>
             </div>
             <div style="margin-bottom:16px">
-              <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">По возрастным группам</div>
+              <div class="anl-head">По возрастным группам</div>
               <div id="anlPcAgeTable"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
               <div>
-                <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">Топ 10 по визитам</div>
+                <div class="anl-head">Топ 10 по визитам</div>
                 <div id="anlPcTopVisits"></div>
               </div>
               <div>
-                <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #2A2A4A">Топ 10 по часам</div>
+                <div class="anl-head">Топ 10 по часам</div>
                 <div id="anlPcTopHours"></div>
               </div>
             </div>
@@ -646,18 +697,18 @@
       <div id="anlEmpty" class="fin-empty">Выберите период и нажмите «Показать»</div>
     </div>
 
-    <!-- ── Отчёт ──────────────────────────────────────────────────── -->
+    <!-- Отчёт -->
     <div id="statsTabReport" style="display:none">
       <div class="fin-toolbar" style="margin-bottom:16px">
         <div class="tab-bar">
-          <button class="tab-btn active" id="rptBtnDay" onclick="setReportPeriod('day')">День</button>
-          <button class="tab-btn" id="rptBtnMonth" onclick="setReportPeriod('month')">Месяц</button>
+          <button class="tab-btn active" id="rptBtnDay"   onclick="setReportPeriod('day')">День</button>
+          <button class="tab-btn"        id="rptBtnMonth" onclick="setReportPeriod('month')">Месяц</button>
         </div>
-        <input type="date" id="rptDateDay" style="background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
-        <input type="month" id="rptDateMonth" style="display:none;background:#0f0f1a;border:1px solid #333355;border-radius:6px;color:#ccc;padding:5px 10px;font-size:13px">
+        <input type="date"  id="rptDateDay"   class="tinput" style="width:auto">
+        <input type="month" id="rptDateMonth" class="tinput" style="display:none;width:auto">
         <button class="btn btn-primary" style="padding:6px 16px;font-size:13px" onclick="loadReport()">Показать</button>
-        <button class="btn btn-outline" style="padding:6px 16px;font-size:13px" onclick="exportReport()">📊 Экспорт Excel</button>
-        <button class="btn btn-outline" style="padding:6px 16px;font-size:13px;color:#F87171;border-color:#5D2A2A" onclick="clearReadersReport()">🗑 Очистить</button>
+        <button class="btn btn-outline" style="padding:6px 16px;font-size:13px" onclick="exportReport()">Экспорт Excel</button>
+        <button class="btn btn-danger"  style="padding:6px 16px;font-size:13px" onclick="clearReadersReport()">Очистить</button>
       </div>
       <div id="reportSummary" style="display:none;gap:12px;margin-bottom:16px"></div>
       <div id="reportTable" class="fin-table-wrap">
@@ -675,7 +726,7 @@
       <h3>Веб-интерфейс оператора</h3>
       <p id="opWebUrl" class="op-url"></p>
     </div>
-    
+
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
       <div class="settings-card" style="width:400px;flex-shrink:0">
         <h3>Добавить оператора</h3>
@@ -684,18 +735,18 @@
         <div class="form-row"><label>Пароль</label><input type="password" id="newOpPwd" placeholder="••••••"></div>
         <div class="form-row">
           <label>Права доступа</label>
-          <div style="display:flex;gap:16px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-              <input type="checkbox" id="newOpReaders" style="width:15px;height:15px">
-              <span>👁 Просмотр читателей</span>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink-2)">
+              <input type="checkbox" id="newOpReaders" style="width:15px;height:15px;accent-color:var(--accent)">
+              <span>Просмотр читателей</span>
             </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-              <input type="checkbox" id="newOpFinance" style="width:15px;height:15px">
-              <span>💰 История финансов</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink-2)">
+              <input type="checkbox" id="newOpFinance" style="width:15px;height:15px;accent-color:var(--accent)">
+              <span>История финансов</span>
             </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-              <input type="checkbox" id="newOpStats" style="width:15px;height:15px">
-              <span>📊 Статистика</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink-2)">
+              <input type="checkbox" id="newOpStats" style="width:15px;height:15px;accent-color:var(--accent)">
+              <span>Статистика</span>
             </label>
           </div>
         </div>
@@ -713,16 +764,16 @@
 
 <!-- ══════════════════════ DIALOGS ══════════════════════ -->
 
-<!-- Import readers dialog -->
+<!-- Import readers -->
 <div id="dlgImportReaders" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title">📥 Импорт читателей из Excel</div>
-    <p style="color:#888;font-size:13px;margin-bottom:16px">Файл должен содержать столбцы: <b>ID пользователя</b>, <b>Имя пользователя</b>, <b>Дата рождения</b>, <b>Категория пользователей</b>, <b>Дата регистрации</b>, <b>Дата последнего обновления</b>, <b>Пол</b>. Если дата обновления не указана или равна −1, берётся дата регистрации.</p>
+    <div class="dlg-title">Импорт читателей из Excel</div>
+    <p class="settings-hint" style="margin-bottom:16px">Файл должен содержать столбцы: <b>ID пользователя</b>, <b>Имя пользователя</b>, <b>Дата рождения</b>, <b>Категория пользователей</b>, <b>Дата регистрации</b>, <b>Дата последнего обновления</b>, <b>Пол</b>.</p>
     <div class="form-row">
       <label>Файл Excel</label>
-      <input type="file" id="importFile" accept=".xlsx,.xls" style="color:#ccc;font-size:13px">
+      <input type="file" id="importFile" accept=".xlsx,.xls">
     </div>
-    <div id="importResult" style="display:none;margin-top:16px;padding:12px;border-radius:6px;background:#1A1A2E;border:1px solid #3D3D6B"></div>
+    <div id="importResult" style="display:none;margin-top:16px;padding:12px;border-radius:8px;background:var(--card-muted);border:1px solid var(--line)"></div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgImportReaders')">Закрыть</button>
       <button class="btn btn-primary" id="importBtn" onclick="doImport()">Загрузить</button>
@@ -730,33 +781,31 @@
   </div>
 </div>
 
-<!-- Edit / Add reader dialog -->
+<!-- Edit / Add reader -->
 <div id="dlgEditReader" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title" id="dlgEditReaderTitle">✏ Редактировать читателя</div>
+    <div class="dlg-title" id="dlgEditReaderTitle">Редактировать читателя</div>
     <input type="hidden" id="editReaderId">
     <div class="form-row" id="editReaderCardIdRow">
       <label>Номер билета (цифры, макс 9)</label>
-      <div style="display:flex;align-items:center;gap:0;border:1px solid #3D3D6B;border-radius:6px;overflow:hidden;background:#1A1A2E">
-        <span id="editReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B">FAA</span>
+      <div class="input-group">
+        <span id="editReaderPrefix" class="input-prefix">FAA</span>
         <input type="text" id="editReaderIdInput" inputmode="numeric" placeholder="230700422" maxlength="9"
-               oninput="onReaderIdNumInput(this)"
-               style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px">
+               oninput="onReaderIdNumInput(this)">
       </div>
     </div>
     <div class="form-row"><label>ФИО</label><input type="text" id="editReaderName"></div>
     <div class="form-row">
       <label>Дата рождения</label>
-      <input type="text" id="editReaderBirth" placeholder="26-03-2004" maxlength="10"
-             oninput="autoFormatDate(this)">
+      <input type="text" id="editReaderBirth" placeholder="26-03-2004" maxlength="10" oninput="autoFormatDate(this)">
     </div>
     <div class="form-row">
       <label>Категория</label>
-      <select id="editReaderCat" style="background:#1A1A2E;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:6px 10px"></select>
+      <select id="editReaderCat"></select>
     </div>
     <div class="form-row">
       <label>Пол</label>
-      <select id="editReaderGender" style="background:#1A1A2E;border:1px solid #3D3D6B;border-radius:6px;color:#ccc;padding:6px 10px">
+      <select id="editReaderGender">
         <option value="">—</option>
         <option value="М">М</option>
         <option value="Ж">Ж</option>
@@ -777,12 +826,11 @@
   </div>
 </div>
 
-<!-- Start session dialog -->
+<!-- Start session -->
 <div id="dlgStartSession" class="dlg-overlay" style="display:none">
   <div class="dlg dlg-session">
     <div class="dlg-title">Запуск платной сессии — <span id="dlgSsPc"></span></div>
 
-    <!-- Тип сессии — карточки как в WPF -->
     <div class="ss-type-row">
       <div class="ss-type-btn active" id="ssBtnLimited" onclick="ssSelectType('Лимит')">
         <div class="ss-type-icon">⏱</div>
@@ -794,48 +842,44 @@
       </div>
     </div>
 
-    <!-- Поля для Лимит -->
     <div id="dlgSsLimitFields">
       <div class="form-row">
         <label>Время</label>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="number" id="dlgSsHours" min="0" max="23" placeholder="0" style="width:70px" oninput="ssSyncMinutes()">
-          <span style="color:#888;font-size:13px">ч</span>
+          <span style="color:var(--ink-3);font-size:13px">ч</span>
           <input type="number" id="dlgSsMins" min="0" max="59" placeholder="30" style="width:70px" oninput="ssSyncMinutes()">
-          <span style="color:#888;font-size:13px">мин</span>
+          <span style="color:var(--ink-3);font-size:13px">мин</span>
         </div>
       </div>
       <div class="form-row">
         <label>Сумма (сум)</label>
         <input type="number" id="dlgSsMoney" min="0" placeholder="3000" oninput="ssSyncMoney()">
       </div>
-      <div id="dlgSsHint" style="font-size:12px;color:#1d9e75;text-align:right;margin-bottom:12px"></div>
+      <div id="dlgSsHint" style="font-size:12px;color:var(--free);text-align:right;margin-bottom:12px"></div>
     </div>
 
-    <!-- Сообщение для VIP -->
-    <div id="dlgSsVipInfo" style="display:none;color:#666688;font-size:13px;text-align:center;margin-bottom:16px">
+    <div id="dlgSsVipInfo" style="display:none;color:var(--ink-3);font-size:13px;text-align:center;margin-bottom:16px">
       Безлимитный доступ без ограничений по времени
     </div>
 
-    <!-- Читательский билет -->
     <div id="rowSsReader" class="form-row">
       <label id="lblSsReader">Читательский билет</label>
       <div class="radio-group" style="margin-bottom:6px">
         <label class="radio-opt"><input type="radio" name="ssCardType" value="regular" checked onchange="ssOnCardTypeChanged()"> Постоянный (3 года)</label>
         <label class="radio-opt"><input type="radio" name="ssCardType" value="temp" onchange="ssOnCardTypeChanged()"> Временный (1 день)</label>
       </div>
-      <div style="display:flex;gap:0;border:1px solid #3D3D6B;border-radius:8px;overflow:hidden;background:#1A1A2E">
-        <span id="dlgSsReaderPrefix" style="padding:8px 10px;background:#2D2D5B;color:#AAAACC;font-size:13px;font-family:monospace;border-right:1px solid #3D3D6B;white-space:nowrap;line-height:1.5">FAA</span>
+      <div class="input-group">
+        <span id="dlgSsReaderPrefix" class="input-prefix">FAA</span>
         <input type="text" id="dlgSsReader" inputmode="numeric" placeholder="260500456" maxlength="9"
-               style="border:none;border-radius:0;background:transparent;flex:1;padding:8px 10px;color:#fff;font-size:13px"
                oninput="onSsReaderInput()"
                onblur="ssLookupReader()" onkeydown="if(event.key==='Enter'){ssLookupReader();}">
       </div>
       <div id="dlgSsReaderInfo" style="display:none;margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px"></div>
     </div>
-    <!-- Имя пользователя -->
+
     <div id="rowSsName" class="form-row">
-      <label id="lblSsName">Имя читателя <span style="color:#666;font-size:11px">(заполняется автоматически)</span></label>
+      <label id="lblSsName">Имя читателя <span style="color:var(--ink-3);font-size:11px">(заполняется автоматически)</span></label>
       <input type="text" id="dlgSsName" placeholder="Иванов Иван">
     </div>
 
@@ -846,22 +890,22 @@
   </div>
 </div>
 
-<!-- Session summary dialog -->
+<!-- Session summary -->
 <div id="dlgSummary" class="dlg-overlay" style="display:none">
   <div class="dlg">
     <div class="dlg-title">Итог сессии</div>
-    <div id="dlgSummaryContent" style="margin:16px 0;line-height:1.8;color:#ccc"></div>
+    <div id="dlgSummaryContent" style="margin:16px 0;line-height:1.8;color:var(--ink-2)"></div>
     <div class="dlg-btns">
-      <button id="btnSummaryPayDebts" class="btn" style="background:#854F0B;border-color:#854F0B;color:#fff;display:none" onclick="paySessionDebtsAdmin()">Оплатить долги</button>
+      <button id="btnSummaryPayDebts" class="btn btn-primary" style="background:var(--vip);border-color:var(--vip);display:none" onclick="paySessionDebtsAdmin()">Оплатить долги</button>
       <button class="btn btn-primary" onclick="closeDlg('dlgSummary')">OK</button>
     </div>
   </div>
 </div>
 
-<!-- Debts management dialog -->
+<!-- Debts management -->
 <div id="dlgDebts" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeDlg('dlgDebts')">
   <div class="dlg dlg-wide">
-    <div class="dlg-title">⚠ Задолженности по услугам</div>
+    <div class="dlg-title">Задолженности по услугам</div>
     <div id="dlgDebtsBody" style="max-height:60vh;overflow-y:auto;margin:16px 0"></div>
     <div class="dlg-btns">
       <button class="btn btn-primary" onclick="closeDlg('dlgDebts')">Закрыть</button>
@@ -869,22 +913,22 @@
   </div>
 </div>
 
-<!-- Offline alert dialog -->
+<!-- Offline alert -->
 <div id="dlgOffline" class="dlg-overlay" style="display:none">
   <div class="dlg dlg-warn">
-    <div class="dlg-title">⚠️ ПК отключился с активной сессией</div>
-    <div id="dlgOfflineText" style="margin:16px 0;color:#ccc"></div>
+    <div class="dlg-title">ПК отключился с активной сессией</div>
+    <div id="dlgOfflineText" style="margin:16px 0;color:var(--ink-2)"></div>
     <div class="dlg-btns">
-      <button class="btn btn-outline" onclick="resolveOffline('Pause')">⏸ Поставить на паузу</button>
-      <button class="btn btn-primary" onclick="resolveOffline('Continue')">▶ Продолжить (таймер идёт)</button>
+      <button class="btn btn-outline" onclick="resolveOffline('Pause')">Поставить на паузу</button>
+      <button class="btn btn-primary" onclick="resolveOffline('Continue')">Продолжить (таймер идёт)</button>
     </div>
   </div>
 </div>
 
-<!-- Transfer session dialog -->
+<!-- Transfer session -->
 <div id="dlgTransfer" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title">↔ Пересадка сессии — <span id="dlgTransferFrom"></span></div>
+    <div class="dlg-title">Пересадка сессии — <span id="dlgTransferFrom"></span></div>
     <div class="form-row"><label>Пересадить на</label>
       <select id="dlgTransferTarget"><option value="">— выберите ПК —</option></select>
     </div>
@@ -895,11 +939,11 @@
   </div>
 </div>
 
-<!-- Name conflict dialog -->
+<!-- Name conflict -->
 <div id="dlgNameConflict" class="dlg-overlay" style="display:none">
   <div class="dlg dlg-warn">
-    <div class="dlg-title">⚠️ Конфликт имён ПК</div>
-    <div id="dlgConflictText" style="margin:16px 0;color:#ccc;line-height:1.7"></div>
+    <div class="dlg-title">Конфликт имён ПК</div>
+    <div id="dlgConflictText" style="margin:16px 0;color:var(--ink-2);line-height:1.7"></div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="resolveConflict(false)">Оставить старое имя</button>
       <button class="btn btn-primary" onclick="resolveConflict(true)">Принять новое имя</button>
@@ -907,11 +951,11 @@
   </div>
 </div>
 
-<!-- Number conflict dialog -->
+<!-- Number conflict -->
 <div id="dlgNumberConflict" class="dlg-overlay" style="display:none">
   <div class="dlg dlg-warn">
-    <div class="dlg-title">⚠️ Конфликт номера ПК</div>
-    <div id="dlgNumberConflictText" style="margin:16px 0;color:#ccc;line-height:1.7"></div>
+    <div class="dlg-title">Конфликт номера ПК</div>
+    <div id="dlgNumberConflictText" style="margin:16px 0;color:var(--ink-2);line-height:1.7"></div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="resolveNumberConflict(false)">Отклонить</button>
       <button class="btn btn-primary" onclick="resolveNumberConflict(true)">Разрешить со следующим свободным номером</button>
@@ -919,12 +963,12 @@
   </div>
 </div>
 
-<!-- Rename PC dialog -->
+<!-- Rename PC -->
 <div id="dlgRename" class="dlg-overlay" style="display:none">
   <div class="dlg">
     <div class="dlg-title">Переименовать ПК</div>
     <div class="form-row"><label>Кастомное название (пусто = «ПК»)</label><input type="text" id="dlgRenameName" placeholder="Зал, Комп..."></div>
-    <div style="color:#888;font-size:12px;margin-bottom:16px">Номер ПК (<span id="dlgRenameNum"></span>) сохраняется — меняется только название.</div>
+    <div style="color:var(--ink-3);font-size:12px;margin-bottom:16px">Номер ПК (<span id="dlgRenameNum"></span>) сохраняется — меняется только название.</div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgRename')">Отмена</button>
       <button class="btn btn-primary" onclick="confirmRename()">Сохранить</button>
@@ -938,17 +982,17 @@
 <!-- Context menu -->
 <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
 
-<!-- Extend session dialog -->
+<!-- Extend session -->
 <div id="dlgExtend" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title">⏱ Добавить время — <span id="dlgExtPc"></span></div>
+    <div class="dlg-title">Добавить время — <span id="dlgExtPc"></span></div>
     <div class="form-row">
       <label>Добавить время</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="number" id="dlgExtHours" min="0" max="23" value="0" style="width:70px" oninput="calcExtAmount()">
-        <span style="color:#888;font-size:13px">ч</span>
+        <span style="color:var(--ink-3);font-size:13px">ч</span>
         <input type="number" id="dlgExtMins" min="0" max="59" value="30" style="width:70px" oninput="calcExtAmount()">
-        <span style="color:#888;font-size:13px">мин</span>
+        <span style="color:var(--ink-3);font-size:13px">мин</span>
       </div>
     </div>
     <div class="form-row">
@@ -962,17 +1006,17 @@
   </div>
 </div>
 
-<!-- Убрать время (с возвратом, только Лимит) -->
+<!-- Subtract time -->
 <div id="dlgSubtract" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title">−⏱ Убрать время — <span id="dlgSubPc"></span></div>
+    <div class="dlg-title">Убрать время — <span id="dlgSubPc"></span></div>
     <div class="form-row">
       <label>Убрать время</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="number" id="dlgSubHours" min="0" max="23" value="0" style="width:70px" oninput="calcSubAmount()">
-        <span style="color:#888;font-size:13px">ч</span>
+        <span style="color:var(--ink-3);font-size:13px">ч</span>
         <input type="number" id="dlgSubMins" min="0" max="59" value="10" style="width:70px" oninput="calcSubAmount()">
-        <span style="color:#888;font-size:13px">мин</span>
+        <span style="color:var(--ink-3);font-size:13px">мин</span>
       </div>
     </div>
     <div class="form-row">
@@ -981,22 +1025,22 @@
     </div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgSubtract')">Отмена</button>
-      <button class="btn" style="background:#e67e22;color:#fff" onclick="confirmSubtract()">Убрать</button>
+      <button class="btn" style="background:var(--warn);color:#fff;border-color:var(--warn)" onclick="confirmSubtract()">Убрать</button>
     </div>
   </div>
 </div>
 
-<!-- Штраф (Лимит: время+сумма авто; VIP: только сумма) -->
+<!-- Penalty -->
 <div id="dlgPenalty" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title">⚠ Штраф — <span id="dlgPenPc"></span></div>
+    <div class="dlg-title">Штраф — <span id="dlgPenPc"></span></div>
     <div class="form-row" id="penTimeRow">
       <label>Убрать время</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="number" id="dlgPenHours" min="0" max="23" value="0" style="width:70px" oninput="calcPenAmount()">
-        <span style="color:#888;font-size:13px">ч</span>
+        <span style="color:var(--ink-3);font-size:13px">ч</span>
         <input type="number" id="dlgPenMins" min="0" max="59" value="10" style="width:70px" oninput="calcPenAmount()">
-        <span style="color:#888;font-size:13px">мин</span>
+        <span style="color:var(--ink-3);font-size:13px">мин</span>
       </div>
     </div>
     <div class="form-row">
@@ -1005,19 +1049,19 @@
     </div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgPenalty')">Отмена</button>
-      <button class="btn" style="background:#c0392b;color:#fff" onclick="confirmPenalty()">Штраф</button>
+      <button class="btn" style="background:var(--locked);color:#fff;border-color:var(--locked)" onclick="confirmPenalty()">Штраф</button>
     </div>
   </div>
 </div>
 
-<!-- Individual PC background dialog -->
+<!-- Individual PC background -->
 <div id="dlgIndBg" class="dlg-overlay" style="display:none">
   <div class="dlg">
-    <div class="dlg-title">🖼 Фон для <span id="dlgIndBgPcName"></span></div>
-    <p style="color:#666;font-size:12px;margin-bottom:12px">Индивидуальный фон только для этого ПК</p>
+    <div class="dlg-title">Фон для <span id="dlgIndBgPcName"></span></div>
+    <p class="settings-hint" style="margin-bottom:12px">Индивидуальный фон только для этого ПК</p>
     <div class="form-row">
       <label>Выбрать файл</label>
-      <input type="file" id="dlgIndBgInput" accept="image/*" style="color:#ccc;font-size:13px">
+      <input type="file" id="dlgIndBgInput" accept="image/*">
     </div>
     <div class="dlg-btns">
       <button class="btn btn-outline" onclick="closeDlg('dlgIndBg')">Отмена</button>
@@ -1026,32 +1070,32 @@
   </div>
 </div>
 
-<!-- Screen viewer dialog -->
+<!-- Screen viewer -->
 <div id="dlgScreenView" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeScreenView()">
   <div class="dlg dlg-wide">
     <div class="dlg-title" id="dlgScreenViewTitle">Экран ПК</div>
-    <div style="text-align:center;background:#000;border-radius:6px;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center">
+    <div style="text-align:center;background:#000;border-radius:8px;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center">
       <img id="screenViewImg" style="max-width:100%;max-height:65vh;display:block" src="" alt="Загрузка...">
     </div>
-    <div style="font-size:12px;color:#777;margin-top:8px;text-align:center" id="screenViewStatus">Подключение...</div>
+    <div style="font-size:12px;color:var(--ink-3);margin-top:8px;text-align:center" id="screenViewStatus">Подключение...</div>
     <div class="dlg-btns">
       <button class="btn btn-primary" onclick="closeScreenView()">Закрыть</button>
     </div>
   </div>
 </div>
 
-<!-- Client log viewer dialog -->
+<!-- Client logs -->
 <div id="dlgClientLogs" class="dlg-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="dlg dlg-wide">
-    <div class="dlg-title">📋 Логи клиента</div>
+    <div class="dlg-title">Логи клиента</div>
     <div class="dlg-pc-name" id="dlgClientLogsPcName"></div>
     <pre id="dlgClientLogsBody" style="
-      background:#0d0d1a; color:#c8d3f5; font-size:11px; font-family:monospace;
-      border-radius:8px; padding:12px; height:65vh; overflow-y:auto;
+      background:var(--card-muted); color:var(--ink-2); font-size:11px; font-family:monospace;
+      border-radius:8px; border:1px solid var(--line); padding:12px; height:65vh; overflow-y:auto;
       white-space:pre-wrap; word-break:break-all; margin-top:8px;
     ">⏳ Запрашиваем...</pre>
     <div class="dlg-btns" style="margin-top:14px">
-      <button class="btn btn-outline" onclick="copyClientLogs()">📋 Копировать</button>
+      <button class="btn btn-outline" onclick="copyClientLogs()">Копировать</button>
       <button class="btn btn-primary" onclick="document.getElementById('dlgClientLogs').style.display='none'">Закрыть</button>
     </div>
   </div>
@@ -1060,7 +1104,7 @@
 <!-- Admin Service dialog -->
 <div id="dlgAdminService" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeDlg('dlgAdminService')">
   <div class="dlg" style="width:480px">
-    <div class="dlg-title">🛎 Оказать услугу</div>
+    <div class="dlg-title">Оказать услугу</div>
 
     <div class="form-row">
       <label>Привязать к сессии</label>
@@ -1068,20 +1112,21 @@
         <option value="">— Без привязки —</option>
       </select>
     </div>
-    <div id="dlgAdminSvcSessionInfo" style="font-size:12px;color:#1D9E75;margin:4px 0 8px;display:none"></div>
+    <div id="dlgAdminSvcSessionInfo" style="font-size:12px;color:var(--free);margin:4px 0 8px;display:none"></div>
 
     <div id="dlgAdminSvcReaderRow" class="form-row" style="display:none">
-      <label>Читатель <span style="color:#666;font-size:11px">(необязательно)</span></label>
+      <label>Читатель <span style="color:var(--ink-3);font-size:11px">(необязательно)</span></label>
       <input type="text" id="dlgAdminSvcReaderId" placeholder="Номер читательского билета">
     </div>
 
-    <div style="border-top:1px solid #2D2D5B;margin:8px 0 10px"></div>
+    <div style="border-top:1px solid var(--line);margin:8px 0 10px"></div>
     <div id="dlgAdminSvcList"></div>
-    <button id="btnAdminAddSvcRow" class="btn btn-outline" onclick="addAdminSvcRow()" style="margin-bottom:12px;font-size:12px;padding:5px 12px">+ Добавить услугу</button>
+    <button id="btnAdminAddSvcRow" class="btn btn-outline" onclick="addAdminSvcRow()"
+      style="margin-bottom:12px;font-size:12px;padding:5px 12px">+ Добавить услугу</button>
 
     <div class="form-row">
       <label>Итого</label>
-      <div id="dlgAdminSvcTotal" style="font-size:16px;font-weight:700;color:#1d9e75">—</div>
+      <div id="dlgAdminSvcTotal" style="font-size:16px;font-weight:700;color:var(--free)">—</div>
     </div>
     <div class="form-row">
       <label>Оплата</label>
@@ -1090,7 +1135,7 @@
         <label class="radio-opt"><input type="radio" name="svcAdminPay" value="later" id="rbAdminSvcLater" onclick="onAdminSvcPayChanged()"> Позже</label>
       </div>
     </div>
-    <div id="dlgAdminSvcDeferNote" style="font-size:12px;color:#E09000;display:none;margin-top:-4px;margin-bottom:8px">
+    <div id="dlgAdminSvcDeferNote" style="font-size:12px;color:var(--warn);display:none;margin-top:-4px;margin-bottom:8px">
       ⓘ Выберите активную сессию, чтобы отложить оплату
     </div>
 
@@ -1105,28 +1150,82 @@
 <script src="/admin.js"></script>
 
 <!-- Folder picker modal -->
-<div id="folderPickerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;align-items:center;justify-content:center">
-  <div style="background:#1e1e2e;border:1px solid #3d3d6b;border-radius:10px;width:520px;max-height:75vh;display:flex;flex-direction:column;padding:20px;gap:12px">
-
-    <!-- Header -->
-    <div style="display:flex;align-items:center;gap:8px">
-      <button id="btnFolderUp" onclick="folderPickerUp()" title="На уровень выше"
-        style="padding:4px 10px;background:transparent;border:1px solid #3d3d6b;border-radius:4px;color:#aaa;cursor:pointer;font-size:16px;line-height:1">↑</button>
-      <span id="folderPickerPath" style="flex:1;font-size:12px;font-family:monospace;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      <button onclick="closeFolderPicker()"
-        style="background:transparent;border:none;color:#666;font-size:18px;cursor:pointer;line-height:1;padding:0 4px">✕</button>
+<div id="folderPickerModal" class="fpicker-overlay" style="display:none">
+  <div class="fpicker-wrap">
+    <div class="fpicker-header">
+      <button id="btnFolderUp" onclick="folderPickerUp()" title="На уровень выше" class="fpicker-up">↑</button>
+      <span id="folderPickerPath" class="fpicker-path"></span>
+      <button onclick="closeFolderPicker()" class="fpicker-close">✕</button>
     </div>
-
-    <!-- List -->
-    <div id="folderPickerList"
-      style="flex:1;overflow-y:auto;border:1px solid #2a2a4a;border-radius:6px;min-height:200px;max-height:400px"></div>
-
-    <!-- Footer -->
-    <div style="display:flex;gap:8px">
+    <div id="folderPickerList" class="fpicker-list"></div>
+    <div class="fpicker-footer">
       <button onclick="folderPickerSelect()" class="btn btn-primary" style="flex:1">✓ Выбрать эту папку</button>
       <button onclick="closeFolderPicker()" class="btn btn-outline">Отмена</button>
     </div>
   </div>
 </div>
+
+<!-- ══════════════════════ THEME SCRIPT ══════════════════════ -->
+<script>
+(function () {
+  const THEMES = [
+    { id: 'light',    name: 'Светлая',   bg: '#eef1f6', acc: '#2563eb' },
+    { id: 'dark',     name: 'Тёмная',    bg: '#0b0f17', acc: '#3b82f6' },
+    { id: 'tiffany',  name: 'Тиффани',   bg: '#aaded6', acc: '#0aa89f' },
+    { id: 'night',    name: 'Ночь',      bg: '#08120f', acc: '#2dd4bf' },
+    { id: 'sepia',    name: 'Сепия',     bg: '#e7dac2', acc: '#c2691f' },
+    { id: 'amethyst', name: 'Аметист',   bg: '#130f1e', acc: '#a78bfa' },
+  ];
+
+  function renderThemeBtn(active) {
+    const t = THEMES.find(x => x.id === active) || THEMES[0];
+    const el = document.getElementById('adminThemeNameEl');
+    if (el) el.textContent = t.name;
+  }
+
+  function renderThemeMenu(active) {
+    const menu = document.getElementById('adminThemeMenu');
+    if (!menu) return;
+    menu.innerHTML = THEMES.map(t => `
+      <button class="admin-theme-opt${active === t.id ? ' on' : ''}" onclick="adminSetTheme('${t.id}')">
+        <span class="admin-theme-swatch">
+          <span style="background:${t.bg};border:1px solid rgba(0,0,0,.12)"></span>
+          <span style="background:${t.acc}"></span>
+        </span>
+        ${t.name}
+      </button>`).join('');
+  }
+
+  window.adminSetTheme = function (id) {
+    document.documentElement.setAttribute('data-theme', id);
+    localStorage.setItem('bibTheme', id);
+    renderThemeBtn(id);
+    renderThemeMenu(id);
+    const menu = document.getElementById('adminThemeMenu');
+    if (menu) menu.style.display = 'none';
+  };
+
+  window.adminToggleTheme = function () {
+    const menu = document.getElementById('adminThemeMenu');
+    if (!menu) return;
+    menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+  };
+
+  // Close on outside click
+  document.addEventListener('click', function (e) {
+    const wrap = document.getElementById('adminThemeWrap');
+    if (wrap && !wrap.contains(e.target)) {
+      const menu = document.getElementById('adminThemeMenu');
+      if (menu) menu.style.display = 'none';
+    }
+  });
+
+  // Init
+  const saved = localStorage.getItem('bibTheme') || 'light';
+  renderThemeBtn(saved);
+  renderThemeMenu(saved);
+})();
+</script>
+
 </body>
 </html>

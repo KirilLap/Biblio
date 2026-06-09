@@ -866,7 +866,7 @@ function setSrvMode(mode) {
     const panel = document.getElementById('srvPanel' + m.charAt(0).toUpperCase() + m.slice(1));
     const tab   = document.getElementById('srvTab'   + m.charAt(0).toUpperCase() + m.slice(1));
     if (panel) panel.style.display = (m === mode) ? '' : 'none';
-    if (tab)   { tab.style.background = (m === mode) ? '#3d3d6b' : 'transparent'; tab.style.color = (m === mode) ? 'white' : '#aaa'; }
+    if (tab)   { tab.classList.toggle('on', m === mode); tab.style.background = ''; tab.style.color = ''; }
   });
   document.getElementById('serverZipUploadStatus').textContent = '';
   document.getElementById('folderUpdateStatus').textContent = '';
@@ -877,7 +877,7 @@ function setCliMode(mode) {
     const panel = document.getElementById('cliPanel' + m.charAt(0).toUpperCase() + m.slice(1));
     const tab   = document.getElementById('cliTab'   + m.charAt(0).toUpperCase() + m.slice(1));
     if (panel) panel.style.display = (m === mode) ? '' : 'none';
-    if (tab)   { tab.style.background = (m === mode) ? '#3d3d6b' : 'transparent'; tab.style.color = (m === mode) ? 'white' : '#aaa'; }
+    if (tab)   { tab.classList.toggle('on', m === mode); tab.style.background = ''; tab.style.color = ''; }
   });
   document.getElementById('clientZipUploadStatus').textContent   = '';
   document.getElementById('clientZipCmdStatus').textContent      = '';
