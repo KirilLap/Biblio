@@ -781,7 +781,9 @@ async function _lookupReaderImpl() {
       data.age ? `${data.age} лет` : null,
       expDate ? `до ${expDate.toLocaleDateString('ru-RU')}` : null
     ].filter(Boolean);
-    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#1D9E75;border:1px solid #1D5D1D';
+    infoEl.className = 'reader-info valid';
+    infoEl.style.cssText = '';
+    infoEl.style.display = 'block';
     infoEl.textContent = '✓ ' + parts.join(' · ');
   } catch {
     infoEl.style.display = 'none';
