@@ -106,21 +106,56 @@
 
   <!-- ══════════════════════ COMPUTERS PAGE ══════════════════════ -->
   <div id="page-computers" class="page active">
-    <div class="page-header">
-      <div>
-        <h1>Компьютеры</h1>
-        <p id="pcStats" class="page-sub">Загрузка...</p>
+    <!-- PC Toolbar -->
+    <div class="pc-toolbar">
+      <div class="pc-toolbar-row">
+        <div class="filters">
+          <button class="fchip active" id="chipAll" onclick="setAdminFilter('all')" style="--fc:var(--ink-2)">
+            <span class="fchip-n" id="chipAllN">0</span>
+            <span class="fchip-l">Все</span>
+          </button>
+          <button class="fchip" id="chipFree" onclick="setAdminFilter('free')" style="--fc:var(--free)">
+            <span class="fchip-n" id="chipFreeN">0</span>
+            <span class="fchip-l">Свободно</span>
+          </button>
+          <button class="fchip" id="chipSession" onclick="setAdminFilter('session')" style="--fc:var(--limit)">
+            <span class="fchip-n" id="chipSessionN">0</span>
+            <span class="fchip-l">Сессии</span>
+          </button>
+          <button class="fchip" id="chipOffline" onclick="setAdminFilter('offline')" style="--fc:var(--offline)">
+            <span class="fchip-n" id="chipOfflineN">0</span>
+            <span class="fchip-l">Оффлайн</span>
+          </button>
+        </div>
+        <div class="pc-toolbar-right">
+          <label class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="pcSearch" type="search" placeholder="Поиск ПК..." oninput="filterPcGrid()">
+          </label>
+        </div>
       </div>
-      <div class="header-actions">
-        <select id="sortMode" class="sort-select" onchange="changeSortMode(this.value)">
+      <div class="pc-toolbar-row pc-toolbar-actions">
+        <select id="sortMode" class="gbtn" style="cursor:pointer" onchange="changeSortMode(this.value)">
           <option value="ByNumber">По номеру</option>
           <option value="ByName">По имени</option>
         </select>
-        <button class="btn btn-primary" onclick="openAdminServiceDlg('')">Услуга</button>
-        <button class="btn btn-outline" onclick="lockAll()">Заблокировать всех</button>
-        <button class="btn btn-outline" onclick="unlockAll()">Разблокировать всех</button>
+        <button class="gbtn" onclick="openAdminServiceDlg('')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          Услуга
+        </button>
+        <div class="gbtn-spacer"></div>
+        <button class="gbtn" onclick="lockAll()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Заблок. всех
+        </button>
+        <button class="gbtn" onclick="unlockAll()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+          Разблок. всех
+        </button>
       </div>
     </div>
+    <!-- hidden for JS compat -->
+    <p id="pcStats" style="display:none"></p>
 
     <div id="updateProgressPanel" class="update-progress-panel" style="display:none">
       <div class="update-progress-header">
@@ -827,65 +862,87 @@
 </div>
 
 <!-- Start session -->
-<div id="dlgStartSession" class="dlg-overlay" style="display:none">
-  <div class="dlg dlg-session">
-    <div class="dlg-title">Запуск платной сессии — <span id="dlgSsPc"></span></div>
-
-    <div class="ss-type-row">
-      <div class="ss-type-btn active" id="ssBtnLimited" onclick="ssSelectType('Лимит')">
-        <div class="ss-type-icon">⏱</div>
-        <div class="ss-type-label" id="ssBtnLimitedLbl">Лимитированная</div>
+<div id="dlgStartSession" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgStartSession')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Начать сессию</div>
+        <div class="modal-sub" id="dlgSsPc"></div>
       </div>
-      <div class="ss-type-btn" id="ssBtnVip" onclick="ssSelectType('VIP')">
-        <div class="ss-type-icon">⭐</div>
-        <div class="ss-type-label" id="ssBtnVipLbl">VIP</div>
-      </div>
+      <button class="modal-x" onclick="closeDlg('dlgStartSession')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <div class="modal-body">
 
-    <div id="dlgSsLimitFields">
-      <div class="form-row">
-        <label>Время</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="dlgSsHours" min="0" max="23" placeholder="0" style="width:70px" oninput="ssSyncMinutes()">
-          <span style="color:var(--ink-3);font-size:13px">ч</span>
-          <input type="number" id="dlgSsMins" min="0" max="59" placeholder="30" style="width:70px" oninput="ssSyncMinutes()">
-          <span style="color:var(--ink-3);font-size:13px">мин</span>
+      <div class="field">
+        <label>Тип сессии</label>
+        <div class="seg">
+          <label class="seg-opt on" id="ssBtnLimited" onclick="ssSelectType('Лимит')">
+            <input type="radio" name="stype_admin" value="Лимит" checked style="display:none">
+            <span id="ssBtnLimitedLbl">Лимит</span>
+          </label>
+          <label class="seg-opt" id="ssBtnVip" onclick="ssSelectType('VIP')">
+            <input type="radio" name="stype_admin" value="VIP" style="display:none">
+            VIP<span class="seg-rate">безлимит</span>
+          </label>
         </div>
       </div>
-      <div class="form-row">
-        <label>Сумма (сум)</label>
-        <input type="number" id="dlgSsMoney" min="0" placeholder="3000" oninput="ssSyncMoney()">
+
+      <div id="dlgSsLimitFields">
+        <div class="field">
+          <label>Время</label>
+          <div class="dur-field">
+            <div class="dur-cell">
+              <button type="button" onclick="stepDur('dlgSsHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+              <div class="dur-val"><input id="dlgSsHours" type="number" min="0" max="23" value="1" oninput="ssSyncMinutes()"><span>ч</span></div>
+              <button type="button" onclick="stepDur('dlgSsHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            </div>
+            <div class="dur-cell">
+              <button type="button" onclick="stepDur('dlgSsMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+              <div class="dur-val"><input id="dlgSsMins" type="number" min="0" max="59" value="0" oninput="ssSyncMinutes()"><span>мин</span></div>
+              <button type="button" onclick="stepDur('dlgSsMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Сумма</label>
+          <div class="amount-input">
+            <input id="dlgSsMoney" type="number" min="0" value="0" oninput="ssSyncMoney()">
+            <span class="unit">сум</span>
+          </div>
+          <div id="dlgSsHint" class="time-cost"></div>
+        </div>
       </div>
-      <div id="dlgSsHint" style="font-size:12px;color:var(--free);text-align:right;margin-bottom:12px"></div>
-    </div>
 
-    <div id="dlgSsVipInfo" style="display:none;color:var(--ink-3);font-size:13px;text-align:center;margin-bottom:16px">
-      Безлимитный доступ без ограничений по времени
-    </div>
-
-    <div id="rowSsReader" class="form-row">
-      <label id="lblSsReader">Читательский билет</label>
-      <div class="radio-group" style="margin-bottom:6px">
-        <label class="radio-opt"><input type="radio" name="ssCardType" value="regular" checked onchange="ssOnCardTypeChanged()"> Постоянный (3 года)</label>
-        <label class="radio-opt"><input type="radio" name="ssCardType" value="temp" onchange="ssOnCardTypeChanged()"> Временный (1 день)</label>
+      <div id="dlgSsVipInfo" style="display:none;color:var(--ink-3);font-size:13px;text-align:center;padding:12px 0">
+        Безлимитный доступ без ограничений по времени
       </div>
-      <div class="input-group">
-        <span id="dlgSsReaderPrefix" class="input-prefix">FAA</span>
-        <input type="text" id="dlgSsReader" inputmode="numeric" placeholder="260500456" maxlength="9"
-               oninput="onSsReaderInput()"
-               onblur="ssLookupReader()" onkeydown="if(event.key==='Enter'){ssLookupReader();}">
+
+      <div id="rowSsReader" class="field">
+        <label id="lblSsReader">Читательский билет</label>
+        <div class="card-type-toggle">
+          <input type="radio" name="ssCardType" value="regular" checked style="display:none" id="rbSsCardRegular">
+          <input type="radio" name="ssCardType" value="temp"    style="display:none" id="rbSsCardTemp">
+          <button type="button" class="card-type-btn on" id="ssBtnCardRegular" onclick="ssSetCardType('regular')">Постоянный (3 года)</button>
+          <button type="button" class="card-type-btn"    id="ssBtnCardTemp"    onclick="ssSetCardType('temp')">Временный (1 день)</button>
+        </div>
+        <div class="reader-field">
+          <span id="dlgSsReaderPrefix" class="reader-prefix">FAA</span>
+          <input type="text" id="dlgSsReader" inputmode="numeric" placeholder="260500456" maxlength="9"
+                 oninput="onSsReaderInput()"
+                 onblur="ssLookupReader()" onkeydown="if(event.key==='Enter'){ssLookupReader();}">
+        </div>
+        <div id="dlgSsReaderInfo" class="reader-info"></div>
       </div>
-      <div id="dlgSsReaderInfo" style="display:none;margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px"></div>
-    </div>
 
-    <div id="rowSsName" class="form-row">
-      <label id="lblSsName">Имя читателя <span style="color:var(--ink-3);font-size:11px">(заполняется автоматически)</span></label>
-      <input type="text" id="dlgSsName" placeholder="Иванов Иван">
-    </div>
+      <div id="rowSsName" class="field">
+        <label id="lblSsName">Имя читателя <span class="opt">(заполняется автоматически)</span></label>
+        <input type="text" id="dlgSsName" class="tinput" placeholder="Иванов Иван">
+      </div>
 
-    <div class="dlg-btns">
-      <button class="btn btn-outline" onclick="closeDlg('dlgStartSession')">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmStartSession()">Начать</button>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgStartSession')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmStartSession()">Начать сессию</button>
     </div>
   </div>
 </div>
@@ -1102,46 +1159,47 @@
 </div>
 
 <!-- Admin Service dialog -->
-<div id="dlgAdminService" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeDlg('dlgAdminService')">
-  <div class="dlg" style="width:480px">
-    <div class="dlg-title">Оказать услугу</div>
-
-    <div class="form-row">
-      <label>Привязать к сессии</label>
-      <select id="dlgAdminSvcPc" onchange="onAdminSvcPcChanged()">
-        <option value="">— Без привязки —</option>
-      </select>
+<div id="dlgAdminService" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgAdminService')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <div><div class="modal-title">Оказать услугу</div></div>
+      <button class="modal-x" onclick="closeDlg('dlgAdminService')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
-    <div id="dlgAdminSvcSessionInfo" style="font-size:12px;color:var(--free);margin:4px 0 8px;display:none"></div>
+    <div class="modal-body">
 
-    <div id="dlgAdminSvcReaderRow" class="form-row" style="display:none">
-      <label>Читатель <span style="color:var(--ink-3);font-size:11px">(необязательно)</span></label>
-      <input type="text" id="dlgAdminSvcReaderId" placeholder="Номер читательского билета">
-    </div>
-
-    <div style="border-top:1px solid var(--line);margin:8px 0 10px"></div>
-    <div id="dlgAdminSvcList"></div>
-    <button id="btnAdminAddSvcRow" class="btn btn-outline" onclick="addAdminSvcRow()"
-      style="margin-bottom:12px;font-size:12px;padding:5px 12px">+ Добавить услугу</button>
-
-    <div class="form-row">
-      <label>Итого</label>
-      <div id="dlgAdminSvcTotal" style="font-size:16px;font-weight:700;color:var(--free)">—</div>
-    </div>
-    <div class="form-row">
-      <label>Оплата</label>
-      <div class="radio-group">
-        <label class="radio-opt"><input type="radio" name="svcAdminPay" value="now" checked onclick="onAdminSvcPayChanged()"> Сейчас</label>
-        <label class="radio-opt"><input type="radio" name="svcAdminPay" value="later" id="rbAdminSvcLater" onclick="onAdminSvcPayChanged()"> Позже</label>
+      <div class="field">
+        <label>Привязать к сессии</label>
+        <select id="dlgAdminSvcPc" class="tinput" onchange="onAdminSvcPcChanged()">
+          <option value="">— Без привязки —</option>
+        </select>
       </div>
-    </div>
-    <div id="dlgAdminSvcDeferNote" style="font-size:12px;color:var(--warn);display:none;margin-top:-4px;margin-bottom:8px">
-      ⓘ Выберите активную сессию, чтобы отложить оплату
-    </div>
+      <div id="dlgAdminSvcSessionInfo" style="font-size:12px;color:var(--free);margin:-6px 0 10px;display:none"></div>
 
-    <div class="dlg-btns">
-      <button class="btn btn-outline" onclick="closeDlg('dlgAdminService')">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmAdminService()">Создать</button>
+      <div id="dlgAdminSvcReaderRow" class="field" style="display:none">
+        <label>Читатель <span class="opt">(необязательно)</span></label>
+        <input type="text" id="dlgAdminSvcReaderId" class="tinput" placeholder="Номер читательского билета">
+      </div>
+
+      <div style="border-top:1px solid var(--line);margin:4px 0 12px"></div>
+      <div id="dlgAdminSvcList"></div>
+      <button id="btnAdminAddSvcRow" class="btn-add-svc" onclick="addAdminSvcRow()">+ Добавить услугу</button>
+
+      <div class="field">
+        <label>Оплата</label>
+        <div class="radio-group">
+          <label class="radio-opt"><input type="radio" name="svcAdminPay" value="now" checked onclick="onAdminSvcPayChanged()"> Сейчас</label>
+          <label class="radio-opt"><input type="radio" name="svcAdminPay" value="later" id="rbAdminSvcLater" onclick="onAdminSvcPayChanged()"> Позже</label>
+        </div>
+      </div>
+      <div id="dlgAdminSvcDeferNote" style="font-size:12px;color:var(--warn);display:none;margin-top:-4px">
+        ⓘ Выберите активную сессию, чтобы отложить оплату
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <div class="foot-total">Итого: <b id="dlgAdminSvcTotal">—</b></div>
+      <button class="mbtn ghost" onclick="closeDlg('dlgAdminService')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmAdminService()">Создать</button>
     </div>
   </div>
 </div>

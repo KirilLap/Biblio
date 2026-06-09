@@ -213,6 +213,39 @@ function showPage(name) {
 })();
 
 // ─── PC Grid ──────────────────────────────────────────────────────────────
+let _adminFilterState = 'all';
+
+function setAdminFilter(state) {
+  _adminFilterState = state;
+  ['all','free','session','offline'].forEach(s => {
+    document.getElementById('chip' + s.charAt(0).toUpperCase() + s.slice(1))
+      ?.classList.toggle('active', s === state);
+  });
+  filterPcGrid();
+}
+
+function filterPcGrid() {
+  const query = (document.getElementById('pcSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('#pcGrid .pccard').forEach(card => {
+    const pcNumber = card.dataset.pcnumber || '';
+    const c = pcs[pcNumber];
+    if (!c) { card.style.display = ''; return; }
+
+    let matchFilter = true;
+    if (_adminFilterState === 'free')    matchFilter = c.isFree && c.isOnline;
+    else if (_adminFilterState === 'session') matchFilter = c.isSession;
+    else if (_adminFilterState === 'offline') matchFilter = !c.isOnline;
+
+    const matchSearch = !query ||
+      (c.pcNumber || '').toLowerCase().includes(query) ||
+      (c.customName || '').toLowerCase().includes(query) ||
+      (c.ip || '').includes(query) ||
+      (c.userName || '').toLowerCase().includes(query);
+
+    card.style.display = (matchFilter && matchSearch) ? '' : 'none';
+  });
+}
+
 function renderPcGrid() {
   const grid = document.getElementById('pcGrid');
   const sortMode = settings.clientSortMode || 'ByNumber';
@@ -228,18 +261,30 @@ function renderPcGrid() {
     list.sort((a, b) => a.pcNumberValue !== b.pcNumberValue ? a.pcNumberValue - b.pcNumberValue : (a.customName || '').localeCompare(b.customName || ''));
   }
 
-  let online = 0, sessions = 0, free = 0;
+  let sessions = 0, free = 0, offline = 0;
   list.forEach(c => {
-    if (c.isOnline) online++;
     if (c.isSession) sessions++;
-    if (c.isFree) free++;
+    if (c.isFree && c.isOnline) free++;
+    if (!c.isOnline) offline++;
   });
-  document.getElementById('pcStats').textContent =
-    `Всего: ${list.length} | Онлайн: ${online} | Сессий: ${sessions} | Свободных: ${free}`;
+  // Update chip counts
+  const chipAllN = document.getElementById('chipAllN');
+  const chipFreeN = document.getElementById('chipFreeN');
+  const chipSessionN = document.getElementById('chipSessionN');
+  const chipOfflineN = document.getElementById('chipOfflineN');
+  if (chipAllN)     chipAllN.textContent     = list.length;
+  if (chipFreeN)    chipFreeN.textContent    = free;
+  if (chipSessionN) chipSessionN.textContent = sessions;
+  if (chipOfflineN) chipOfflineN.textContent = offline;
+
+  // Legacy pcStats for compat
+  const pcStats = document.getElementById('pcStats');
+  if (pcStats) pcStats.textContent = `Всего: ${list.length} | Сессий: ${sessions} | Свободных: ${free}`;
 
   grid.innerHTML = '';
   list.forEach(c => grid.appendChild(buildPcCard(c)));
 
+  filterPcGrid();
   renderUpdatePanel(list);
   if (selectedAdminPc) renderAdminActionBar();
 }
@@ -282,112 +327,142 @@ function closeUpdatePanel() {
   document.getElementById('updateProgressPanel').style.display = 'none';
 }
 
+function getStatusKey(c) {
+  if (!c.isOnline) return 'offline';
+  if (c.isSession && c.isPaused) return 'pause';
+  if (c.isSession && c.sessionType === 'VIP') return 'vip';
+  if (c.isSession) return 'limit';
+  if (c.isFree) return 'free';
+  return 'locked';
+}
+
 function buildPcCard(c) {
   const div = document.createElement('div');
-  div.className = 'pc-card';
-  div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
+  const stKey = getStatusKey(c);
+
+  div.className = 'pccard' + (!c.isOnline ? ' is-offline' : '');
+  if (selectedAdminPc === c.pcNumber) div.classList.add('is-selected');
   div.id = 'pc-' + c.pcNumber.replace(/\s/g, '_');
   div.dataset.pcnumber = c.pcNumber;
-  if (selectedAdminPc === c.pcNumber) div.classList.add('selected');
+  div.style.setProperty('--st', `var(--${stKey})`);
+
+  div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
   div.addEventListener('click', e => {
-    if (!e.target.closest('button') && !e.target.closest('.pc-name')) selectAdminPc(c.pcNumber);
+    if (!e.target.closest('button')) selectAdminPc(c.pcNumber);
   });
 
-  // Оффлайн + сессия: карточка с тёплым красным акцентом
-  if (!c.isOnline && c.isSession) {
-    div.style.borderColor = '#c86464';
-    div.style.background  = '#1f1010';
-  }
-
-  const dotClass = !c.isOnline ? '' : c.isSession && c.isPaused ? 'paused' : c.isSession ? 'session' : c.isFree ? 'free' : 'online';
-  const badge = statusBadge(c);
-
-  // Индивидуальные настройки — ★ справа от имени
+  // Header
   const indBadge = c.hasIndividualSettings
-    ? `<span class="pc-ind-badge" title="Есть индивидуальные настройки">★</span>`
+    ? `<span class="pc-ind-badge" title="Индивидуальные настройки">★</span>`
     : '';
+  const badge = `<span class="badge" style="color:var(--${stKey});background:var(--${stKey}-bg);border-color:var(--${stKey}-ring)"><span class="dot" style="background:var(--${stKey})"></span>${esc(c.status)}</span>`;
 
-  let timer = '';
+  const head = `<div class="pccard-stripe"></div>
+    <div class="pccard-head">
+      <div class="pccard-title">
+        <span class="pccard-name" onclick="event.stopPropagation();openRename(${c.pcNumberValue},'${esc(c.customName)}')">${esc(c.pcNumber)}${indBadge}</span>
+        ${c.ip ? `<span class="pccard-ip">${esc(c.ip)}</span>` : ''}
+      </div>
+      <div class="pccard-head-right">
+        ${badge}
+        <button class="pc-menu-btn" data-pcnumber="${esc(c.pcNumber)}" title="Меню">⋮</button>
+      </div>
+    </div>`;
+
+  // Body
+  let body = '';
   if (c.isSession) {
-    const timerCls = `pc-timer ${c.sessionType === 'VIP' ? 'vip-timer' : ''} ${c.isPaused ? 'paused-timer' : ''} ${!c.isOnline ? 'offline-timer' : ''}`;
-    const _timerId = 'timer-' + c.pcNumber.replace(/\s/g, '_');
-    timer = `<div class="${timerCls}" id="${_timerId}">${fmtTime(c.elapsedSeconds)}</div>`;
+    const isLow = c.sessionType === 'Лимит' && c.limitSeconds > 0 && Math.max(0, c.limitSeconds - c.elapsedSeconds) <= 300;
+    const timerId = 'timer-' + c.pcNumber.replace(/\s/g, '_');
+    const clockCls = 'sess-clock mono' + (isLow ? ' low' : '');
+
+    const nameLabel = c.userName || (c.readerId ? `🪪 ${c.readerId}` : '');
+    const userLine = nameLabel
+      ? `<div class="sess-user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="sess-user-name">${esc(nameLabel)}</span></div>`
+      : '';
+
+    let remainText = '';
     if (c.limitSeconds > 0) {
       const rem = Math.max(0, c.limitSeconds - c.elapsedSeconds);
-      const remCls = rem <= 300 ? 'style="color:#f87171"' : '';
-      timer += `<div class="pc-meta"><span ${remCls}>Осталось: ${fmtTime(rem)}</span></div>`;
+      const remStyle = rem <= 300 ? 'style="color:var(--locked)"' : '';
+      remainText = `<span class="sess-clock-cap" ${remStyle}>/ ${fmtTime(c.limitSeconds)}</span>`;
     }
-    // VIP — показываем стоимость
-    if (c.sessionType === 'VIP') {
-      const cost = Math.floor(c.elapsedSeconds * (settings.tariff || 3000) / 3600);
-      timer += `<div class="pc-meta"><span style="color:#f59e0b">К оплате: ${cost.toLocaleString()} сум</span></div>`;
-    }
-    // Оффлайн + сессия — предупреждение
+
+    const costLine = c.sessionType === 'VIP'
+      ? `<div style="font-size:12px;font-weight:700;color:var(--vip);margin-top:2px">К оплате: ${Math.floor(c.elapsedSeconds * (settings.tariff || 3000) / 3600).toLocaleString()} сум</div>`
+      : '';
+    const offlineWarn = !c.isOnline
+      ? `<div style="font-size:12px;color:var(--locked);font-weight:700;margin-top:2px">📵 нет связи</div>`
+      : '';
+
+    const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
+    const updBadgeMap = { pending: '⏳', updating: '🔄', done: '✅', failed: '❌', deferred: '⏸' };
+    const updBadgeLbl = { pending: 'Ожидание', updating: 'Устанавливает...', done: 'Обновлён', failed: 'Не обновился', deferred: 'После сессии' };
+    const updBadge = c.updateStatus
+      ? `<div style="margin-top:4px"><span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus]} ${updBadgeLbl[c.updateStatus]}</span></div>`
+      : (isOutdated ? `<div style="margin-top:4px"><span class="pc-update-badge pending">⬆ v${latestClientVersion} доступно</span></div>` : '');
+
+    const pauseIco = c.isPaused
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor"/></svg>`;
+
+    body = `<div class="pccard-body">
+      ${userLine}
+      <div class="sess-timer">
+        <span class="${clockCls}" id="${timerId}">${fmtTime(c.elapsedSeconds)}</span>
+        ${remainText}
+      </div>
+      ${costLine}${offlineWarn}${updBadge}
+      <div class="pccard-actions">
+        <button class="qbtn qbtn-ghost" title="Экран" onclick="event.stopPropagation();openScreenView('${esc(c.pcNumber)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="qbtn qbtn-ghost" title="${c.isPaused ? 'Продолжить' : 'Пауза'}" onclick="event.stopPropagation();togglePause('${esc(c.pcNumber)}')">${pauseIco}</button>
+        <button class="qbtn qbtn-danger qbtn-grow" onclick="event.stopPropagation();endSession('${esc(c.pcNumber)}')" title="Завершить сессию"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Завершить</button>
+      </div>
+    </div>`;
+  } else {
+    const stMark = !c.isOnline ? 'state-mark offline' : c.isFree ? 'state-mark free' : 'state-mark locked';
+    let icon = '';
     if (!c.isOnline) {
-      timer += `<div class="pc-meta"><span style="color:#f87171">📵 нет связи</span></div>`;
+      icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`;
+    } else if (c.isFree) {
+      icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="4 12 9 17 20 6"/></svg>`;
+    } else {
+      icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
     }
+    const stateLabel = !c.isOnline ? 'Нет связи' : c.isFree ? 'Готов к работе' : 'Заблокирован';
+
+    const freeActions = c.isOnline
+      ? `<div class="pccard-actions">
+          <button class="qbtn qbtn-ghost" title="Экран" onclick="event.stopPropagation();openScreenView('${esc(c.pcNumber)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button class="qbtn qbtn-accent qbtn-grow" onclick="event.stopPropagation();openStartSession('${esc(c.pcNumber)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>Начать сессию</button>
+        </div>`
+      : `<div class="pccard-actions">
+          <button class="qbtn qbtn-danger qbtn-grow" onclick="event.stopPropagation();deletePc('${esc(c.pcNumber)}')">🗑 Удалить</button>
+        </div>`;
+
+    body = `<div class="pccard-body pccard-body-state">
+      <div class="${stMark}">${icon}</div>
+      <span class="state-text">${stateLabel}</span>
+      ${freeActions}
+    </div>`;
   }
 
-  const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
-  const updBadgeMap = { pending: '⏳ Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился', deferred: '⏸ После сессии' };
-  const updBadge = c.updateStatus ? `<span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus] || ''}</span>` : '';
-  const meta = `<div class="pc-meta">
-    ${c.ip ? `<span>${c.ip}</span>` : ''}
-    ${c.isSession && c.userName ? `<span>👤 ${esc(c.userName)}</span>` : ''}
-    ${c.isSession && c.readerId ? `<span>🪪 ${esc(c.readerId)}</span>` : ''}
-    ${c.isSession && c.paidAmount ? `<span>💵 ${c.paidAmount.toLocaleString()} сум</span>` : ''}
-    ${c.clientVersion ? `<span class="pc-ver${isOutdated ? ' pc-ver-old' : ''}" title="${isOutdated ? `Доступно обновление v${latestClientVersion}` : 'Версия BibClient'}">${isOutdated ? '⬆ ' : ''}v${c.clientVersion}</span>` : ''}
-    ${updBadge}
-  </div>`;
-
-  const actions = buildActions(c);
-
-  div.innerHTML = `
-    <div class="pc-card-header">
-      <span class="pc-name" onclick="openRename(${c.pcNumberValue}, '${esc(c.customName)}')">${esc(c.pcNumber)}${indBadge}</span>
-      <button class="pc-menu-btn" data-pcnumber="${esc(c.pcNumber)}" title="Действия">⋮</button>
-      <div class="pc-offline-dot ${dotClass} online"></div>
-    </div>
-    ${badge}
-    ${timer}
-    ${meta}
-    ${actions ? `<div class="pc-actions">${actions}</div>` : ''}
-  `;
+  div.innerHTML = head + body;
   return div;
-}
-
-function statusBadge(c) {
-  const map = {
-    'Оффлайн':     'badge-offline',
-    'Заблокирован':'badge-locked',
-    'Свободный':   'badge-free',
-    'VIP':         'badge-vip',
-    'Лимит':       'badge-limit',
-    'Пауза':       'badge-pause',
-  };
-  const cls = map[c.status] || 'badge-locked';
-  return `<div class="pc-status-badge ${cls}">${c.status}</div>`;
-}
-
-function buildActions(c) {
-  // Для оффлайн-ПК — только удаление прямо на карточке
-  if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑 Удалить</button>`;
-  // Для онлайн-ПК все действия в нижней панели (selectAdminPc → renderAdminActionBar)
-  return '';
 }
 
 // ─── Bottom action bar ───────────────────────────────────────────────────────
 function selectAdminPc(pcNumber) {
   if (!pcNumber || selectedAdminPc === pcNumber) {
     selectedAdminPc = null;
-    document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('#pcGrid .pccard.is-selected').forEach(c => c.classList.remove('is-selected'));
     document.getElementById('adminActionBar').classList.add('hidden');
     return;
   }
   selectedAdminPc = pcNumber;
-  document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('#pcGrid .pccard.is-selected').forEach(c => c.classList.remove('is-selected'));
   const card = document.querySelector(`#pcGrid [data-pcnumber="${CSS.escape(pcNumber)}"]`);
-  if (card) card.classList.add('selected');
+  if (card) card.classList.add('is-selected');
   renderAdminActionBar();
 }
 
@@ -473,7 +548,7 @@ function ssOnCardTypeChanged() {
   _ssLookupState = null;
   _ssLookedUpId  = '';
   document.getElementById('dlgSsReader').value = '';
-  document.getElementById('dlgSsReaderInfo').style.display = 'none';
+  document.getElementById('dlgSsReaderInfo').className = 'reader-info';
   document.getElementById('dlgSsName').value = '';
   document.getElementById('dlgSsReader').placeholder = isTemp ? '842' : '260500456';
 }
@@ -488,7 +563,7 @@ function onSsReaderInput() {
   if (nums.length >= 6) {
     _ssLookupTimer = setTimeout(ssLookupReader, 500);
   } else {
-    document.getElementById('dlgSsReaderInfo').style.display = 'none';
+    document.getElementById('dlgSsReaderInfo').className = 'reader-info';
     document.getElementById('dlgSsName').value = '';
   }
 }
@@ -496,7 +571,8 @@ function onSsReaderInput() {
 // Deduplication wrapper — prevents two concurrent lookups (blur + button click)
 async function ssQuickAddReader(cardId) {
   const infoEl = document.getElementById('dlgSsReaderInfo');
-  infoEl.innerHTML = `<span style="color:#aaa">Добавление…</span>`;
+  infoEl.className = 'reader-info valid';
+  infoEl.textContent = 'Добавление…';
   try {
     const r = await fetch('/api/admin/readers/quick-add', {
       method: 'POST',
@@ -506,7 +582,7 @@ async function ssQuickAddReader(cardId) {
     if (r.ok) {
       _ssLookupState = 'valid';
       _ssLookedUpId  = cardId;
-      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
+      infoEl.className = 'reader-info valid';
       infoEl.textContent = `✓ ${cardId} — добавлен как новый читатель`;
       toast('Читатель добавлен', 'success');
     } else {
@@ -530,13 +606,13 @@ async function ssLookupReader() {
 async function _ssLookupReaderImpl() {
   const nums   = document.getElementById('dlgSsReader').value.trim();
   const infoEl = document.getElementById('dlgSsReaderInfo');
-  if (!nums) { infoEl.style.display = 'none'; _ssLookupState = null; return; }
+  if (!nums) { infoEl.className = 'reader-info'; _ssLookupState = null; return; }
 
   const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
   if (isTemp) {
     _ssLookupState = 'valid';
     _ssLookedUpId  = nums;
-    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A1A2E;color:#AAAACC;border:1px solid #3D3D6B';
+    infoEl.className = 'reader-info valid';
     infoEl.textContent = `✓ Временный билет №${nums} — посещение будет зафиксировано`;
     return;
   }
@@ -549,11 +625,11 @@ async function _ssLookupReaderImpl() {
     if (!r.ok) {
       _ssLookupState = 'not_found';
       document.getElementById('dlgSsName').value = '';
-      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A;display:flex;align-items:center;gap:10px';
-      infoEl.innerHTML = `<span style="flex:1">&#x2717; Читатель ${esc(cardId)} не найден в базе</span>
+      infoEl.className = 'reader-info invalid';
+      infoEl.innerHTML = `<span style="flex:1">✗ Читатель ${esc(cardId)} не найден в базе</span>
         <button data-quick-add="${esc(cardId)}"
-          style="padding:3px 10px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75;white-space:nowrap">
-          &#x2795; Добавить
+          style="padding:3px 10px;font-size:11px;border-radius:5px;cursor:pointer;border:1px solid var(--free-ring);background:var(--free-bg);color:var(--free);white-space:nowrap">
+          + Добавить
         </button>`;
       infoEl.querySelector('[data-quick-add]').addEventListener('click', function() {
         ssQuickAddReader(this.dataset.quickAdd);
@@ -568,18 +644,18 @@ async function _ssLookupReaderImpl() {
       if (Date.now() > expDate) {
         _ssLookupState = 'expired';
         document.getElementById('dlgSsName').value = data.fullName || '';
-        infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+        infoEl.className = 'reader-info expired';
         infoEl.textContent = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
         return;
       }
     }
     _ssLookupState = 'valid';
     document.getElementById('dlgSsName').value = data.fullName || '';
-    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
+    infoEl.className = 'reader-info valid';
     infoEl.textContent = `✓ ${data.fullName}${data.category ? ' · ' + data.category : ''}`;
   } catch {
     _ssLookupState = null;
-    infoEl.style.display = 'none';
+    infoEl.className = 'reader-info';
   }
 }
 
@@ -593,11 +669,13 @@ function openStartSession(pcNumber) {
   document.getElementById('dlgSsMins').value = '';
   document.getElementById('dlgSsMoney').value = '';
   document.getElementById('dlgSsHint').textContent = '';
-  document.getElementById('dlgSsReaderInfo').style.display = 'none';
+  document.getElementById('dlgSsReaderInfo').className = 'reader-info';
 
   // Reset card type to regular
   const regularRadio = document.querySelector('[name="ssCardType"][value="regular"]');
   if (regularRadio) regularRadio.checked = true;
+  document.getElementById('ssBtnCardRegular')?.classList.toggle('on', true);
+  document.getElementById('ssBtnCardTemp')?.classList.toggle('on', false);
   const prefixEl = document.getElementById('dlgSsReaderPrefix');
   if (prefixEl) prefixEl.textContent = settings.readerCardPrefix || 'FAA';
   _ssLookupState = null;
@@ -612,7 +690,7 @@ function openStartSession(pcNumber) {
   if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
 
   ssSelectType('Лимит');
-  document.getElementById('dlgStartSession').style.display = 'flex';
+  document.getElementById('dlgStartSession').classList.add('open');
 }
 
 function ssSelectType(type) {
@@ -620,9 +698,9 @@ function ssSelectType(type) {
   const isLimit = type === 'Лимит';
   document.getElementById('dlgSsLimitFields').style.display = isLimit ? '' : 'none';
   document.getElementById('dlgSsVipInfo').style.display     = isLimit ? 'none' : '';
-  // Стили кнопок
-  document.getElementById('ssBtnLimited').classList.toggle('active', isLimit);
-  document.getElementById('ssBtnVip').classList.toggle('active', !isLimit);
+  // Segment control
+  document.getElementById('ssBtnLimited').classList.toggle('on', isLimit);
+  document.getElementById('ssBtnVip').classList.toggle('on', !isLimit);
   if (!isLimit) {
     document.getElementById('dlgSsHours').value = '';
     document.getElementById('dlgSsMins').value = '';
@@ -2281,7 +2359,32 @@ async function logout() {
 
 // ─── Dialog helpers ───────────────────────────────────────────────────────────
 function closeDlg(id) {
-  document.getElementById(id).style.display = 'none';
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('modal-scrim')) {
+    el.classList.remove('open');
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function closeDlgIfOverlay(event, id) {
+  if (event.target === document.getElementById(id)) closeDlg(id);
+}
+
+function stepDur(id, delta, min, max) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let v = parseInt(el.value) || 0;
+  el.value = Math.min(max, Math.max(min, v + delta));
+  el.dispatchEvent(new Event('input'));
+}
+
+function ssSetCardType(val) {
+  document.getElementById(val === 'temp' ? 'rbSsCardTemp' : 'rbSsCardRegular').checked = true;
+  document.getElementById('ssBtnCardRegular').classList.toggle('on', val === 'regular');
+  document.getElementById('ssBtnCardTemp').classList.toggle('on', val === 'temp');
+  ssOnCardTypeChanged();
 }
 
 // Close on overlay click — only if mousedown also started on the overlay,
@@ -3128,7 +3231,7 @@ function openAdminServiceDlg(pcNumber) {
   renderAdminSvcRows();
   updateAdminSvcTotal();
   onAdminSvcPcChanged();
-  document.getElementById('dlgAdminService').style.display = 'flex';
+  document.getElementById('dlgAdminService').classList.add('open');
 }
 
 function addAdminSvcRow() {
