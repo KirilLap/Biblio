@@ -367,7 +367,7 @@ function buildCardHtml(pc) {
     </div>`;
 
     return head + `<div class="pccard-body">
-      ${nameLabel ? `<div class="sess-user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="sess-user-name">${esc(nameLabel)}</span>${tariffChip}${clientBadge}</div>` : `<div style="margin-bottom:4px">${tariffChip}${clientBadge}</div>`}
+      ${nameLabel ? `<div class="sess-user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="sess-user-name">${esc(nameLabel)}</span>${clientBadge}</div>` : (clientBadge ? `<div style="margin-bottom:4px">${clientBadge}</div>` : '')}
       <div class="sess-timer">
         <span class="${isLow ? 'sess-clock low' : 'sess-clock'} mono" data-pc-clock="${esc(n)}">${fmtTime(elapsed)}</span>
         <span class="sess-clock-cap">${pc.isPaused ? 'пауза' : 'прошло'}</span>
@@ -1073,6 +1073,8 @@ function openServiceDlg(pcNum) {
   const segLater = document.getElementById('segSvcLater');
   if (segNow) segNow.classList.add('on');
   if (segLater) segLater.classList.remove('on');
+  // «Позже» доступно только при привязке к сессии
+  if (segLater) segLater.style.display = pcNum ? '' : 'none';
 
   renderSvcList();
   updateSvcTotal();
@@ -1232,7 +1234,7 @@ function showSessionSummary(s) {
       <span class="val">${fmt(totalDebt)} сум</span>
     </div>
     <div style="margin-top:10px">
-      <button class="btn-primary" style="background:#854F0B;border-color:#854F0B;width:100%"
+      <button class="mbtn" style="background:var(--warn);color:#fff;border-color:var(--warn);width:100%"
         onclick="paySessionDebts()">Оплатить долги по услугам</button>
     </div>`;
     html += `</div>`;
