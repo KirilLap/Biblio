@@ -1264,7 +1264,7 @@ async function paySessionDebts() {
     // Заменяем секцию долгов на сообщение об успешной оплате
     const debtSection = document.getElementById('dlgSummaryDebtSection');
     if (debtSection) {
-      const paid = result?.totalPaid ?? (typeof result === 'number' ? result : 0) || _summaryTotalDebt;
+      const paid = result?.totalPaid || (typeof result === 'number' ? result : 0) || _summaryTotalDebt;
       debtSection.innerHTML = `
         <div style="margin-top:14px;padding:14px 16px;background:var(--free-bg);border:1px solid var(--free-ring);border-radius:10px;color:var(--free);font-weight:600;font-size:14px">
           ✓ Долги оплачены: ${fmt(paid)} сум
