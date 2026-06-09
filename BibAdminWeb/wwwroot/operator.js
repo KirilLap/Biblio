@@ -1073,12 +1073,10 @@ function openServiceDlg(pcNum) {
   const segLater = document.getElementById('segSvcLater');
   if (segNow) segNow.classList.add('on');
   if (segLater) segLater.classList.remove('on');
-  // «Позже» доступно только при привязке к сессии
-  if (segLater) segLater.style.display = pcNum ? '' : 'none';
 
   renderSvcList();
   updateSvcTotal();
-  onSvcPcChanged();
+  onSvcPcChanged();   // обновит видимость блока оплаты динамически
   openDlg('dlgService');
 }
 
@@ -1152,9 +1150,15 @@ function updateSvcTotal() {
 }
 
 function onSvcPcChanged() {
-  const pcVal = document.getElementById('dlgSvcPc').value;
-  const info = document.getElementById('dlgSvcSessionInfo');
+  const pcVal   = document.getElementById('dlgSvcPc').value;
+  const info    = document.getElementById('dlgSvcSessionInfo');
   const readerRow = document.getElementById('dlgSvcReaderRow');
+  const payRow  = document.getElementById('dlgSvcPayRow');
+  const segLater = document.getElementById('segSvcLater');
+  // Сбросить на «Сейчас» при смене привязки
+  const segNow = document.getElementById('segSvcNow');
+
+  const hasSession = !!(pcVal && pcs[pcVal] && pcs[pcVal].isSession);
 
   if (pcVal && pcs[pcVal]) {
     const pc = pcs[pcVal];
@@ -1167,6 +1171,14 @@ function onSvcPcChanged() {
   } else {
     info.style.display = 'none';
     if (readerRow) readerRow.style.display = '';
+  }
+
+  // Блок оплаты — показываем только при привязке к сессии
+  if (payRow) payRow.style.display = hasSession ? '' : 'none';
+  // При смене привязки сбрасываем выбор на «Сейчас»
+  if (!hasSession) {
+    if (segNow)   { segNow.classList.add('on');    document.querySelector('[name="svcPay"][value="now"]').checked = true; }
+    if (segLater) segLater.classList.remove('on');
   }
   updateDeferNote();
 }
@@ -1220,16 +1232,15 @@ function showSessionSummary(s) {
 
   const debts = s.serviceDebts || [];
   if (debts.length > 0) {
-    html += `<div style="margin-top:14px;padding-top:12px;border-top:1px solid #eee">
-      <div style="font-weight:600;color:#854F0B;margin-bottom:8px">Неоплаченные услуги</div>`;
+    const totalDebt = s.totalServiceDebt || debts.reduce((a, d) => a + d.debt, 0);
+    let debtInner = `<div style="font-weight:600;color:var(--warn);margin-bottom:8px">Неоплаченные услуги</div>`;
     debts.forEach(d => {
-      html += `<div class="summary-row" style="font-size:13px">
+      debtInner += `<div class="summary-row" style="font-size:13px">
         <span>${esc(d.name)} × ${d.qty} ${esc(d.unit)}</span>
-        <span class="val" style="color:#854F0B">${fmt(d.debt)} сум</span>
+        <span class="val" style="color:var(--warn)">${fmt(d.debt)} сум</span>
       </div>`;
     });
-    const totalDebt = s.totalServiceDebt || debts.reduce((a, d) => a + d.debt, 0);
-    html += `<div class="summary-row" style="font-weight:700;color:#854F0B;margin-top:6px">
+    debtInner += `<div class="summary-row" style="font-weight:700;color:var(--warn);margin-top:6px">
       <span>Итого долгов</span>
       <span class="val">${fmt(totalDebt)} сум</span>
     </div>
@@ -1237,7 +1248,7 @@ function showSessionSummary(s) {
       <button class="mbtn" style="background:var(--warn);color:#fff;border-color:var(--warn);width:100%"
         onclick="paySessionDebts()">Оплатить долги по услугам</button>
     </div>`;
-    html += `</div>`;
+    html += `<div id="dlgSummaryDebtSection" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${debtInner}</div>`;
   }
 
   document.getElementById('dlgSummaryBody').innerHTML = html;
@@ -1246,9 +1257,18 @@ function showSessionSummary(s) {
 
 async function paySessionDebts() {
   try {
-    await connection.invoke('PaySessionDebts', _summaryPcNumber, _summaryReaderId);
-    toast('Долги оплачены', 'good');
-    closeDlg('dlgSummary');
+    const result = await connection.invoke('PaySessionDebts', _summaryPcNumber, _summaryReaderId);
+    // Заменяем секцию долгов на сообщение об успешной оплате
+    const debtSection = document.getElementById('dlgSummaryDebtSection');
+    if (debtSection) {
+      const paid = result?.totalPaid ?? result ?? 0;
+      debtSection.innerHTML = `
+        <div style="margin-top:14px;padding:14px 16px;background:var(--free-bg);border:1px solid var(--free-ring);border-radius:10px;color:var(--free);font-weight:600;font-size:14px">
+          ✓ Долги оплачены${paid > 0 ? ': ' + fmt(paid) + ' сум' : ''}
+        </div>`;
+    } else {
+      toast('Долги оплачены', 'good');
+    }
   } catch (e) { toast('Ошибка оплаты: ' + e, 'warn'); }
 }
 
