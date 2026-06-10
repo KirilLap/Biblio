@@ -78,6 +78,9 @@ namespace BibAdminWeb
         public bool RequireReaderId { get; set; } = true;
         public bool RequireUserName { get; set; } = false;
 
+        // Конец рабочего дня ("HH:MM", пусто = без ограничения)
+        public string WorkdayEnd { get; set; } = "";
+
         // ╔══════════════════════════════════════════════════════════════════════╗
         // ║  ВАЖНО: путь к файлу настроек — НЕ МЕНЯТЬ без крайней необходимости ║
         // ║                                                                      ║

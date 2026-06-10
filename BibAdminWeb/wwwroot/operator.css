@@ -272,6 +272,9 @@ a { text-decoration: none; color: inherit; }
 .sess-clock.low { color: var(--locked); }
 .sess-clock-cap { font-size: 11px; color: var(--ink-3); font-weight: 600; }
 
+.sess-times { display: flex; gap: 10px; margin: 0 0 6px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.sess-time-item { display: flex; align-items: center; gap: 3px; }
+
 .sess-progress { height: 5px; border-radius: 999px; background: var(--card-muted); overflow: hidden; border: 1px solid var(--line); }
 .sess-progress span { display: block; height: 100%; border-radius: 999px; transition: width 1s linear; }
 
@@ -446,6 +449,8 @@ a { text-decoration: none; color: inherit; }
 .amount-input .unit { font-size: 13px; font-weight: 600; color: var(--ink-3); }
 .time-cost { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--warn); margin-top: 6px; }
 .time-cost.refund { color: var(--free); }
+.dlg-end-time-hint { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-top: 5px; }
+.dlg-workday-hint { font-size: 12px; font-weight: 600; color: var(--warn); margin-top: 5px; padding: 6px 8px; background: rgba(245,158,11,.1); border-radius: 6px; border: 1px solid rgba(245,158,11,.25); }
 
 /* Итог (расчёт сессии) */
 .settle { display: flex; flex-direction: column; gap: 2px; }

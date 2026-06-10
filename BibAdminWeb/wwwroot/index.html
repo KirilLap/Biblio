@@ -283,6 +283,11 @@
             <p class="settings-hint">Если поле обязательно — отображается и включается в отчёт.</p>
             <div class="form-check"><label><input type="checkbox" id="sRequireReaderId"> Обязательно: ID читателя</label></div>
             <div class="form-check"><label><input type="checkbox" id="sRequireUserName"> Обязательно: Имя пользователя</label></div>
+            <div class="form-row" style="margin-top:10px">
+              <label>Конец рабочего дня</label>
+              <input type="time" id="sWorkdayEnd" style="width:120px">
+            </div>
+            <p class="settings-hint">При старте сессии время автоматически обрежется до конца рабочего дня. Оставьте пустым — без ограничения.</p>
           </div>
 
           <div class="settings-card">
@@ -910,6 +915,8 @@
             <span class="unit">сум</span>
           </div>
           <div id="dlgSsHint" class="time-cost"></div>
+          <div id="dlgSsEndTimeHint" class="dlg-end-time-hint" style="display:none"></div>
+          <div id="dlgSsWorkdayHint" class="dlg-workday-hint" style="display:none"></div>
         </div>
       </div>
 

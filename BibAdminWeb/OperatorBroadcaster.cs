@@ -57,7 +57,8 @@ namespace BibAdminWeb
             _ = _ctx.Clients.All.SendAsync("sessionFields", new
             {
                 requireReaderId = settings.RequireReaderId,
-                requireUserName = settings.RequireUserName
+                requireUserName = settings.RequireUserName,
+                workdayEnd = settings.WorkdayEnd
             });
         }
 

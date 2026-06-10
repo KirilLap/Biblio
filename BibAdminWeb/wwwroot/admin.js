@@ -509,6 +509,8 @@ function renderAdminActionBar() {
 
 // ─── Timers ──────────────────────────────────────────────────────────────────
 function tickTimers() {
+  if (document.getElementById('dlgStartSession')?.classList.contains('open')) ssUpdateEndTimeHint();
+
   Object.values(pcs).forEach(c => {
     // Тикаем таймер если сессия активна (включая оффлайн-ПК с сессией — таймер идёт)
     if (!c.isSession || c.isPaused) return;
@@ -690,6 +692,7 @@ function openStartSession(pcNumber) {
   if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
 
   ssSelectType('Лимит');
+  ssUpdateEndTimeHint();
   document.getElementById('dlgStartSession').classList.add('open');
 }
 
@@ -706,13 +709,61 @@ function ssSelectType(type) {
     document.getElementById('dlgSsMins').value = '';
     document.getElementById('dlgSsMoney').value = '';
     document.getElementById('dlgSsHint').textContent = '';
+    const wh = document.getElementById('dlgSsWorkdayHint');
+    if (wh) wh.style.display = 'none';
   }
+  ssUpdateEndTimeHint();
 }
 
 function _fmtHM(h, m) {
   if (h > 0 && m > 0) return `${h} ч ${m} мин`;
   if (h > 0) return `${h} ч`;
   return `${m} мин`;
+}
+
+function _fmtClock(date) {
+  return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+}
+
+function ssUpdateEndTimeHint() {
+  const hint = document.getElementById('dlgSsEndTimeHint');
+  if (!hint) return;
+  if (_ssType !== 'Лимит') { hint.style.display = 'none'; return; }
+  const h = parseInt(document.getElementById('dlgSsHours').value) || 0;
+  const m = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+  const totalMins = h * 60 + m;
+  if (!totalMins) { hint.style.display = 'none'; return; }
+  hint.textContent = 'Сессия закончится в ' + _fmtClock(new Date(Date.now() + totalMins * 60000));
+  hint.style.display = '';
+}
+
+// Возвращает оставшиеся минуты до конца рабочего дня, или null если ограничение не задано
+function _ssWorkdayRemaining() {
+  const end = (settings.workdayEnd || '').trim();
+  if (!end) return null;
+  const parts = end.split(':');
+  if (parts.length < 2) return null;
+  const endH = parseInt(parts[0]), endM = parseInt(parts[1]);
+  if (isNaN(endH) || isNaN(endM)) return null;
+  const now = new Date();
+  const remaining = (endH * 60 + endM) - (now.getHours() * 60 + now.getMinutes());
+  return remaining > 0 ? remaining : null;
+}
+
+function _ssApplyWorkdayCap(totalMins) {
+  const capHint = document.getElementById('dlgSsWorkdayHint');
+  const cap = _ssWorkdayRemaining();
+  if (!cap || totalMins <= 0 || totalMins <= cap) {
+    if (capHint) capHint.style.display = 'none';
+    return totalMins;
+  }
+  const t = GlobalSettings_Tariff();
+  const cappedAmount = Math.round((cap / 60) * t);
+  if (capHint) {
+    capHint.textContent = `До конца рабочего дня (${(settings.workdayEnd || '')}) — ${cap} мин = ${cappedAmount.toLocaleString()} сум`;
+    capHint.style.display = '';
+  }
+  return cap;
 }
 
 // Синхронизация часы/минуты → деньги
@@ -722,17 +773,24 @@ function ssSyncMinutes() {
   try {
     const h = parseInt(document.getElementById('dlgSsHours').value) || 0;
     const m = parseInt(document.getElementById('dlgSsMins').value)  || 0;
-    const totalMins = h * 60 + m;
+    let totalMins = h * 60 + m;
+    const capped = _ssApplyWorkdayCap(totalMins);
+    if (capped !== totalMins) {
+      totalMins = capped;
+      document.getElementById('dlgSsHours').value = Math.floor(totalMins / 60) || '';
+      document.getElementById('dlgSsMins').value  = totalMins % 60 || '';
+    }
     const t = GlobalSettings_Tariff();
     if (totalMins > 0) {
       const cost = Math.round((totalMins / 60) * t);
       document.getElementById('dlgSsMoney').value = cost;
-      document.getElementById('dlgSsHint').textContent = `${_fmtHM(h, m)} = ${cost.toLocaleString()} сум`;
+      document.getElementById('dlgSsHint').textContent = `${_fmtHM(Math.floor(totalMins/60), totalMins%60)} = ${cost.toLocaleString()} сум`;
     } else {
       document.getElementById('dlgSsMoney').value = '';
       document.getElementById('dlgSsHint').textContent = '';
     }
   } finally { _ssSyncing = false; }
+  ssUpdateEndTimeHint();
 }
 
 // Синхронизация деньги → часы/минуты
@@ -743,18 +801,27 @@ function ssSyncMoney() {
     const money = parseFloat(document.getElementById('dlgSsMoney').value);
     const t = GlobalSettings_Tariff();
     if (money > 0) {
-      const totalMins = Math.round((money / t) * 60);
+      let totalMins = Math.round((money / t) * 60);
+      const capped = _ssApplyWorkdayCap(totalMins);
+      if (capped !== totalMins) {
+        totalMins = capped;
+        document.getElementById('dlgSsMoney').value = Math.round((totalMins / 60) * t);
+      }
       const h = Math.floor(totalMins / 60);
       const m = totalMins % 60;
       document.getElementById('dlgSsHours').value = h || '';
       document.getElementById('dlgSsMins').value  = m || '';
-      document.getElementById('dlgSsHint').textContent = `${money.toLocaleString()} сум = ${_fmtHM(h, m)}`;
+      document.getElementById('dlgSsHint').textContent = totalMins > 0
+        ? `${document.getElementById('dlgSsMoney').value} сум = ${_fmtHM(h, m)}` : '';
     } else {
       document.getElementById('dlgSsHours').value = '';
       document.getElementById('dlgSsMins').value  = '';
       document.getElementById('dlgSsHint').textContent = '';
+      const capHint = document.getElementById('dlgSsWorkdayHint');
+      if (capHint) capHint.style.display = 'none';
     }
   } finally { _ssSyncing = false; }
+  ssUpdateEndTimeHint();
 }
 
 async function confirmStartSession() {
@@ -1912,6 +1979,7 @@ function fillSettingsForm() {
   // Поля сессии
   document.getElementById('sRequireReaderId').checked = settings.requireReaderId !== false;
   document.getElementById('sRequireUserName').checked = !!settings.requireUserName;
+  document.getElementById('sWorkdayEnd').value = settings.workdayEnd || '';
 
   // Sort mode selector
   const sortSel = document.getElementById('sortMode');
@@ -2101,6 +2169,7 @@ function readSettingsForm() {
     updatesPath: document.getElementById('sUpdatesPath').value.trim(),
     requireReaderId: document.getElementById('sRequireReaderId').checked,
     requireUserName: document.getElementById('sRequireUserName').checked,
+    workdayEnd: document.getElementById('sWorkdayEnd').value.trim(),
   };
 }
 

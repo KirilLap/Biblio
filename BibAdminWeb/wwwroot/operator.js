@@ -342,6 +342,13 @@ function buildCardHtml(pc) {
       : `<span class="tariff-chip tariff-limit">Лимит</span>`;
     const clientBadge = pc.clientVersion && latestClientVersion && pc.clientVersion !== latestClientVersion
       ? `<span title="Обновление v${esc(latestClientVersion)}" style="font-size:10px;color:var(--warn)">⬆v${esc(pc.clientVersion)}</span>` : '';
+    const startTime = pc.sessionStart ? fmtClock(new Date(pc.sessionStart)) : null;
+    const endTime = pc.sessionType === 'Лимит' && limit > 0
+      ? fmtClock(new Date(Date.now() + rem * 1000)) : null;
+    const sessTimesBlock = (startTime || endTime) ? `<div class="sess-times">
+      ${startTime ? `<span class="sess-time-item"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>${startTime}</span>` : ''}
+      ${endTime ? `<span class="sess-time-item"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span data-pc-end="${esc(n)}">${endTime}</span></span>` : ''}
+    </div>` : '';
 
     const limMetaBlock = pc.sessionType === 'Лимит' && limit > 0
       ? `<div class="sess-progress"><span data-pc-prog="${esc(n)}" style="width:${prog}%;background:${isLow ? 'var(--locked)' : 'var(--limit)'}"></span></div>
@@ -372,6 +379,7 @@ function buildCardHtml(pc) {
         <span class="${isLow ? 'sess-clock low' : 'sess-clock'} mono" data-pc-clock="${esc(n)}">${fmtTime(elapsed)}</span>
         <span class="sess-clock-cap">${pc.isPaused ? 'пауза' : 'прошло'}</span>
       </div>
+      ${sessTimesBlock}
       ${limMetaBlock}
       ${cardActions}
     </div>`;
@@ -400,6 +408,9 @@ function buildCardHtml(pc) {
 
 // ── Тики таймеров (локальный инкремент) ───────────────────────────────────────
 function tickTimers() {
+  // Обновляем хинт в диалоге если он открыт (чтобы время не устаревало пока оператор думает)
+  if (document.getElementById('dlgSession')?.classList.contains('open')) updateEndTimeHint();
+
   Object.values(pcs).forEach(pc => {
     if (!pc.isSession || pc.isPaused) return;
     pc.elapsedSeconds += 1;
@@ -427,6 +438,9 @@ function tickTimers() {
         progEl.style.width = prog + '%';
         progEl.style.background = isLow ? 'var(--locked)' : 'var(--limit)';
       }
+
+      const endEl = document.querySelector(`[data-pc-end="${n}"]`);
+      if (endEl) endEl.textContent = fmtClock(new Date(Date.now() + rem * 1000));
 
       // Обновляем класс карточки (is-low)
       const card = document.querySelector(`[data-pc="${CSS.escape(pc.pcNumber)}"]`);
@@ -608,19 +622,76 @@ function openSessionDlg() {
   const lblName = document.getElementById('lblUserName');
   if (lblName) lblName.innerHTML = reqName ? 'Имя *' : 'Имя читателя <span style="font-weight:500;color:var(--ink-3)">(заполняется автоматически)</span>';
 
+  updateEndTimeHint();
   openDlg('dlgSession');
+}
+
+function fmtClock(date) {
+  return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+}
+
+function _workdayRemaining() {
+  const end = (sessionFields.workdayEnd || '').trim();
+  if (!end) return null;
+  const parts = end.split(':');
+  if (parts.length < 2) return null;
+  const endH = parseInt(parts[0]), endM = parseInt(parts[1]);
+  if (isNaN(endH) || isNaN(endM)) return null;
+  const now = new Date();
+  const remaining = (endH * 60 + endM) - (now.getHours() * 60 + now.getMinutes());
+  return remaining > 0 ? remaining : null;
+}
+
+function _applyWorkdayCap(requestedMins) {
+  const hint = document.getElementById('dlgWorkdayHint');
+  const cap = _workdayRemaining();
+  if (!cap || requestedMins <= 0 || requestedMins <= cap) {
+    if (hint) hint.style.display = 'none';
+    return requestedMins;
+  }
+  const cappedAmount = Math.round(tariff * cap / 60);
+  if (hint) {
+    hint.textContent = `⏰ Рабочий день заканчивается в ${sessionFields.workdayEnd} — обрезано до ${cap} мин = ${fmt(cappedAmount)} сум`;
+    hint.style.display = '';
+  }
+  return cap;
+}
+
+function updateEndTimeHint() {
+  const hint = document.getElementById('dlgEndTimeHint');
+  if (!hint) return;
+  const stype = document.querySelector('[name="stype"]:checked')?.value;
+  if (stype !== 'Лимит') { hint.style.display = 'none'; return; }
+  const h = parseInt(document.getElementById('dlgLimitHours').value) || 0;
+  const mins = h * 60 + (parseInt(document.getElementById('dlgLimitMins').value) || 0);
+  if (!mins) { hint.style.display = 'none'; return; }
+  hint.textContent = 'Сессия закончится в ' + fmtClock(new Date(Date.now() + mins * 60000));
+  hint.style.display = '';
 }
 
 function calcAmount() {
   const h = parseInt(document.getElementById('dlgLimitHours').value) || 0;
-  const mins = h * 60 + (parseInt(document.getElementById('dlgLimitMins').value) || 0);
+  let mins = h * 60 + (parseInt(document.getElementById('dlgLimitMins').value) || 0);
+  const capped = _applyWorkdayCap(mins);
+  if (capped !== mins) {
+    mins = capped;
+    document.getElementById('dlgLimitHours').value = Math.floor(mins / 60);
+    document.getElementById('dlgLimitMins').value  = mins % 60;
+  }
   document.getElementById('dlgAmount').value = Math.round(tariff * mins / 60);
+  updateEndTimeHint();
 }
 function calcTime() {
   const amount = parseInt(document.getElementById('dlgAmount').value) || 0;
-  const totalMins = Math.round(amount / tariff * 60);
+  let totalMins = Math.round(amount / tariff * 60);
+  const capped = _applyWorkdayCap(totalMins);
+  if (capped !== totalMins) {
+    totalMins = capped;
+    document.getElementById('dlgAmount').value = Math.round(tariff * totalMins / 60);
+  }
   document.getElementById('dlgLimitHours').value = Math.floor(totalMins / 60);
   document.getElementById('dlgLimitMins').value  = totalMins % 60;
+  updateEndTimeHint();
 }
 
 async function confirmStartSession() {
@@ -1861,6 +1932,9 @@ function onSegStypeClick(el, val) {
   if (radio) radio.checked = true;
   // Обновить подсказку стоимости в диалоге сессии
   if (typeof updateSessionAmountHint === 'function') updateSessionAmountHint();
+  updateEndTimeHint();
+  const wh = document.getElementById('dlgWorkdayHint');
+  if (wh) wh.style.display = 'none';
 }
 
 function onSegSvcPayClick(el, val) {
