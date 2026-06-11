@@ -622,7 +622,7 @@ function openSessionDlg() {
   const lblName = document.getElementById('lblUserName');
   if (lblName) lblName.innerHTML = reqName ? 'Имя *' : 'Имя читателя <span style="font-weight:500;color:var(--ink-3)">(заполняется автоматически)</span>';
 
-  updateEndTimeHint();
+  calcAmount();
   openDlg('dlgSession');
 }
 
