@@ -83,8 +83,18 @@ namespace BibAdminWeb
 
             if (client.OriginalLimitSeconds > 0) // Лимит → VIP: оплаченные секунды как кредит
             {
-                int vipExtra = Math.Max(0, (int)((client.ElapsedSeconds - client.OriginalLimitSeconds) * (double)tariff / 3600));
-                earned = paidAmount + vipExtra + client.PenaltyAmount;
+                if (client.ElapsedSeconds >= client.OriginalLimitSeconds)
+                {
+                    // Использовали больше оплаченного времени — доплата за сверхлимит по VIP-тарифу
+                    int vipExtra = (int)((client.ElapsedSeconds - client.OriginalLimitSeconds) * (double)tariff / 3600);
+                    earned = paidAmount + vipExtra + client.PenaltyAmount;
+                }
+                else
+                {
+                    // Завершили раньше оплаченного лимита — начисляем по VIP-тарифу, возврат разницы
+                    earned = Math.Min((int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount, paidAmount);
+                    refund = Math.Max(0, paidAmount - earned);
+                }
             }
             else if (client.IsPostPay) // VIP → Лимит: постоплата как VIP
             {
