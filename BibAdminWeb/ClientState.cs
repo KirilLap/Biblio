@@ -108,6 +108,11 @@ namespace BibAdminWeb
         // VIP→Лимит: IsPostPay = true, оплата по тарифу в конце (как VIP)
         public bool IsPostPay { get; set; } = false;
 
+        // Защита от перезаписи SessionType из клиентского heartbeat после смены типа администратором.
+        // Устанавливается в ChangeSessionType, обнуляется когда клиент подтверждает новый тип.
+        [System.Text.Json.Serialization.JsonIgnore]
+        public DateTime? SessionTypeLockedUntil { get; set; }
+
         public int RemainingSeconds => LimitSeconds > 0 ? Math.Max(0, LimitSeconds - ElapsedSeconds) : -1;
 
         public void MarkIndividual(string commandType)

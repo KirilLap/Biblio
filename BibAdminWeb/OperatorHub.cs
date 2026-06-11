@@ -443,6 +443,7 @@ namespace BibAdminWeb
                 cmd = JsonSerializer.Serialize(new { Type = "CHANGE_SESSION_TYPE", Value = "Лимит", LimitSeconds = newLimit });
             }
 
+            client.SessionTypeLockedUntil = DateTime.UtcNow.AddSeconds(30);
             AdminHub.KnownClients[pcNumber] = client;
             AdminHub.SaveActiveSessions();
             if (client.IsOnline)
