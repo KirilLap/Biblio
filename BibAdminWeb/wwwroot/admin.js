@@ -456,7 +456,7 @@ function selectAdminPc(pcNumber) {
   if (!pcNumber || selectedAdminPc === pcNumber) {
     selectedAdminPc = null;
     document.querySelectorAll('#pcGrid .pccard.is-selected').forEach(c => c.classList.remove('is-selected'));
-    document.getElementById('adminActionBar').classList.add('hidden');
+    document.getElementById('adminActionBar').style.display = 'none';
     return;
   }
   selectedAdminPc = pcNumber;
@@ -1676,7 +1676,6 @@ function buildCtxHtml(c) {
   let html = item('✎', 'Переименовать', `rename:${c.pcNumberValue}:${encodeURIComponent(c.customName || '')}`);
   if (c.isSession) {
     html += item('↔', 'Пересадить пользователя', `transfer:${c.pcNumber}`);
-    html += item('⇅', 'Сменить тип сессии', `changeType:${c.pcNumber}`);
   }
   html += sep;
 
@@ -1743,7 +1742,6 @@ document.addEventListener('click', async e => {
       break;
     case 'delete':     deletePc(args[0]); break;
     case 'logs':       requestClientLogs(args[0]); break;
-    case 'changeType': openAdminChangeTypeDlg(args[0]); break;
   }
 });
 
