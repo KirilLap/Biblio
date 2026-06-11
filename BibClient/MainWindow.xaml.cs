@@ -446,7 +446,7 @@ namespace BibClient
             // Подписки на события сессии
             _sessionManager.SessionExpired += OnSessionExpired;
             _sessionManager.ElapsedUpdated += (elapsed) =>
-                _ = _networkManager?.SendStatusUpdateAsync(sessionType, elapsed);
+                _ = _networkManager?.SendStatusUpdateAsync(PolicyEngine.ActiveSessionType, elapsed);
 
             // 4. Отправляем статус на сервер
             _ = _networkManager?.SendStatusAsync(sessionType);
