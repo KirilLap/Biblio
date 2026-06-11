@@ -1377,3 +1377,13 @@ body {
   transition: .14s; cursor: pointer; margin-bottom: 12px;
 }
 .btn-add-svc:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Change session type dialog ────────────────────────────────────────────── */
+.charge-highlight { margin-top:10px; padding:10px 13px; border-radius:9px; background:rgba(245,158,11,.12); color:var(--warn); font-weight:700; font-size:13px; }
+.ct-info { display:flex; flex-direction:column; gap:2px; margin-bottom:14px; }
+.ct-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.ct-row .val { font-weight:700; }
+.ct-note { font-size:12px; color:var(--ink-3); padding:8px 10px; background:var(--surface-2); border-radius:7px; line-height:1.45; }
+.badge-type { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.badge-limit { background:rgba(139,92,246,.15); color:#8b5cf6; }
+.badge-vip   { background:var(--free-bg); color:var(--free); }

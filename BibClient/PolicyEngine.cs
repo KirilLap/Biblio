@@ -49,6 +49,8 @@ namespace BibClient
         public static event Action<int>? PenaltySessionRequested;
         public static event Action? EndSessionRequested;
         public static event Action<int>? UpdateSessionElapsedTime;
+        // (newSessionType, newLimitSeconds)
+        public static event Action<string, int>? ChangeSessionTypeRequested;
 
         // Фаза 4: дрейф системных часов — offsetSeconds > 0 → клиент отстаёт
         public static event Action<double>? ClockMismatchDetected;
@@ -129,6 +131,13 @@ namespace BibClient
                         ActiveSessionType = "";
                         ActiveElapsedSeconds = 0;
                         EndSessionRequested?.Invoke();
+                        break;
+
+                    case "CHANGE_SESSION_TYPE":
+                        var newSType = root.TryGetProperty("Value", out var nstp) ? nstp.GetString() ?? "" : "";
+                        var newLimit = root.TryGetProperty("LimitSeconds", out var nlp) ? nlp.GetInt32() : 0;
+                        ActiveSessionType = newSType;
+                        ChangeSessionTypeRequested?.Invoke(newSType, newLimit);
                         break;
 
                     case "SESSION_TIME_SYNC":

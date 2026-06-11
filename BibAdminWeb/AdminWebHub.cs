@@ -69,10 +69,28 @@ namespace BibAdminWeb
 
             string sessionType = string.IsNullOrEmpty(client.SessionType) ? client.Status : client.SessionType;
             int tariff = GlobalSettings.Load().Tariff;
-            int earned = (int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount;
             int paidAmount = client.PaidAmount;
-            if (sessionType == "Лимит") earned = Math.Min(earned, paidAmount);
-            int refund = Math.Max(0, paidAmount - earned);
+            int earned;
+            int refund = 0;
+
+            if (client.OriginalLimitSeconds > 0) // Лимит → VIP
+            {
+                int vipExtra = Math.Max(0, (int)((client.ElapsedSeconds - client.OriginalLimitSeconds) * (double)tariff / 3600));
+                earned = paidAmount + vipExtra + client.PenaltyAmount;
+            }
+            else if (client.IsPostPay) // VIP → Лимит
+            {
+                earned = (int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount;
+            }
+            else if (sessionType == "Лимит")
+            {
+                earned = Math.Min((int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount, paidAmount);
+                refund = Math.Max(0, paidAmount - earned);
+            }
+            else
+            {
+                earned = (int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount;
+            }
             int duration = client.ElapsedSeconds;
             var startTime = client.SessionStart ?? DateTime.Now;
 
@@ -97,6 +115,7 @@ namespace BibAdminWeb
             client.Status = "Заблокирован"; client.SessionType = ""; client.ElapsedSeconds = 0;
             client.LimitSeconds = 0; client.PaidAmount = 0; client.PenaltyAmount = 0; client.SessionStart = null;
             client.IsPaused = false; client.AccumulatedSeconds = 0; client.SessionId = "";
+            client.OriginalLimitSeconds = 0; client.IsPostPay = false;
             AdminHub.KnownClients[pcNumber] = client;
             AdminHub.SaveActiveSessions();
             AdminHub.AddPendingCommand(pcNumber, "REMOTE_LOCK", "true");
@@ -119,8 +138,9 @@ namespace BibAdminWeb
                 unit = d.Unit, debt = d.DebtAmount
             }).ToList();
 
+            int additionalCharge = Math.Max(0, earned - paidAmount);
             await Clients.Caller.SendAsync("sessionSummary", new {
-                pcNumber, sessionType, duration, earned, paidAmount, refund,
+                pcNumber, sessionType, duration, earned, paidAmount, refund, additionalCharge,
                 readerId = sessionReaderId, serviceDebts = debtItems, totalServiceDebt = totalDebt
             });
 
@@ -424,6 +444,39 @@ namespace BibAdminWeb
             }
             AdminHub.KnownClients[pcNumber] = client;
             AdminHub.SaveActiveSessions();
+            AdminHub.RaiseClientUpdated(client);
+        }
+
+        public async Task ChangeSessionType(string pcNumber, string newType, int remainingMinutes)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession) return;
+            if (client.SessionType == newType) return;
+
+            string cmd;
+            if (newType == "VIP")
+            {
+                client.OriginalLimitSeconds = client.LimitSeconds;
+                client.SessionType = "VIP";
+                client.Status = "VIP";
+                client.LimitSeconds = 0;
+                cmd = JsonSerializer.Serialize(new { Type = "CHANGE_SESSION_TYPE", Value = "VIP", LimitSeconds = 0 });
+            }
+            else
+            {
+                int newLimit = client.ElapsedSeconds + remainingMinutes * 60;
+                client.IsPostPay = true;
+                client.SessionType = "Лимит";
+                client.Status = "Лимит";
+                client.LimitSeconds = newLimit;
+                cmd = JsonSerializer.Serialize(new { Type = "CHANGE_SESSION_TYPE", Value = "Лимит", LimitSeconds = newLimit });
+            }
+
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", cmd);
             AdminHub.RaiseClientUpdated(client);
         }
 

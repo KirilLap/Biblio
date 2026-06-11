@@ -522,6 +522,8 @@ function renderActionBar() {
       </div>`;
     }
     btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico(warnSvg)}Штраф</button>`;
+    const convertSvg = '<path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/>';
+    btns += `<button class="abtn" onclick="openChangeTypeDlg()">${ico(convertSvg)}Тип</button>`;
     btns += `<button class="abtn" onclick="openTransferDlg()">${ico(swapSvg)}Пересадить</button>`;
     btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
     btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico(stopSvg)}Завершить</button>`;
@@ -1020,6 +1022,89 @@ async function confirmPenalty() {
   } catch (e) { toast('Ошибка: ' + e, 'warn'); }
 }
 
+// ── Смена типа сессии ─────────────────────────────────────────────────────────
+
+let _changeTypeData = null;
+
+function openChangeTypeDlg() {
+  if (!selectedPc) return;
+  const pc = pcs[selectedPc];
+  if (!pc?.isSession) return;
+  document.getElementById('dlgCtPc').textContent = selectedPc;
+
+  const isLimit = pc.sessionType === 'Лимит';
+  const elapsed = pc.elapsedSeconds || 0;
+  const paid = pc.paidAmount || 0;
+  const limitSec = pc.limitSeconds || 0;
+
+  let bodyHtml;
+  if (isLimit) {
+    bodyHtml = `
+      <div class="ct-info">
+        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-limit">Лимит</span></span></div>
+        <div class="ct-row"><span>Оплачено</span><span class="val">${fmt(paid)} сум / ${fmtTime(limitSec)}</span></div>
+        <div class="ct-row"><span>Прошло</span><span class="val">${fmtTime(elapsed)}</span></div>
+      </div>
+      <div class="ct-note">Время сверх оплаченных <strong>${fmtTime(limitSec)}</strong> будет начислено по тарифу в конце сессии.</div>`;
+    document.getElementById('dlgCtConfirm').textContent = 'Перевести на VIP';
+    _changeTypeData = { newType: 'VIP', remainingMinutes: 0 };
+  } else {
+    bodyHtml = `
+      <div class="ct-info">
+        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-vip">VIP</span></span></div>
+        <div class="ct-row"><span>Прошло</span><span class="val">${fmtTime(elapsed)}</span></div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>Ещё осталось</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('ctRemHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="ctRemHours" type="number" min="0" max="23" value="1" oninput="updateCtHint()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('ctRemHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('ctRemMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="ctRemMins" type="number" min="0" max="59" value="0" oninput="updateCtHint()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('ctRemMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+        <div id="ctRemHint" class="dlg-end-time-hint" style="margin-top:6px"></div>
+      </div>
+      <div class="ct-note" style="margin-top:8px">Оплата за всё время сессии начислится по тарифу при завершении.</div>`;
+    document.getElementById('dlgCtConfirm').textContent = 'Ограничить сессию';
+    _changeTypeData = { newType: 'Лимит', remainingMinutes: 60 };
+  }
+
+  document.getElementById('dlgCtBody').innerHTML = bodyHtml;
+  if (!isLimit) updateCtHint();
+  openDlg('dlgChangeType');
+}
+
+function updateCtHint() {
+  const h = parseInt(document.getElementById('ctRemHours')?.value) || 0;
+  const m = h * 60 + (parseInt(document.getElementById('ctRemMins')?.value) || 0);
+  _changeTypeData = { newType: 'Лимит', remainingMinutes: m };
+  const hint = document.getElementById('ctRemHint');
+  if (!hint) return;
+  if (m > 0) {
+    hint.textContent = 'Сессия завершится в ' + fmtClock(new Date(Date.now() + m * 60000));
+    hint.style.display = '';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+async function confirmChangeType() {
+  if (!selectedPc || !_changeTypeData) return;
+  if (_changeTypeData.newType === 'Лимит' && _changeTypeData.remainingMinutes <= 0) {
+    toast('Укажите оставшееся время', 'warn'); return;
+  }
+  closeDlg('dlgChangeType');
+  try {
+    await connection.invoke('ChangeSessionType', selectedPc, _changeTypeData.newType, _changeTypeData.remainingMinutes);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
 // ── Управление всеми ПК ───────────────────────────────────────────────────────
 async function shutdownAll() {
   if (!confirm('Выключить все ПК?')) return;
@@ -1305,6 +1390,8 @@ function showSessionSummary(s) {
     <div class="summary-row"><span>Начислено</span><span class="val">${fmt(s.earned)} сум</span></div>`;
   if (s.refund > 0)
     html += `<div class="refund-highlight">💵 Возврат: ${fmt(s.refund)} сум</div>`;
+  if ((s.additionalCharge || 0) > 0)
+    html += `<div class="charge-highlight">⚠️ Доплатить: ${fmt(s.additionalCharge)} сум</div>`;
 
   const debts = s.serviceDebts || [];
   if (debts.length > 0) {

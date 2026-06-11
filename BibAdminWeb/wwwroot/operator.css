@@ -616,6 +616,16 @@ a { text-decoration: none; color: inherit; }
 .summary-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .summary-row .val { font-weight: 700; }
 .refund-highlight { margin-top: 10px; padding: 10px 13px; border-radius: 9px; background: var(--free-bg); color: var(--free); font-weight: 700; font-size: 13px; }
+.charge-highlight { margin-top: 10px; padding: 10px 13px; border-radius: 9px; background: rgba(245,158,11,.12); color: var(--warn); font-weight: 700; font-size: 13px; }
+
+/* Смена типа сессии */
+.ct-info { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
+.ct-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ct-row .val { font-weight: 700; }
+.ct-note { font-size: 12px; color: var(--ink-3); padding: 8px 10px; background: var(--surface-2); border-radius: 7px; line-height: 1.45; }
+.badge-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.badge-limit { background: var(--vip-bg, rgba(139,92,246,.15)); color: var(--vip, #8b5cf6); }
+.badge-vip   { background: var(--free-bg); color: var(--free); }
 
 /* Задолженности */
 .debt-row {

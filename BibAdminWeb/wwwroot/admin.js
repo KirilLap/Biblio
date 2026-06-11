@@ -1379,6 +1379,8 @@ function showSummary(d, isManual = false) {
     <b>Оплачено:</b> ${d.paidAmount.toLocaleString()} сум<br>
     <b>Возврат:</b> ${d.refund.toLocaleString()} сум
   `;
+  if ((d.additionalCharge || 0) > 0)
+    html += `<div class="charge-highlight">⚠️ Доплатить: ${d.additionalCharge.toLocaleString()} сум</div>`;
 
   const debts = d.serviceDebts || [];
   const payBtn = document.getElementById('btnSummaryPayDebts');
@@ -1617,8 +1619,10 @@ function buildCtxHtml(c) {
      </div>`;
 
   let html = item('✎', 'Переименовать', `rename:${c.pcNumberValue}:${encodeURIComponent(c.customName || '')}`);
-  if (c.isSession)
+  if (c.isSession) {
     html += item('↔', 'Пересадить пользователя', `transfer:${c.pcNumber}`);
+    html += item('⇅', 'Сменить тип сессии', `changeType:${c.pcNumber}`);
+  }
   html += sep;
 
   // Settings submenu
@@ -1682,10 +1686,99 @@ document.addEventListener('click', async e => {
     case 'shutdown':
       if (confirm(`Выключить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'SHUTDOWN', 'true');
       break;
-    case 'delete':  deletePc(args[0]); break;
-    case 'logs':    requestClientLogs(args[0]); break;
+    case 'delete':     deletePc(args[0]); break;
+    case 'logs':       requestClientLogs(args[0]); break;
+    case 'changeType': openAdminChangeTypeDlg(args[0]); break;
   }
 });
+
+// ─── Смена типа сессии (admin) ────────────────────────────────────────────────
+
+let _actData = null;
+
+function openAdminChangeTypeDlg(pcNumber) {
+  const pc = pcs[pcNumber];
+  if (!pc?.isSession) return;
+  activePc = pcNumber;
+  document.getElementById('dlgActPc').textContent = pcNumber;
+
+  const isLimit = pc.sessionType === 'Лимит';
+  const elapsed = pc.elapsedSeconds || 0;
+  const paid = pc.paidAmount || 0;
+  const limitSec = pc.limitSeconds || 0;
+  const t = _extTariff || settings?.tariff || 3000;
+
+  const fmtSecs = s => {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
+  };
+
+  let bodyHtml;
+  if (isLimit) {
+    bodyHtml = `
+      <div class="ct-info">
+        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-limit">Лимит</span></span></div>
+        <div class="ct-row"><span>Оплачено</span><span class="val">${paid.toLocaleString()} сум / ${fmtSecs(limitSec)}</span></div>
+        <div class="ct-row"><span>Прошло</span><span class="val">${fmtSecs(elapsed)}</span></div>
+      </div>
+      <div class="ct-note">Время сверх оплаченных <strong>${fmtSecs(limitSec)}</strong> будет начислено по тарифу в конце сессии.</div>`;
+    document.getElementById('dlgActConfirm').textContent = 'Перевести на VIP';
+    _actData = { newType: 'VIP', remainingMinutes: 0 };
+  } else {
+    bodyHtml = `
+      <div class="ct-info">
+        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-vip">VIP</span></span></div>
+        <div class="ct-row"><span>Прошло</span><span class="val">${fmtSecs(elapsed)}</span></div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>Ещё осталось</label>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <input id="actRemH" type="number" min="0" max="23" value="1" class="tinput" style="width:60px;text-align:center" oninput="updateActHint()">
+            <span style="font-size:13px;color:var(--ink-3)">ч</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input id="actRemM" type="number" min="0" max="59" value="0" class="tinput" style="width:60px;text-align:center" oninput="updateActHint()">
+            <span style="font-size:13px;color:var(--ink-3)">мин</span>
+          </div>
+        </div>
+        <div id="actRemHint" class="dlg-end-time-hint" style="margin-top:6px"></div>
+      </div>
+      <div class="ct-note" style="margin-top:8px">Оплата за всё время сессии начислится по тарифу при завершении.</div>`;
+    document.getElementById('dlgActConfirm').textContent = 'Ограничить сессию';
+    _actData = { newType: 'Лимит', remainingMinutes: 60 };
+  }
+
+  document.getElementById('dlgActBody').innerHTML = bodyHtml;
+  if (!isLimit) updateActHint();
+  document.getElementById('dlgAdminChangeType').classList.add('open');
+}
+
+function updateActHint() {
+  const h = parseInt(document.getElementById('actRemH')?.value) || 0;
+  const m = h * 60 + (parseInt(document.getElementById('actRemM')?.value) || 0);
+  _actData = { newType: 'Лимит', remainingMinutes: m };
+  const hint = document.getElementById('actRemHint');
+  if (!hint) return;
+  if (m > 0) {
+    const end = new Date(Date.now() + m * 60000);
+    hint.textContent = 'Сессия завершится в ' + end.getHours().toString().padStart(2,'0') + ':' + end.getMinutes().toString().padStart(2,'0');
+    hint.style.display = '';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+async function confirmAdminChangeType() {
+  if (!activePc || !_actData) return;
+  if (_actData.newType === 'Лимит' && _actData.remainingMinutes <= 0) {
+    toast('Укажите оставшееся время', 'warn'); return;
+  }
+  closeDlg('dlgAdminChangeType');
+  try {
+    await conn.invoke('ChangeSessionType', activePc, _actData.newType, _actData.remainingMinutes);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
 
 // ─── Base64 helper (chunked, works for large files) ──────────────────────────
 function arrayBufferToBase64(buffer) {

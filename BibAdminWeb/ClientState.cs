@@ -102,6 +102,12 @@ namespace BibAdminWeb
             (!IsOnline && !string.IsNullOrEmpty(SessionType) &&
              SessionType != "Заблокирован" && SessionType != "Свободный" && SessionStart.HasValue);
 
+        // Биллинг при конвертации типа сессии
+        // Лимит→VIP: OriginalLimitSeconds = LimitSeconds на момент конвертации (оплаченные секунды)
+        public int OriginalLimitSeconds { get; set; } = 0;
+        // VIP→Лимит: IsPostPay = true, оплата по тарифу в конце (как VIP)
+        public bool IsPostPay { get; set; } = false;
+
         public int RemainingSeconds => LimitSeconds > 0 ? Math.Max(0, LimitSeconds - ElapsedSeconds) : -1;
 
         public void MarkIndividual(string commandType)

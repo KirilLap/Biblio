@@ -195,6 +195,7 @@ namespace BibClient
             _trayIcon.ShowPopupRequested += ShowPopup;
             PolicyEngine.ExtendSessionRequested += OnExtend; PolicyEngine.PenaltySessionRequested += OnPenalty; PolicyEngine.EndSessionRequested += OnEnd;
             PolicyEngine.UpdateSessionElapsedTime += UpdateElapsedTimeFromServer; PolicyEngine.SessionPaused += SetPaused;
+            PolicyEngine.ChangeSessionTypeRequested += OnChangeSessionType;
             _timer.Interval = TimeSpan.FromSeconds(1); _timer.Tick += Timer_Tick; _timer.Start();
             ShowPopup(); UpdateTrayTooltip(); SaveSessionState();
         }
@@ -293,6 +294,24 @@ namespace BibClient
             });
         }
 
+        private void OnChangeSessionType(string newType, int newLimitSeconds)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                _sessionType = newType;
+                _limitSeconds = newLimitSeconds;
+                _warningShown5 = _warningShown4 = _warningShown3 = _warningShown2 = _warningShown1 = false;
+                if (_popup?.IsVisible == true) _popup.UpdateSession(_sessionType, _elapsedSeconds, _limitSeconds, _tariff, _isPaused);
+                UpdateTrayTooltip();
+                SaveSessionState();
+                int remMins = newLimitSeconds > 0 ? Math.Max(0, newLimitSeconds - _elapsedSeconds) / 60 : 0;
+                string msg = newType == "VIP"
+                    ? "Тип изменён на VIP — без ограничения времени"
+                    : $"Установлен лимит: ещё {remMins} мин";
+                _trayIcon?.ShowNotification("Тип сессии изменён", msg);
+            });
+        }
+
         public int GetElapsedSeconds() => _elapsedSeconds;
         public string GetSessionType() => _sessionType;
         private string FormatTime(int secs) => $"{secs / 3600:D2}:{(secs % 3600) / 60:D2}:{secs % 60:D2}";
@@ -302,6 +321,7 @@ namespace BibClient
             _timer.Stop(); SaveSessionState();
             PolicyEngine.ExtendSessionRequested -= OnExtend; PolicyEngine.PenaltySessionRequested -= OnPenalty; PolicyEngine.EndSessionRequested -= OnEnd;
             PolicyEngine.UpdateSessionElapsedTime -= UpdateElapsedTimeFromServer; PolicyEngine.SessionPaused -= SetPaused;
+            PolicyEngine.ChangeSessionTypeRequested -= OnChangeSessionType;
             if (_trayIcon != null) _trayIcon.ShowPopupRequested -= ShowPopup;
             System.Windows.Application.Current.Dispatcher.Invoke(() => { _popup?.Close(); _popup = null; });
         }
