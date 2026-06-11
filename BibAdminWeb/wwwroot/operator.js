@@ -523,7 +523,8 @@ function renderActionBar() {
     }
     btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico(warnSvg)}Штраф</button>`;
     const convertSvg = '<path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/>';
-    btns += `<button class="abtn" onclick="openChangeTypeDlg()">${ico(convertSvg)}Тип</button>`;
+    const typeTarget = pc.sessionType === 'Лимит' ? 'VIP' : 'Лимит';
+    btns += `<button class="abtn" onclick="openChangeTypeDlg()">${ico(convertSvg)}→ ${typeTarget}</button>`;
     btns += `<button class="abtn" onclick="openTransferDlg()">${ico(swapSvg)}Пересадить</button>`;
     btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
     btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico(stopSvg)}Завершить</button>`;

@@ -66,6 +66,7 @@ function connectHub() {
   conn.on('pcUpdated', c => {
     pcs[c.pcNumber] = c;
     renderPcGrid();
+    if (selectedAdminPc === c.pcNumber) renderAdminActionBar();
     loadFinance(); // refresh finance when a session ends
   });
   conn.on('allPcsUpdated', all => {
@@ -512,7 +513,8 @@ function renderAdminActionBar() {
         </div>`;
       }
       btns += `<button class="abtn" onclick="openPenalty('${esc(p)}')">${ico(warnSvg)}Штраф</button>`;
-      btns += `<button class="abtn" onclick="openAdminChangeTypeDlg('${esc(p)}')">${ico(convertSvg)}Тип</button>`;
+      const typeTarget = pc.sessionType === 'Лимит' ? 'VIP' : 'Лимит';
+      btns += `<button class="abtn" onclick="openAdminChangeTypeDlg('${esc(p)}')">${ico(convertSvg)}→ ${typeTarget}</button>`;
       const pauseLabel = pc.isPaused ? 'Продолжить' : 'Пауза';
       const pausePath  = pc.isPaused ? playSvg : pauseSvg;
       btns += `<button class="abtn" onclick="togglePause('${esc(p)}')">${ico(pausePath)}${pauseLabel}</button>`;
