@@ -472,7 +472,7 @@ function renderAdminActionBar() {
   if (!pc) { ab.style.display = 'none'; return; }
 
   const p = pc.pcNumber;
-  const stKey = _stKey(pc);
+  const stKey = getStatusKey(pc);
   const badgeLabel = pc.isSession ? (pc.sessionType === 'VIP' ? 'VIP' : 'Лимит') : (pc.status || '');
 
   const ico = (path, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
