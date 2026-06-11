@@ -378,7 +378,6 @@ function buildCardHtml(pc) {
       <div class="sess-timer">
         <span class="${isLow ? 'sess-clock low' : 'sess-clock'} mono" data-pc-clock="${esc(n)}">${fmtTime(elapsed)}</span>
         <span class="sess-clock-cap">${pc.isPaused ? 'пауза' : 'прошло'}</span>
-        ${tariffChip}
       </div>
       ${sessTimesBlock}
       ${limMetaBlock}

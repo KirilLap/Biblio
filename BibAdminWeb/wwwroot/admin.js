@@ -195,6 +195,7 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`).classList.add('active');
+  if (name !== 'computers') selectAdminPc(null);
   if (name === 'readers') loadReaders();
   if (name === 'stats') initStatsPage();
 }
