@@ -469,42 +469,71 @@ function selectAdminPc(pcNumber) {
 function renderAdminActionBar() {
   const ab = document.getElementById('adminActionBar');
   const pc = pcs[selectedAdminPc];
-  if (!pc) { ab.classList.add('hidden'); return; }
-
-  document.getElementById('aabPcName').textContent = pc.pcNumber;
-  document.getElementById('aabStatus').textContent = pc.status;
+  if (!pc) { ab.style.display = 'none'; return; }
 
   const p = pc.pcNumber;
-  const btns = [];
+  const stKey = _stKey(pc);
+  const badgeLabel = pc.isSession ? (pc.sessionType === 'VIP' ? 'VIP' : 'Лимит') : (pc.status || '');
+
+  const ico = (path, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  const screenSvg  = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
+  const playSvg    = '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/>';
+  const stopSvg    = '<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" stroke="none"/>';
+  const pauseSvg   = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  const swapSvg    = '<path d="M7 4 3.5 7.5 7 11"/><path d="M3.5 7.5H17a3.5 3.5 0 0 1 0 7h-1"/><path d="M17 20l3.5-3.5L17 13"/><path d="M20.5 16.5H7"/>';
+  const warnSvg    = '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
+  const receiptSvg = '<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>';
+  const convertSvg = '<path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/>';
+  const lockSvg    = '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+  const unlockSvg  = '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
+  const trashSvg   = '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>';
+
+  let btns = '';
+  btns += `<button class="abtn" onclick="openScreenView('${esc(p)}')">${ico(screenSvg)}Экран</button>`;
 
   if (!pc.isOnline) {
-    btns.push(`<button class="ab-btn red" onclick="deletePc('${esc(p)}')">🗑 Удалить</button>`);
+    btns += `<button class="abtn abtn-danger" onclick="deletePc('${esc(p)}')">${ico(trashSvg)}Удалить</button>`;
   } else {
-    btns.push(`<button class="ab-btn" style="background:#374151;border-color:#4b5563" onclick="openScreenView('${esc(p)}')">👁 Экран</button>`);
     if (!pc.isSession && !pc.isFree) {
-      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
-      btns.push(`<button class="ab-btn" style="background:#1A3A1A;border-color:#2A5A2A;color:#90E090" onclick="unlock('${esc(p)}')">🔓 Разблокировать</button>`);
+      btns += `<button class="abtn abtn-accent" onclick="openStartSession('${esc(p)}')">${ico(playSvg)}Начать сессию</button>`;
+      btns += `<button class="abtn" onclick="unlock('${esc(p)}')">${ico(unlockSvg)}Разблокировать</button>`;
     }
     if (!pc.isSession && pc.isFree) {
-      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
-      btns.push(`<button class="ab-btn" style="background:#3A1A1A;border-color:#5A2A2A;color:#E09090" onclick="lock('${esc(p)}')">🔒 Заблокировать</button>`);
+      btns += `<button class="abtn abtn-accent" onclick="openStartSession('${esc(p)}')">${ico(playSvg)}Начать сессию</button>`;
+      btns += `<button class="abtn" onclick="lock('${esc(p)}')">${ico(lockSvg)}Заблокировать</button>`;
     }
     if (pc.isSession) {
-      const pauseLabel = pc.isPaused ? '▶ Продолжить' : '⏸ Пауза';
-      const pauseCls   = pc.isPaused ? 'green' : 'amber';
-      btns.push(`<button class="ab-btn ${pauseCls}" onclick="togglePause('${esc(p)}')">${pauseLabel}</button>`);
-      btns.push(`<button class="ab-btn blue" onclick="openTransfer('${esc(p)}')">↔ Пересадить</button>`);
+      btns += `<button class="abtn" onclick="openAdminServiceDlg('${esc(p)}')">${ico(receiptSvg)}Услуга</button>`;
       if (pc.sessionType === 'Лимит') {
-        btns.push(`<button class="ab-btn blue" onclick="openExtend('${esc(p)}')">+⏱ Время</button>`);
-        btns.push(`<button class="ab-btn red" onclick="openSubtract('${esc(p)}')">−⏱ Убрать</button>`);
+        btns += `<div class="abtn-stepper">
+          <button onclick="openSubtract('${esc(p)}')" title="Убрать время">${ico('<path d="M5 12h14"/>', 15)}</button>
+          <span>Время</span>
+          <button onclick="openExtend('${esc(p)}')" title="Добавить время">${ico('<path d="M12 5v14M5 12h14"/>', 15)}</button>
+        </div>`;
       }
-      btns.push(`<button class="ab-btn red" onclick="openPenalty('${esc(p)}')">⚠ Штраф</button>`);
-      btns.push(`<button class="ab-btn red" onclick="endSession('${esc(p)}')">⏹ Завершить</button>`);
+      btns += `<button class="abtn" onclick="openPenalty('${esc(p)}')">${ico(warnSvg)}Штраф</button>`;
+      btns += `<button class="abtn" onclick="openAdminChangeTypeDlg('${esc(p)}')">${ico(convertSvg)}Тип</button>`;
+      const pauseLabel = pc.isPaused ? 'Продолжить' : 'Пауза';
+      const pausePath  = pc.isPaused ? playSvg : pauseSvg;
+      btns += `<button class="abtn" onclick="togglePause('${esc(p)}')">${ico(pausePath)}${pauseLabel}</button>`;
+      btns += `<button class="abtn" onclick="openTransfer('${esc(p)}')">${ico(swapSvg)}Пересадить</button>`;
+      btns += `<button class="abtn abtn-danger" onclick="endSession('${esc(p)}')">${ico(stopSvg)}Завершить</button>`;
     }
   }
 
-  document.getElementById('aabActions').innerHTML = btns.join('');
-  ab.classList.remove('hidden');
+  ab.style.setProperty('--st', `var(--${stKey})`);
+  ab.innerHTML = `
+    <div class="bb-left">
+      <div class="bb-stripe"></div>
+      <div class="bb-id">
+        <span class="bb-name">${esc(p)}</span>
+        ${pc.ip ? `<span class="bb-ip">${esc(pc.ip)}</span>` : ''}
+      </div>
+      <span class="badge" style="color:var(--${stKey});background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)"><span class="dot" style="background:var(--${stKey})"></span>${esc(badgeLabel)}</span>
+    </div>
+    <div class="bb-actions">${btns}</div>
+    <button class="bb-close" onclick="selectAdminPc(null)">${ico('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15)}</button>`;
+  ab.style.display = 'flex';
 }
 
 // ─── Timers ──────────────────────────────────────────────────────────────────
@@ -667,10 +696,6 @@ function openStartSession(pcNumber) {
   document.getElementById('dlgSsReader').value = '';
   document.getElementById('dlgSsReader').placeholder = '260500456';
   document.getElementById('dlgSsName').value = '';
-  document.getElementById('dlgSsHours').value = '';
-  document.getElementById('dlgSsMins').value = '';
-  document.getElementById('dlgSsMoney').value = '';
-  document.getElementById('dlgSsHint').textContent = '';
   document.getElementById('dlgSsReaderInfo').className = 'reader-info';
 
   // Reset card type to regular
@@ -692,8 +717,24 @@ function openStartSession(pcNumber) {
   if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
 
   ssSelectType('Лимит');
-  ssUpdateEndTimeHint();
+  ssApplyPreset(60);
   document.getElementById('dlgStartSession').classList.add('open');
+}
+
+function ssApplyPreset(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  document.getElementById('dlgSsHours').value = h || '';
+  document.getElementById('dlgSsMins').value  = m || '';
+  ssSyncMinutes();
+  _ssSyncPresets(mins);
+}
+
+function _ssSyncPresets(activeMins) {
+  document.querySelectorAll('#ssTPresets .preset').forEach(btn => {
+    const match = btn.getAttribute('onclick')?.match(/ssApplyPreset\((\d+)\)/);
+    btn.classList.toggle('on', !!match && parseInt(match[1]) === activeMins);
+  });
 }
 
 function ssSelectType(type) {
@@ -711,6 +752,7 @@ function ssSelectType(type) {
     document.getElementById('dlgSsHint').textContent = '';
     const wh = document.getElementById('dlgSsWorkdayHint');
     if (wh) wh.style.display = 'none';
+    _ssSyncPresets(-1);
   }
   ssUpdateEndTimeHint();
 }
@@ -791,6 +833,9 @@ function ssSyncMinutes() {
     }
   } finally { _ssSyncing = false; }
   ssUpdateEndTimeHint();
+  const h2 = parseInt(document.getElementById('dlgSsHours').value) || 0;
+  const m2 = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+  _ssSyncPresets(h2 * 60 + m2);
 }
 
 // Синхронизация деньги → часы/минуты
@@ -1237,7 +1282,7 @@ function openExtend(pcNumber) {
   document.getElementById('dlgExtHours').value = 0;
   document.getElementById('dlgExtMins').value  = 30;
   document.getElementById('dlgExtAmount').value = _extTariff ? Math.round(_extTariff * 30 / 60) : 0;
-  document.getElementById('dlgExtend').style.display = 'flex';
+  document.getElementById('dlgExtend').classList.add('open');
 }
 
 function calcExtAmount() {
@@ -1245,7 +1290,10 @@ function calcExtAmount() {
   _extSyncing = true;
   const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
   const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
-  document.getElementById('dlgExtAmount').value = Math.round(_extTariff * min / 60);
+  const cost = Math.round(_extTariff * min / 60);
+  document.getElementById('dlgExtAmount').value = cost;
+  const hint = document.getElementById('dlgExtAmountHint');
+  if (hint) { hint.textContent = min > 0 ? `${min} мин = ${cost.toLocaleString()} сум` : ''; hint.style.display = min > 0 ? '' : 'none'; }
   _extSyncing = false;
 }
 
@@ -1256,6 +1304,8 @@ function calcExtTime() {
   const totalMins = Math.round(amount * 60 / _extTariff) || 0;
   document.getElementById('dlgExtHours').value = Math.floor(totalMins / 60);
   document.getElementById('dlgExtMins').value  = totalMins % 60;
+  const hint = document.getElementById('dlgExtAmountHint');
+  if (hint) { hint.textContent = totalMins > 0 ? `${totalMins} мин = ${amount.toLocaleString()} сум` : ''; hint.style.display = totalMins > 0 ? '' : 'none'; }
   _extSyncing = false;
 }
 
@@ -1277,7 +1327,7 @@ function openSubtract(pcNumber) {
   document.getElementById('dlgSubHours').value = 0;
   document.getElementById('dlgSubMins').value  = 10;
   document.getElementById('dlgSubAmount').value = _extTariff ? Math.round(_extTariff * 10 / 60) : 0;
-  document.getElementById('dlgSubtract').style.display = 'flex';
+  document.getElementById('dlgSubtract').classList.add('open');
 }
 
 function calcSubAmount() {
@@ -1285,7 +1335,10 @@ function calcSubAmount() {
   _subSyncing = true;
   const h = parseInt(document.getElementById('dlgSubHours').value) || 0;
   const min = h * 60 + (parseInt(document.getElementById('dlgSubMins').value) || 0);
-  document.getElementById('dlgSubAmount').value = Math.round(_extTariff * min / 60);
+  const cost = Math.round(_extTariff * min / 60);
+  document.getElementById('dlgSubAmount').value = cost;
+  const hint = document.getElementById('dlgSubAmountHint');
+  if (hint) { hint.textContent = min > 0 ? `Возврат за ${min} мин = ${cost.toLocaleString()} сум` : ''; hint.style.display = min > 0 ? '' : 'none'; }
   _subSyncing = false;
 }
 
@@ -1296,6 +1349,8 @@ function calcSubTime() {
   const totalMins = Math.round(amount * 60 / _extTariff) || 0;
   document.getElementById('dlgSubHours').value = Math.floor(totalMins / 60);
   document.getElementById('dlgSubMins').value  = totalMins % 60;
+  const hint = document.getElementById('dlgSubAmountHint');
+  if (hint) { hint.textContent = totalMins > 0 ? `Убрать ${totalMins} мин = ${amount.toLocaleString()} сум` : ''; hint.style.display = totalMins > 0 ? '' : 'none'; }
   _subSyncing = false;
 }
 
@@ -1320,7 +1375,7 @@ function openPenalty(pcNumber) {
   document.getElementById('dlgPenHours').value = 0;
   document.getElementById('dlgPenMins').value = 10;
   document.getElementById('dlgPenAmount').value = (!isVip && _extTariff) ? Math.round(_extTariff * 10 / 60) : 0;
-  document.getElementById('dlgPenalty').style.display = 'flex';
+  document.getElementById('dlgPenalty').classList.add('open');
 }
 
 function calcPenAmount() {

@@ -171,12 +171,7 @@
     <div id="pcGrid" class="pc-grid"></div>
 
     <!-- Bottom action bar -->
-    <div id="adminActionBar" class="action-bar hidden">
-      <div id="aabPcName" class="ab-pc-name"></div>
-      <div id="aabStatus" class="ab-status"></div>
-      <div id="aabActions" class="ab-actions"></div>
-      <button class="ab-close" onclick="selectAdminPc(null)">✕</button>
-    </div>
+    <div id="adminActionBar" class="bottombar" style="display:none"></div>
   </div>
 
   <!-- ══════════════════════ FINANCE PAGE ══════════════════════ -->
@@ -894,6 +889,15 @@
 
       <div id="dlgSsLimitFields">
         <div class="field">
+          <label>Предустановки</label>
+          <div class="presets" id="ssTPresets">
+            <button type="button" class="preset" onclick="ssApplyPreset(30)">30 мин</button>
+            <button type="button" class="preset on" onclick="ssApplyPreset(60)">1 ч</button>
+            <button type="button" class="preset" onclick="ssApplyPreset(90)">1.5 ч</button>
+            <button type="button" class="preset" onclick="ssApplyPreset(120)">2 ч</button>
+          </div>
+        </div>
+        <div class="field">
           <label>Время</label>
           <div class="dur-field">
             <div class="dur-cell">
@@ -1061,74 +1065,122 @@
 <!-- Context menu -->
 <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
 
-<!-- Extend session -->
-<div id="dlgExtend" class="dlg-overlay" style="display:none">
-  <div class="dlg">
-    <div class="dlg-title">Добавить время — <span id="dlgExtPc"></span></div>
-    <div class="form-row">
-      <label>Добавить время</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="dlgExtHours" min="0" max="23" value="0" style="width:70px" oninput="calcExtAmount()">
-        <span style="color:var(--ink-3);font-size:13px">ч</span>
-        <input type="number" id="dlgExtMins" min="0" max="59" value="30" style="width:70px" oninput="calcExtAmount()">
-        <span style="color:var(--ink-3);font-size:13px">мин</span>
+<!-- Добавить время -->
+<div id="dlgExtend" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgExtend')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Добавить время</div><div class="modal-sub" id="dlgExtPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgExtend')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Время</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgExtHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgExtHours" type="number" min="0" max="23" value="0" oninput="calcExtAmount()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('dlgExtHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgExtMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgExtMins" type="number" min="0" max="59" value="30" oninput="calcExtAmount()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('dlgExtMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Сумма</label>
+        <div class="amount-input">
+          <input id="dlgExtAmount" type="number" min="0" value="0" oninput="calcExtTime()">
+          <span class="unit">сум</span>
+        </div>
+        <div class="time-cost" id="dlgExtAmountHint" style="display:none"></div>
       </div>
     </div>
-    <div class="form-row">
-      <label>Добавить сумму (сум)</label>
-      <input type="number" id="dlgExtAmount" min="0" value="0" oninput="calcExtTime()">
-    </div>
-    <div class="dlg-btns">
-      <button class="btn btn-outline" onclick="closeDlg('dlgExtend')">Отмена</button>
-      <button class="btn btn-primary" onclick="confirmExtend()">Добавить</button>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgExtend')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmExtend()">Добавить</button>
     </div>
   </div>
 </div>
 
-<!-- Subtract time -->
-<div id="dlgSubtract" class="dlg-overlay" style="display:none">
-  <div class="dlg">
-    <div class="dlg-title">Убрать время — <span id="dlgSubPc"></span></div>
-    <div class="form-row">
-      <label>Убрать время</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="dlgSubHours" min="0" max="23" value="0" style="width:70px" oninput="calcSubAmount()">
-        <span style="color:var(--ink-3);font-size:13px">ч</span>
-        <input type="number" id="dlgSubMins" min="0" max="59" value="10" style="width:70px" oninput="calcSubAmount()">
-        <span style="color:var(--ink-3);font-size:13px">мин</span>
+<!-- Убрать время -->
+<div id="dlgSubtract" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgSubtract')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Убрать время</div><div class="modal-sub" id="dlgSubPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgSubtract')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Убрать время</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgSubHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgSubHours" type="number" min="0" max="23" value="0" oninput="calcSubAmount()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('dlgSubHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgSubMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgSubMins" type="number" min="0" max="59" value="10" oninput="calcSubAmount()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('dlgSubMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Сумма возврата</label>
+        <div class="amount-input">
+          <input id="dlgSubAmount" type="number" min="0" value="0" oninput="calcSubTime()">
+          <span class="unit">сум</span>
+        </div>
+        <div class="time-cost refund" id="dlgSubAmountHint" style="display:none"></div>
       </div>
     </div>
-    <div class="form-row">
-      <label>Сумма возврата (сум)</label>
-      <input type="number" id="dlgSubAmount" min="0" value="0" oninput="calcSubTime()">
-    </div>
-    <div class="dlg-btns">
-      <button class="btn btn-outline" onclick="closeDlg('dlgSubtract')">Отмена</button>
-      <button class="btn" style="background:var(--warn);color:#fff;border-color:var(--warn)" onclick="confirmSubtract()">Убрать</button>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgSubtract')">Отмена</button>
+      <button class="mbtn warn" onclick="confirmSubtract()">Убрать</button>
     </div>
   </div>
 </div>
 
-<!-- Penalty -->
-<div id="dlgPenalty" class="dlg-overlay" style="display:none">
-  <div class="dlg">
-    <div class="dlg-title">Штраф — <span id="dlgPenPc"></span></div>
-    <div class="form-row" id="penTimeRow">
-      <label>Убрать время</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="dlgPenHours" min="0" max="23" value="0" style="width:70px" oninput="calcPenAmount()">
-        <span style="color:var(--ink-3);font-size:13px">ч</span>
-        <input type="number" id="dlgPenMins" min="0" max="59" value="10" style="width:70px" oninput="calcPenAmount()">
-        <span style="color:var(--ink-3);font-size:13px">мин</span>
+<!-- Штраф -->
+<div id="dlgPenalty" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgPenalty')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Штраф</div><div class="modal-sub" id="dlgPenPc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgPenalty')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="penalty-note">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Штраф снимет время (при Лимите) и дополнительно спишет сумму из баланса сессии.</span>
+      </div>
+      <div class="field" id="penTimeRow">
+        <label>Убрать время</label>
+        <div class="dur-field">
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgPenHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgPenHours" type="number" min="0" max="23" value="0" oninput="calcPenAmount()"><span>ч</span></div>
+            <button type="button" onclick="stepDur('dlgPenHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+          <div class="dur-cell">
+            <button type="button" onclick="stepDur('dlgPenMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <div class="dur-val"><input id="dlgPenMins" type="number" min="0" max="59" value="10" oninput="calcPenAmount()"><span>мин</span></div>
+            <button type="button" onclick="stepDur('dlgPenMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Сумма штрафа</label>
+        <div class="amount-input">
+          <input id="dlgPenAmount" type="number" min="0" value="0" oninput="calcPenTime()">
+          <span class="unit">сум</span>
+        </div>
       </div>
     </div>
-    <div class="form-row">
-      <label>Сумма штрафа (сум)</label>
-      <input type="number" id="dlgPenAmount" min="0" value="0" oninput="calcPenTime()">
-    </div>
-    <div class="dlg-btns">
-      <button class="btn btn-outline" onclick="closeDlg('dlgPenalty')">Отмена</button>
-      <button class="btn" style="background:var(--locked);color:#fff;border-color:var(--locked)" onclick="confirmPenalty()">Штраф</button>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgPenalty')">Отмена</button>
+      <button class="mbtn danger" onclick="confirmPenalty()">Применить штраф</button>
     </div>
   </div>
 </div>
