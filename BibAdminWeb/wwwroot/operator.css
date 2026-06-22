@@ -452,6 +452,11 @@ a { text-decoration: none; color: inherit; }
 .dlg-end-time-hint { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-top: 5px; }
 .dlg-workday-hint { font-size: 12px; font-weight: 600; color: var(--warn); margin-top: 5px; padding: 6px 8px; background: rgba(245,158,11,.1); border-radius: 6px; border: 1px solid rgba(245,158,11,.25); }
 
+/* VIP — открытая сессия */
+.vip-open-note { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.25); border-radius: 10px; }
+.vip-open-title { font-size: 13px; font-weight: 700; color: var(--warn); }
+.vip-open-desc { font-size: 12px; font-weight: 500; color: var(--ink-2); line-height: 1.45; }
+
 /* Итог (расчёт сессии) */
 .settle { display: flex; flex-direction: column; gap: 2px; }
 .settle-row {

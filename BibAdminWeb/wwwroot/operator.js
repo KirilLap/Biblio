@@ -611,7 +611,7 @@ function openSessionDlg() {
   document.getElementById('segVip')?.classList.remove('on');
   const limitRadio = document.querySelector('[name="stype"][value="Лимит"]');
   if (limitRadio) limitRadio.checked = true;
-  document.getElementById('limitFields').style.display = '';
+  applyStypeFields('Лимит');
 
   // Показываем/скрываем поле читательского билета согласно настройкам
   const reqReader = !!sessionFields.requireReaderId;
@@ -1612,6 +1612,13 @@ function switchOpTab(tab) {
   });
   const toolbar = document.getElementById('toolbar');
   if (toolbar) toolbar.style.display = tab === 'pcs' ? '' : 'none';
+  // Нижняя панель управления ПК относится только к вкладке «ПК».
+  // На других вкладках прячем её, при возврате — восстанавливаем, если ПК выбран.
+  const bar = document.getElementById('bottomBar');
+  if (bar) {
+    if (tab === 'pcs' && selectedPc) renderActionBar();
+    else bar.style.display = 'none';
+  }
   if (tab === 'finance' && !_financeLoaded) { _financeLoaded = true; loadFinanceHistory(); }
 }
 
@@ -2018,11 +2025,25 @@ function onSegStypeClick(el, val) {
   el.classList.add('on');
   const radio = el.querySelector('input[type=radio]');
   if (radio) radio.checked = true;
+  // Поля времени/предустановок/суммы — только для типа «Лимит».
+  // VIP — открытая сессия без ограничения, оплата по факту времени.
+  applyStypeFields(val);
   // Обновить подсказку стоимости в диалоге сессии
   if (typeof updateSessionAmountHint === 'function') updateSessionAmountHint();
   updateEndTimeHint();
   const wh = document.getElementById('dlgWorkdayHint');
   if (wh) wh.style.display = 'none';
+}
+
+// Переключает видимость полей диалога сессии в зависимости от типа.
+function applyStypeFields(val) {
+  const isVip = val === 'VIP';
+  const lf = document.getElementById('limitFields');
+  const vf = document.getElementById('vipFields');
+  if (lf) lf.style.display = isVip ? 'none' : '';
+  if (vf) vf.style.display = isVip ? '' : 'none';
+  const rh = document.getElementById('vipRateHint');
+  if (rh) rh.textContent = fmt(tariff) + ' сум/час';
 }
 
 function onSegSvcPayClick(el, val) {
