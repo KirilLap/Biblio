@@ -31,6 +31,17 @@ let pvBgUrl = null;             // URL фона для предпросмотр�
   loadSettings();
   loadOperators();
   setInterval(tickTimers, 1000);
+  updateNotifBtn();
+
+  // Инициализируем дату для аналитики
+  const _today = new Date().toISOString().split('T')[0];
+  document.getElementById('anlDateDay').value     = _today;
+  document.getElementById('anlDateMonth').value   = _today.substring(0, 7);
+  document.getElementById('anlYearQuarter').value = _today.substring(0, 4);
+  document.getElementById('anlDateYear').value    = _today.substring(0, 4);
+  // Выделяем текущий квартал
+  const _curQ = Math.ceil((new Date().getMonth() + 1) / 3);
+  setQuarter(_curQ);
 
   // Загружаем последнюю доступную версию BibClient для сравнения на карточках
   fetch('/updates/bibclient-version.json').then(r => r.ok ? r.json() : null).then(v => {
@@ -55,6 +66,7 @@ function connectHub() {
   conn.on('pcUpdated', c => {
     pcs[c.pcNumber] = c;
     renderPcGrid();
+    if (selectedAdminPc === c.pcNumber) renderAdminActionBar();
     loadFinance(); // refresh finance when a session ends
   });
   conn.on('allPcsUpdated', all => {
@@ -62,7 +74,22 @@ function connectHub() {
     all.forEach(c => pcs[c.pcNumber] = c);
     renderPcGrid();
   });
-  conn.on('sessionSummary', d => showSummary(d));
+  conn.on('sessionSummary', d => {
+    const isManual = _manuallyEndedPcs.has(d.pcNumber);
+    _manuallyEndedPcs.delete(d.pcNumber);
+    showSummary(d, isManual);
+  });
+
+  conn.on('sessionEndedByStaff', d => {
+    if (_manuallyEndedPcs.has(d.pcNumber)) return; // я завершил сам
+    const h = Math.floor(d.durationSeconds / 3600), m = Math.floor((d.durationSeconds % 3600) / 60);
+    const name = d.userName && d.userName !== '—' ? d.userName : 'Анонимный';
+    bibNotify(`✅ ${d.pcNumber} — сессия завершена`, `${name} · ${h}ч ${m}м · ${(d.earned||0).toLocaleString('ru-RU')} сум`);
+  });
+
+  conn.on('serverRestarting', d => {
+    bibNotify('🔄 Обновление сервера', 'Страница обновится автоматически. После перезагрузки войдите снова.');
+  });
   conn.on('offlineAlert', d => showOfflineAlert(d));
   conn.on('offlineResolved', d => {
     toast(`${d.pcNumber}: решение — ${d.decision === 'Pause' ? 'пауза' : 'продолжить'}`);
@@ -106,6 +133,55 @@ function setConnStatus(ok) {
   el.style.color = ok ? '#1d9e75' : '#f87171';
 }
 
+// ─── Browser notifications ───────────────────────────────────────────────────
+let _notifDuration = parseInt(localStorage.getItem('bibNotifDuration') || '8', 10);
+
+function bibNotify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const n = new Notification(title, { body, icon: '/favicon.ico' });
+  n.onclick = () => { window.focus(); n.close(); };
+  if (_notifDuration > 0) setTimeout(() => n.close(), _notifDuration * 1000);
+}
+
+function saveNotifDuration() {
+  const v = parseInt(document.getElementById('notifDurationInput').value || '8', 10);
+  _notifDuration = Math.max(1, Math.min(60, isNaN(v) ? 8 : v));
+  localStorage.setItem('bibNotifDuration', _notifDuration);
+  document.getElementById('notifDurationInput').value = _notifDuration;
+}
+
+function updateNotifBtn() {
+  const btn    = document.getElementById('notifPermBtn');
+  const status = document.getElementById('notifPermStatus');
+  if (!btn || !status) return;
+  const durInp = document.getElementById('notifDurationInput');
+  if (durInp) durInp.value = _notifDuration;
+  if (!('Notification' in window)) {
+    status.textContent = 'Браузер не поддерживает уведомления';
+    status.style.color = '#888';
+    return;
+  }
+  const p = Notification.permission;
+  if (p === 'granted') {
+    btn.style.display = 'none';
+    status.style.color = '#1d9e75';
+    status.textContent = '✓ Уведомления включены';
+  } else if (p === 'denied') {
+    btn.style.display = 'none';
+    status.style.color = '#f87171';
+    status.textContent = 'Заблокированы — разрешите в настройках браузера';
+  } else {
+    btn.style.display = '';
+    status.textContent = '';
+  }
+}
+
+async function requestNotifications() {
+  if (!('Notification' in window)) return;
+  await Notification.requestPermission();
+  updateNotifBtn();
+}
+
 // ─── Navigation ─────────────────────────────────────────────────────────────
 function showSettingsTab(name) {
   document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
@@ -119,13 +195,59 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelector(`[data-page="${name}"]`).classList.add('active');
-  if (name === 'readers') {
-    if (currentReadersTab === 'report') loadReport();
-    else loadReaders();
-  }
+  if (name !== 'computers') selectAdminPc(null);
+  if (name === 'readers') loadReaders();
+  if (name === 'stats') initStatsPage();
 }
 
+// Event delegation для таблицы читателей — вешается один раз при загрузке
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('readersTable');
+    if (!el) return;
+    el.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      if (btn.dataset.action === 'edit') openEditReader(btn.dataset.id);
+      else if (btn.dataset.action === 'del') deleteReader(btn.dataset.id, btn.dataset.name);
+    });
+  });
+})();
+
 // ─── PC Grid ──────────────────────────────────────────────────────────────
+let _adminFilterState = 'all';
+
+function setAdminFilter(state) {
+  _adminFilterState = state;
+  ['all','free','session','offline'].forEach(s => {
+    document.getElementById('chip' + s.charAt(0).toUpperCase() + s.slice(1))
+      ?.classList.toggle('active', s === state);
+  });
+  filterPcGrid();
+}
+
+function filterPcGrid() {
+  const query = (document.getElementById('pcSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('#pcGrid .pccard').forEach(card => {
+    const pcNumber = card.dataset.pcnumber || '';
+    const c = pcs[pcNumber];
+    if (!c) { card.style.display = ''; return; }
+
+    let matchFilter = true;
+    if (_adminFilterState === 'free')    matchFilter = c.isFree && c.isOnline;
+    else if (_adminFilterState === 'session') matchFilter = c.isSession;
+    else if (_adminFilterState === 'offline') matchFilter = !c.isOnline;
+
+    const matchSearch = !query ||
+      (c.pcNumber || '').toLowerCase().includes(query) ||
+      (c.customName || '').toLowerCase().includes(query) ||
+      (c.ip || '').includes(query) ||
+      (c.userName || '').toLowerCase().includes(query);
+
+    card.style.display = (matchFilter && matchSearch) ? '' : 'none';
+  });
+}
+
 function renderPcGrid() {
   const grid = document.getElementById('pcGrid');
   const sortMode = settings.clientSortMode || 'ByNumber';
@@ -141,18 +263,30 @@ function renderPcGrid() {
     list.sort((a, b) => a.pcNumberValue !== b.pcNumberValue ? a.pcNumberValue - b.pcNumberValue : (a.customName || '').localeCompare(b.customName || ''));
   }
 
-  let online = 0, sessions = 0, free = 0;
+  let sessions = 0, free = 0, offline = 0;
   list.forEach(c => {
-    if (c.isOnline) online++;
     if (c.isSession) sessions++;
-    if (c.isFree) free++;
+    if (c.isFree && c.isOnline) free++;
+    if (!c.isOnline) offline++;
   });
-  document.getElementById('pcStats').textContent =
-    `Всего: ${list.length} | Онлайн: ${online} | Сессий: ${sessions} | Свободных: ${free}`;
+  // Update chip counts
+  const chipAllN = document.getElementById('chipAllN');
+  const chipFreeN = document.getElementById('chipFreeN');
+  const chipSessionN = document.getElementById('chipSessionN');
+  const chipOfflineN = document.getElementById('chipOfflineN');
+  if (chipAllN)     chipAllN.textContent     = list.length;
+  if (chipFreeN)    chipFreeN.textContent    = free;
+  if (chipSessionN) chipSessionN.textContent = sessions;
+  if (chipOfflineN) chipOfflineN.textContent = offline;
+
+  // Legacy pcStats for compat
+  const pcStats = document.getElementById('pcStats');
+  if (pcStats) pcStats.textContent = `Всего: ${list.length} | Сессий: ${sessions} | Свободных: ${free}`;
 
   grid.innerHTML = '';
   list.forEach(c => grid.appendChild(buildPcCard(c)));
 
+  filterPcGrid();
   renderUpdatePanel(list);
   if (selectedAdminPc) renderAdminActionBar();
 }
@@ -195,154 +329,220 @@ function closeUpdatePanel() {
   document.getElementById('updateProgressPanel').style.display = 'none';
 }
 
+function getStatusKey(c) {
+  if (!c.isOnline) return 'offline';
+  if (c.isSession && c.isPaused) return 'pause';
+  if (c.isSession && c.sessionType === 'VIP') return 'vip';
+  if (c.isSession) return 'limit';
+  if (c.isFree) return 'free';
+  return 'locked';
+}
+
 function buildPcCard(c) {
   const div = document.createElement('div');
-  div.className = 'pc-card';
-  div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
+  const stKey = getStatusKey(c);
+
+  div.className = 'pccard' + (!c.isOnline ? ' is-offline' : '');
+  if (selectedAdminPc === c.pcNumber) div.classList.add('is-selected');
   div.id = 'pc-' + c.pcNumber.replace(/\s/g, '_');
   div.dataset.pcnumber = c.pcNumber;
-  if (selectedAdminPc === c.pcNumber) div.classList.add('selected');
+  div.style.setProperty('--st', `var(--${stKey})`);
+
+  div.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e.clientX, e.clientY, c); });
   div.addEventListener('click', e => {
-    if (!e.target.closest('button') && !e.target.closest('.pc-name')) selectAdminPc(c.pcNumber);
+    if (!e.target.closest('button')) selectAdminPc(c.pcNumber);
   });
 
-  // Оффлайн + сессия: карточка с тёплым красным акцентом
-  if (!c.isOnline && c.isSession) {
-    div.style.borderColor = '#c86464';
-    div.style.background  = '#1f1010';
-  }
-
-  const dotClass = !c.isOnline ? '' : c.isSession && c.isPaused ? 'paused' : c.isSession ? 'session' : c.isFree ? 'free' : 'online';
-  const badge = statusBadge(c);
-
-  // Индивидуальные настройки — ★ справа от имени
+  // Header
   const indBadge = c.hasIndividualSettings
-    ? `<span class="pc-ind-badge" title="Есть индивидуальные настройки">★</span>`
+    ? `<span class="pc-ind-badge" title="Индивидуальные настройки">★</span>`
     : '';
+  const badge = `<span class="badge" style="color:var(--${stKey});background:var(--${stKey}-bg);border-color:var(--${stKey}-ring)"><span class="dot" style="background:var(--${stKey})"></span>${esc(c.status)}</span>`;
 
-  let timer = '';
+  const head = `<div class="pccard-stripe"></div>
+    <div class="pccard-head">
+      <div class="pccard-title">
+        <span class="pccard-name" onclick="event.stopPropagation();openRename(${c.pcNumberValue},'${esc(c.customName)}')">${esc(c.pcNumber)}${indBadge}</span>
+        ${c.ip ? `<span class="pccard-ip">${esc(c.ip)}</span>` : ''}
+      </div>
+      <div class="pccard-head-right">
+        ${badge}
+        <button class="pc-menu-btn" data-pcnumber="${esc(c.pcNumber)}" title="Меню">⋮</button>
+      </div>
+    </div>`;
+
+  // Body
+  let body = '';
   if (c.isSession) {
-    const timerCls = `pc-timer ${c.sessionType === 'VIP' ? 'vip-timer' : ''} ${c.isPaused ? 'paused-timer' : ''} ${!c.isOnline ? 'offline-timer' : ''}`;
-    timer = `<div class="${timerCls}" id="timer-${esc(c.pcNumber)}">${fmtTime(c.elapsedSeconds)}</div>`;
+    const isLow = c.sessionType === 'Лимит' && c.limitSeconds > 0 && Math.max(0, c.limitSeconds - c.elapsedSeconds) <= 300;
+    const timerId = 'timer-' + c.pcNumber.replace(/\s/g, '_');
+    const clockCls = 'sess-clock mono' + (isLow ? ' low' : '');
+
+    const nameLabel = c.userName || (c.readerId ? `🪪 ${c.readerId}` : '');
+    const userLine = nameLabel
+      ? `<div class="sess-user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="sess-user-name">${esc(nameLabel)}</span></div>`
+      : '';
+
+    let remainText = '';
     if (c.limitSeconds > 0) {
       const rem = Math.max(0, c.limitSeconds - c.elapsedSeconds);
-      const remCls = rem <= 300 ? 'style="color:#f87171"' : '';
-      timer += `<div class="pc-meta"><span ${remCls}>Осталось: ${fmtTime(rem)}</span></div>`;
+      const remStyle = rem <= 300 ? 'style="color:var(--locked)"' : '';
+      remainText = `<span class="sess-clock-cap" ${remStyle}>/ ${fmtTime(c.limitSeconds)}</span>`;
     }
-    // VIP — показываем стоимость
-    if (c.sessionType === 'VIP') {
-      const cost = Math.floor(c.elapsedSeconds * (settings.tariff || 3000) / 3600);
-      timer += `<div class="pc-meta"><span style="color:#f59e0b">К оплате: ${cost.toLocaleString()} сум</span></div>`;
-    }
-    // Оффлайн + сессия — предупреждение
+
+    const costLine = c.sessionType === 'VIP'
+      ? `<div style="font-size:12px;font-weight:700;color:var(--vip);margin-top:2px">К оплате: ${Math.floor(c.elapsedSeconds * (settings.tariff || 3000) / 3600).toLocaleString()} сум</div>`
+      : '';
+    const offlineWarn = !c.isOnline
+      ? `<div style="font-size:12px;color:var(--locked);font-weight:700;margin-top:2px">📵 нет связи</div>`
+      : '';
+
+    const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
+    const updBadgeMap = { pending: '⏳', updating: '🔄', done: '✅', failed: '❌', deferred: '⏸' };
+    const updBadgeLbl = { pending: 'Ожидание', updating: 'Устанавливает...', done: 'Обновлён', failed: 'Не обновился', deferred: 'После сессии' };
+    const updBadge = c.updateStatus
+      ? `<div style="margin-top:4px"><span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus]} ${updBadgeLbl[c.updateStatus]}</span></div>`
+      : (isOutdated ? `<div style="margin-top:4px"><span class="pc-update-badge pending">⬆ v${latestClientVersion} доступно</span></div>` : '');
+
+    const pauseIco = c.isPaused
+      ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor"/></svg>`;
+
+    body = `<div class="pccard-body">
+      ${userLine}
+      <div class="sess-timer">
+        <span class="${clockCls}" id="${timerId}">${fmtTime(c.elapsedSeconds)}</span>
+        ${remainText}
+      </div>
+      ${costLine}${offlineWarn}${updBadge}
+      <div class="pccard-actions">
+        <button class="qbtn qbtn-ghost" title="Экран" onclick="event.stopPropagation();openScreenView('${esc(c.pcNumber)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="qbtn qbtn-ghost" title="${c.isPaused ? 'Продолжить' : 'Пауза'}" onclick="event.stopPropagation();togglePause('${esc(c.pcNumber)}')">${pauseIco}</button>
+        <button class="qbtn qbtn-danger qbtn-grow" onclick="event.stopPropagation();endSession('${esc(c.pcNumber)}')" title="Завершить сессию"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Завершить</button>
+      </div>
+    </div>`;
+  } else {
+    const stMark = !c.isOnline ? 'state-mark offline' : c.isFree ? 'state-mark free' : 'state-mark locked';
+    let icon = '';
     if (!c.isOnline) {
-      timer += `<div class="pc-meta"><span style="color:#f87171">📵 нет связи</span></div>`;
+      icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`;
+    } else if (c.isFree) {
+      icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="4 12 9 17 20 6"/></svg>`;
+    } else {
+      icon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
     }
+    const stateLabel = !c.isOnline ? 'Нет связи' : c.isFree ? 'Готов к работе' : 'Заблокирован';
+
+    const freeActions = c.isOnline
+      ? `<div class="pccard-actions">
+          <button class="qbtn qbtn-ghost" title="Экран" onclick="event.stopPropagation();openScreenView('${esc(c.pcNumber)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button class="qbtn qbtn-accent qbtn-grow" onclick="event.stopPropagation();openStartSession('${esc(c.pcNumber)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>Начать сессию</button>
+        </div>`
+      : `<div class="pccard-actions">
+          <button class="qbtn qbtn-danger qbtn-grow" onclick="event.stopPropagation();deletePc('${esc(c.pcNumber)}')">🗑 Удалить</button>
+        </div>`;
+
+    body = `<div class="pccard-body pccard-body-state">
+      <div class="${stMark}">${icon}</div>
+      <span class="state-text">${stateLabel}</span>
+      ${freeActions}
+    </div>`;
   }
 
-  const isOutdated = c.clientVersion && latestClientVersion && c.clientVersion !== latestClientVersion;
-  const updBadgeMap = { pending: '⏳ Ожидание', updating: '🔄 Устанавливает...', done: '✅ Обновлён', failed: '❌ Не обновился', deferred: '⏸ После сессии' };
-  const updBadge = c.updateStatus ? `<span class="pc-update-badge ${c.updateStatus}">${updBadgeMap[c.updateStatus] || ''}</span>` : '';
-  const meta = `<div class="pc-meta">
-    ${c.ip ? `<span>${c.ip}</span>` : ''}
-    ${c.isSession && c.userName ? `<span>👤 ${esc(c.userName)}</span>` : ''}
-    ${c.isSession && c.readerId ? `<span>🪪 ${esc(c.readerId)}</span>` : ''}
-    ${c.isSession && c.paidAmount ? `<span>💵 ${c.paidAmount.toLocaleString()} сум</span>` : ''}
-    ${c.clientVersion ? `<span class="pc-ver${isOutdated ? ' pc-ver-old' : ''}" title="${isOutdated ? `Доступно обновление v${latestClientVersion}` : 'Версия BibClient'}">${isOutdated ? '⬆ ' : ''}v${c.clientVersion}</span>` : ''}
-    ${updBadge}
-  </div>`;
-
-  const actions = buildActions(c);
-
-  div.innerHTML = `
-    <div class="pc-card-header">
-      <span class="pc-name" onclick="openRename(${c.pcNumberValue}, '${esc(c.customName)}')">${esc(c.pcNumber)}${indBadge}</span>
-      <button class="pc-menu-btn" data-pcnumber="${esc(c.pcNumber)}" title="Действия">⋮</button>
-      <div class="pc-offline-dot ${dotClass} online"></div>
-    </div>
-    ${badge}
-    ${timer}
-    ${meta}
-    ${actions ? `<div class="pc-actions">${actions}</div>` : ''}
-  `;
+  div.innerHTML = head + body;
   return div;
-}
-
-function statusBadge(c) {
-  const map = {
-    'Оффлайн':     'badge-offline',
-    'Заблокирован':'badge-locked',
-    'Свободный':   'badge-free',
-    'VIP':         'badge-vip',
-    'Лимит':       'badge-limit',
-    'Пауза':       'badge-pause',
-  };
-  const cls = map[c.status] || 'badge-locked';
-  return `<div class="pc-status-badge ${cls}">${c.status}</div>`;
-}
-
-function buildActions(c) {
-  // Для оффлайн-ПК — только удаление прямо на карточке
-  if (!c.isOnline) return `<button class="btn btn-outline" onclick="deletePc('${esc(c.pcNumber)}')">🗑 Удалить</button>`;
-  // Для онлайн-ПК все действия в нижней панели (selectAdminPc → renderAdminActionBar)
-  return '';
 }
 
 // ─── Bottom action bar ───────────────────────────────────────────────────────
 function selectAdminPc(pcNumber) {
   if (!pcNumber || selectedAdminPc === pcNumber) {
     selectedAdminPc = null;
-    document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
-    document.getElementById('adminActionBar').classList.add('hidden');
+    document.querySelectorAll('#pcGrid .pccard.is-selected').forEach(c => c.classList.remove('is-selected'));
+    document.getElementById('adminActionBar').style.display = 'none';
     return;
   }
   selectedAdminPc = pcNumber;
-  document.querySelectorAll('#pcGrid .pc-card.selected').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('#pcGrid .pccard.is-selected').forEach(c => c.classList.remove('is-selected'));
   const card = document.querySelector(`#pcGrid [data-pcnumber="${CSS.escape(pcNumber)}"]`);
-  if (card) card.classList.add('selected');
+  if (card) card.classList.add('is-selected');
   renderAdminActionBar();
 }
 
 function renderAdminActionBar() {
   const ab = document.getElementById('adminActionBar');
   const pc = pcs[selectedAdminPc];
-  if (!pc) { ab.classList.add('hidden'); return; }
-
-  document.getElementById('aabPcName').textContent = pc.pcNumber;
-  document.getElementById('aabStatus').textContent = pc.status;
+  if (!pc) { ab.style.display = 'none'; return; }
 
   const p = pc.pcNumber;
-  const btns = [];
+  const stKey = getStatusKey(pc);
+  const badgeLabel = pc.isSession ? (pc.sessionType === 'VIP' ? 'VIP' : 'Лимит') : (pc.status || '');
+
+  const ico = (path, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  const screenSvg  = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
+  const playSvg    = '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/>';
+  const stopSvg    = '<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" stroke="none"/>';
+  const pauseSvg   = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  const swapSvg    = '<path d="M7 4 3.5 7.5 7 11"/><path d="M3.5 7.5H17a3.5 3.5 0 0 1 0 7h-1"/><path d="M17 20l3.5-3.5L17 13"/><path d="M20.5 16.5H7"/>';
+  const warnSvg    = '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
+  const receiptSvg = '<path d="M5 3v18l2-1.4L9 21l2-1.4L13 21l2-1.4L17 21l2-1.4V3l-2 1.4L15 3l-2 1.4L11 3 9 4.4 7 3 5 4.4Z"/><path d="M8 8h8M8 12h8M8 16h5"/>';
+  const convertSvg = '<path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/>';
+  const lockSvg    = '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+  const unlockSvg  = '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
+  const trashSvg   = '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>';
+
+  let btns = '';
+  btns += `<button class="abtn" onclick="openScreenView('${esc(p)}')">${ico(screenSvg)}Экран</button>`;
 
   if (!pc.isOnline) {
-    btns.push(`<button class="ab-btn red" onclick="deletePc('${esc(p)}')">🗑 Удалить</button>`);
+    btns += `<button class="abtn abtn-danger" onclick="deletePc('${esc(p)}')">${ico(trashSvg)}Удалить</button>`;
   } else {
-    btns.push(`<button class="ab-btn" style="background:#374151;border-color:#4b5563" onclick="openScreenView('${esc(p)}')">👁 Экран</button>`);
     if (!pc.isSession && !pc.isFree) {
-      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
-      btns.push(`<button class="ab-btn" style="background:#1A3A1A;border-color:#2A5A2A;color:#90E090" onclick="unlock('${esc(p)}')">🔓 Разблокировать</button>`);
+      btns += `<button class="abtn abtn-accent" onclick="openStartSession('${esc(p)}')">${ico(playSvg)}Начать сессию</button>`;
+      btns += `<button class="abtn" onclick="unlock('${esc(p)}')">${ico(unlockSvg)}Разблокировать</button>`;
     }
     if (!pc.isSession && pc.isFree) {
-      btns.push(`<button class="ab-btn green" onclick="openStartSession('${esc(p)}')">▶ Начать сессию</button>`);
-      btns.push(`<button class="ab-btn" style="background:#3A1A1A;border-color:#5A2A2A;color:#E09090" onclick="lock('${esc(p)}')">🔒 Заблокировать</button>`);
+      btns += `<button class="abtn abtn-accent" onclick="openStartSession('${esc(p)}')">${ico(playSvg)}Начать сессию</button>`;
+      btns += `<button class="abtn" onclick="lock('${esc(p)}')">${ico(lockSvg)}Заблокировать</button>`;
     }
     if (pc.isSession) {
-      const pauseLabel = pc.isPaused ? '▶ Продолжить' : '⏸ Пауза';
-      const pauseCls   = pc.isPaused ? 'green' : 'amber';
-      btns.push(`<button class="ab-btn ${pauseCls}" onclick="togglePause('${esc(p)}')">${pauseLabel}</button>`);
-      btns.push(`<button class="ab-btn blue" onclick="openTransfer('${esc(p)}')">↔ Пересадить</button>`);
-      if (pc.sessionType === 'Лимит')
-        btns.push(`<button class="ab-btn blue" onclick="openExtend('${esc(p)}')">+⏱ Время</button>`);
-      btns.push(`<button class="ab-btn red" onclick="endSession('${esc(p)}')">⏹ Завершить</button>`);
+      btns += `<button class="abtn" onclick="openAdminServiceDlg('${esc(p)}')">${ico(receiptSvg)}Услуга</button>`;
+      if (pc.sessionType === 'Лимит') {
+        btns += `<div class="abtn-stepper">
+          <button onclick="openSubtract('${esc(p)}')" title="Убрать время">${ico('<path d="M5 12h14"/>', 15)}</button>
+          <span>Время</span>
+          <button onclick="openExtend('${esc(p)}')" title="Добавить время">${ico('<path d="M12 5v14M5 12h14"/>', 15)}</button>
+        </div>`;
+      }
+      btns += `<button class="abtn" onclick="openPenalty('${esc(p)}')">${ico(warnSvg)}Штраф</button>`;
+      const typeTarget = pc.sessionType === 'Лимит' ? 'VIP' : 'Лимит';
+      btns += `<button class="abtn" onclick="openAdminChangeTypeDlg('${esc(p)}')">${ico(convertSvg)}→ ${typeTarget}</button>`;
+      const pauseLabel = pc.isPaused ? 'Продолжить' : 'Пауза';
+      const pausePath  = pc.isPaused ? playSvg : pauseSvg;
+      btns += `<button class="abtn" onclick="togglePause('${esc(p)}')">${ico(pausePath)}${pauseLabel}</button>`;
+      btns += `<button class="abtn" onclick="openTransfer('${esc(p)}')">${ico(swapSvg)}Пересадить</button>`;
+      btns += `<button class="abtn abtn-danger" onclick="endSession('${esc(p)}')">${ico(stopSvg)}Завершить</button>`;
     }
   }
 
-  document.getElementById('aabActions').innerHTML = btns.join('');
-  ab.classList.remove('hidden');
+  ab.style.setProperty('--st', `var(--${stKey})`);
+  ab.innerHTML = `
+    <div class="bb-left">
+      <div class="bb-stripe"></div>
+      <div class="bb-id">
+        <span class="bb-name">${esc(p)}</span>
+        ${pc.ip ? `<span class="bb-ip">${esc(pc.ip)}</span>` : ''}
+      </div>
+      <span class="badge" style="color:var(--${stKey});background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)"><span class="dot" style="background:var(--${stKey})"></span>${esc(badgeLabel)}</span>
+    </div>
+    <div class="bb-actions">${btns}</div>
+    <button class="bb-close" onclick="selectAdminPc(null)">${ico('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15)}</button>`;
+  ab.style.display = 'flex';
 }
 
 // ─── Timers ──────────────────────────────────────────────────────────────────
 function tickTimers() {
+  if (document.getElementById('dlgStartSession')?.classList.contains('open')) ssUpdateEndTimeHint();
+
   Object.values(pcs).forEach(c => {
     // Тикаем таймер если сессия активна (включая оффлайн-ПК с сессией — таймер идёт)
     if (!c.isSession || c.isPaused) return;
@@ -360,12 +560,17 @@ let _ssLookedUpId  = '';
 let _ssLookupInFlight = null;  // deduplicate concurrent lookups
 let _ssLookupTimer    = null;  // debounce timer for auto-lookup on input
 
-function _ssParseRegDate(str) {
+function _ssParseDate(str) {
   if (!str) return null;
   const p = str.split('-');
   if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
   const d = new Date(str);
   return isNaN(d) ? null : d;
+}
+
+// Returns the date from which card validity (3 years) is counted
+function _ssCardBaseDate(data) {
+  return _ssParseDate(data.updatedAt) || _ssParseDate(data.registeredAt);
 }
 
 function ssOnCardTypeChanged() {
@@ -377,7 +582,7 @@ function ssOnCardTypeChanged() {
   _ssLookupState = null;
   _ssLookedUpId  = '';
   document.getElementById('dlgSsReader').value = '';
-  document.getElementById('dlgSsReaderInfo').style.display = 'none';
+  document.getElementById('dlgSsReaderInfo').className = 'reader-info';
   document.getElementById('dlgSsName').value = '';
   document.getElementById('dlgSsReader').placeholder = isTemp ? '842' : '260500456';
 }
@@ -385,21 +590,49 @@ function ssOnCardTypeChanged() {
 // Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
 function onSsReaderInput() {
   const el = document.getElementById('dlgSsReader');
-  el.value = el.value.replace(/\D/g, '');
+  el.value = el.value.replace(/\D/g, '').slice(0, 9);
   _ssLookupState = null;
   clearTimeout(_ssLookupTimer);
   const nums = el.value;
   if (nums.length >= 6) {
     _ssLookupTimer = setTimeout(ssLookupReader, 500);
   } else {
-    document.getElementById('dlgSsReaderInfo').style.display = 'none';
+    document.getElementById('dlgSsReaderInfo').className = 'reader-info';
     document.getElementById('dlgSsName').value = '';
   }
 }
 
 // Deduplication wrapper — prevents two concurrent lookups (blur + button click)
+async function ssQuickAddReader(cardId) {
+  const infoEl = document.getElementById('dlgSsReaderInfo');
+  infoEl.className = 'reader-info valid';
+  infoEl.textContent = 'Добавление…';
+  try {
+    const r = await fetch('/api/admin/readers/quick-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId })
+    });
+    if (r.ok) {
+      _ssLookupState = 'valid';
+      _ssLookedUpId  = cardId;
+      infoEl.className = 'reader-info valid';
+      infoEl.textContent = `✓ ${cardId} — добавлен как новый читатель`;
+      toast('Читатель добавлен', 'success');
+    } else {
+      toast('Ошибка добавления', 'warn');
+    }
+  } catch { toast('Ошибка добавления', 'warn'); }
+}
+
 async function ssLookupReader() {
   if (_ssLookupInFlight) { await _ssLookupInFlight; return; }
+  // Не перезапускать если результат уже известен для этого ID
+  const nums = document.getElementById('dlgSsReader').value.trim();
+  const prefix = settings.readerCardPrefix || 'FAA';
+  const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  const currentId = isTemp ? nums : (prefix + nums);
+  if (_ssLookupState !== null && _ssLookedUpId === currentId) return;
   _ssLookupInFlight = _ssLookupReaderImpl();
   try { await _ssLookupInFlight; } finally { _ssLookupInFlight = null; }
 }
@@ -407,13 +640,13 @@ async function ssLookupReader() {
 async function _ssLookupReaderImpl() {
   const nums   = document.getElementById('dlgSsReader').value.trim();
   const infoEl = document.getElementById('dlgSsReaderInfo');
-  if (!nums) { infoEl.style.display = 'none'; _ssLookupState = null; return; }
+  if (!nums) { infoEl.className = 'reader-info'; _ssLookupState = null; return; }
 
   const isTemp = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
   if (isTemp) {
     _ssLookupState = 'valid';
     _ssLookedUpId  = nums;
-    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A1A2E;color:#AAAACC;border:1px solid #3D3D6B';
+    infoEl.className = 'reader-info valid';
     infoEl.textContent = `✓ Временный билет №${nums} — посещение будет зафиксировано`;
     return;
   }
@@ -425,31 +658,38 @@ async function _ssLookupReaderImpl() {
     const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
     if (!r.ok) {
       _ssLookupState = 'not_found';
-      infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
-      infoEl.textContent = `✗ Читатель ${cardId} не найден в базе`;
+      document.getElementById('dlgSsName').value = '';
+      infoEl.className = 'reader-info invalid';
+      infoEl.innerHTML = `<span style="flex:1">✗ Читатель ${esc(cardId)} не найден в базе</span>
+        <button data-quick-add="${esc(cardId)}"
+          style="padding:3px 10px;font-size:11px;border-radius:5px;cursor:pointer;border:1px solid var(--free-ring);background:var(--free-bg);color:var(--free);white-space:nowrap">
+          + Добавить
+        </button>`;
+      infoEl.querySelector('[data-quick-add]').addEventListener('click', function() {
+        ssQuickAddReader(this.dataset.quickAdd);
+      });
       return;
     }
     const data = await r.json();
-    const regDate = _ssParseRegDate(data.registeredAt);
-    if (regDate) {
-      const daysSince = (Date.now() - regDate) / 86400000;
-      if (daysSince > 3 * 365 + 1) {
-        const expDate = new Date(regDate);
-        expDate.setFullYear(expDate.getFullYear() + 3);
+    const baseDate = _ssCardBaseDate(data);
+    if (baseDate) {
+      const expDate = new Date(baseDate);
+      expDate.setFullYear(expDate.getFullYear() + 3);
+      if (Date.now() > expDate) {
         _ssLookupState = 'expired';
         document.getElementById('dlgSsName').value = data.fullName || '';
-        infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#2D1A1A;color:#F87171;border:1px solid #5D2A2A';
+        infoEl.className = 'reader-info expired';
         infoEl.textContent = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
         return;
       }
     }
     _ssLookupState = 'valid';
     document.getElementById('dlgSsName').value = data.fullName || '';
-    infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
+    infoEl.className = 'reader-info valid';
     infoEl.textContent = `✓ ${data.fullName}${data.category ? ' · ' + data.category : ''}`;
   } catch {
     _ssLookupState = null;
-    infoEl.style.display = 'none';
+    infoEl.className = 'reader-info';
   }
 }
 
@@ -459,25 +699,45 @@ function openStartSession(pcNumber) {
   document.getElementById('dlgSsReader').value = '';
   document.getElementById('dlgSsReader').placeholder = '260500456';
   document.getElementById('dlgSsName').value = '';
-  document.getElementById('dlgSsMinutes').value = '';
-  document.getElementById('dlgSsMoney').value = '';
-  document.getElementById('dlgSsHint').textContent = '';
-  document.getElementById('dlgSsReaderInfo').style.display = 'none';
+  document.getElementById('dlgSsReaderInfo').className = 'reader-info';
 
   // Reset card type to regular
   const regularRadio = document.querySelector('[name="ssCardType"][value="regular"]');
   if (regularRadio) regularRadio.checked = true;
+  document.getElementById('ssBtnCardRegular')?.classList.toggle('on', true);
+  document.getElementById('ssBtnCardTemp')?.classList.toggle('on', false);
   const prefixEl = document.getElementById('dlgSsReaderPrefix');
   if (prefixEl) prefixEl.textContent = settings.readerCardPrefix || 'FAA';
   _ssLookupState = null;
   _ssLookedUpId  = '';
+
+  // Show/hide reader ID row
+  const rowReader = document.getElementById('rowSsReader');
+  if (rowReader) rowReader.style.display = settings.requireReaderId ? '' : 'none';
 
   // Show/hide name row
   const rowName = document.getElementById('rowSsName');
   if (rowName) rowName.style.display = settings.requireUserName ? '' : 'none';
 
   ssSelectType('Лимит');
-  document.getElementById('dlgStartSession').style.display = 'flex';
+  ssApplyPreset(60);
+  document.getElementById('dlgStartSession').classList.add('open');
+}
+
+function ssApplyPreset(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  document.getElementById('dlgSsHours').value = h || '';
+  document.getElementById('dlgSsMins').value  = m || '';
+  ssSyncMinutes();
+  _ssSyncPresets(mins);
+}
+
+function _ssSyncPresets(activeMins) {
+  document.querySelectorAll('#ssTPresets .preset').forEach(btn => {
+    const match = btn.getAttribute('onclick')?.match(/ssApplyPreset\((\d+)\)/);
+    btn.classList.toggle('on', !!match && parseInt(match[1]) === activeMins);
+  });
 }
 
 function ssSelectType(type) {
@@ -485,35 +745,103 @@ function ssSelectType(type) {
   const isLimit = type === 'Лимит';
   document.getElementById('dlgSsLimitFields').style.display = isLimit ? '' : 'none';
   document.getElementById('dlgSsVipInfo').style.display     = isLimit ? 'none' : '';
-  // Стили кнопок
-  document.getElementById('ssBtnLimited').classList.toggle('active', isLimit);
-  document.getElementById('ssBtnVip').classList.toggle('active', !isLimit);
+  // Segment control
+  document.getElementById('ssBtnLimited').classList.toggle('on', isLimit);
+  document.getElementById('ssBtnVip').classList.toggle('on', !isLimit);
   if (!isLimit) {
-    document.getElementById('dlgSsMinutes').value = '';
+    document.getElementById('dlgSsHours').value = '';
+    document.getElementById('dlgSsMins').value = '';
     document.getElementById('dlgSsMoney').value = '';
     document.getElementById('dlgSsHint').textContent = '';
+    const wh = document.getElementById('dlgSsWorkdayHint');
+    if (wh) wh.style.display = 'none';
+    _ssSyncPresets(-1);
   }
+  ssUpdateEndTimeHint();
 }
 
-// Синхронизация минуты → деньги (как в WPF TxtMinutes_TextChanged)
+function _fmtHM(h, m) {
+  if (h > 0 && m > 0) return `${h} ч ${m} мин`;
+  if (h > 0) return `${h} ч`;
+  return `${m} мин`;
+}
+
+function _fmtClock(date) {
+  return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+}
+
+function ssUpdateEndTimeHint() {
+  const hint = document.getElementById('dlgSsEndTimeHint');
+  if (!hint) return;
+  if (_ssType !== 'Лимит') { hint.style.display = 'none'; return; }
+  const h = parseInt(document.getElementById('dlgSsHours').value) || 0;
+  const m = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+  const totalMins = h * 60 + m;
+  if (!totalMins) { hint.style.display = 'none'; return; }
+  hint.textContent = 'Сессия закончится в ' + _fmtClock(new Date(Date.now() + totalMins * 60000));
+  hint.style.display = '';
+}
+
+// Возвращает оставшиеся минуты до конца рабочего дня, или null если ограничение не задано
+function _ssWorkdayRemaining() {
+  const end = (settings.workdayEnd || '').trim();
+  if (!end) return null;
+  const parts = end.split(':');
+  if (parts.length < 2) return null;
+  const endH = parseInt(parts[0]), endM = parseInt(parts[1]);
+  if (isNaN(endH) || isNaN(endM)) return null;
+  const now = new Date();
+  const remaining = (endH * 60 + endM) - (now.getHours() * 60 + now.getMinutes());
+  return remaining > 0 ? remaining : null;
+}
+
+function _ssApplyWorkdayCap(totalMins) {
+  const capHint = document.getElementById('dlgSsWorkdayHint');
+  const cap = _ssWorkdayRemaining();
+  if (!cap || totalMins <= 0 || totalMins <= cap) {
+    if (capHint) capHint.style.display = 'none';
+    return totalMins;
+  }
+  const t = GlobalSettings_Tariff();
+  const cappedAmount = Math.round((cap / 60) * t);
+  if (capHint) {
+    capHint.textContent = `До конца рабочего дня (${(settings.workdayEnd || '')}) — ${cap} мин = ${cappedAmount.toLocaleString()} сум`;
+    capHint.style.display = '';
+  }
+  return cap;
+}
+
+// Синхронизация часы/минуты → деньги
 function ssSyncMinutes() {
   if (_ssSyncing) return;
   _ssSyncing = true;
   try {
-    const mins = parseFloat(document.getElementById('dlgSsMinutes').value);
+    const h = parseInt(document.getElementById('dlgSsHours').value) || 0;
+    const m = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+    let totalMins = h * 60 + m;
+    const capped = _ssApplyWorkdayCap(totalMins);
+    if (capped !== totalMins) {
+      totalMins = capped;
+      document.getElementById('dlgSsHours').value = Math.floor(totalMins / 60) || '';
+      document.getElementById('dlgSsMins').value  = totalMins % 60 || '';
+    }
     const t = GlobalSettings_Tariff();
-    if (mins > 0) {
-      const cost = Math.round((mins / 60) * t);
+    if (totalMins > 0) {
+      const cost = Math.round((totalMins / 60) * t);
       document.getElementById('dlgSsMoney').value = cost;
-      document.getElementById('dlgSsHint').textContent = `${mins} мин = ${cost.toLocaleString()} сум`;
+      document.getElementById('dlgSsHint').textContent = `${_fmtHM(Math.floor(totalMins/60), totalMins%60)} = ${cost.toLocaleString()} сум`;
     } else {
       document.getElementById('dlgSsMoney').value = '';
       document.getElementById('dlgSsHint').textContent = '';
     }
   } finally { _ssSyncing = false; }
+  ssUpdateEndTimeHint();
+  const h2 = parseInt(document.getElementById('dlgSsHours').value) || 0;
+  const m2 = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+  _ssSyncPresets(h2 * 60 + m2);
 }
 
-// Синхронизация деньги → минуты (как в WPF TxtMoney_TextChanged)
+// Синхронизация деньги → часы/минуты
 function ssSyncMoney() {
   if (_ssSyncing) return;
   _ssSyncing = true;
@@ -521,37 +849,54 @@ function ssSyncMoney() {
     const money = parseFloat(document.getElementById('dlgSsMoney').value);
     const t = GlobalSettings_Tariff();
     if (money > 0) {
-      const mins = Math.round((money / t) * 60);
-      document.getElementById('dlgSsMinutes').value = mins;
-      document.getElementById('dlgSsHint').textContent = `${money.toLocaleString()} сум = ${mins} мин`;
+      let totalMins = Math.round((money / t) * 60);
+      const capped = _ssApplyWorkdayCap(totalMins);
+      if (capped !== totalMins) {
+        totalMins = capped;
+        document.getElementById('dlgSsMoney').value = Math.round((totalMins / 60) * t);
+      }
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      document.getElementById('dlgSsHours').value = h || '';
+      document.getElementById('dlgSsMins').value  = m || '';
+      document.getElementById('dlgSsHint').textContent = totalMins > 0
+        ? `${document.getElementById('dlgSsMoney').value} сум = ${_fmtHM(h, m)}` : '';
     } else {
-      document.getElementById('dlgSsMinutes').value = '';
+      document.getElementById('dlgSsHours').value = '';
+      document.getElementById('dlgSsMins').value  = '';
       document.getElementById('dlgSsHint').textContent = '';
+      const capHint = document.getElementById('dlgSsWorkdayHint');
+      if (capHint) capHint.style.display = 'none';
     }
   } finally { _ssSyncing = false; }
+  ssUpdateEndTimeHint();
 }
 
 async function confirmStartSession() {
   const isTemp  = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
   const nums    = document.getElementById('dlgSsReader').value.trim();
-  if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
 
   const prefix = settings.readerCardPrefix || 'FAA';
   const reader = isTemp ? nums : (prefix + nums);
 
-  if (!isTemp) {
-    if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
-    if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
-    if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
-    if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+  if (settings.requireReaderId) {
+    if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
+    if (!isTemp) {
+      if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
+      if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
+      if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
+      if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+    }
   }
   const name = document.getElementById('dlgSsName').value.trim();
   if (settings.requireUserName && !name) { toast('Введите имя пользователя', 'warn'); return; }
 
   let limitSeconds = 0, paidAmount = 0;
   if (_ssType === 'Лимит') {
-    const mins  = parseFloat(document.getElementById('dlgSsMinutes').value) || 0;
-    const money = parseFloat(document.getElementById('dlgSsMoney').value)   || 0;
+    const h     = parseInt(document.getElementById('dlgSsHours').value) || 0;
+    const m     = parseInt(document.getElementById('dlgSsMins').value)  || 0;
+    const mins  = h * 60 + m;
+    const money = parseFloat(document.getElementById('dlgSsMoney').value) || 0;
     if (!mins && !money) { toast('Введите время или сумму', 'warn'); return; }
     const t = GlobalSettings_Tariff();
     if (mins > 0) {
@@ -568,7 +913,10 @@ async function confirmStartSession() {
 
 function GlobalSettings_Tariff() { return settings.tariff || 3000; }
 
+const _manuallyEndedPcs = new Set();
+
 async function endSession(pcNumber) {
+  _manuallyEndedPcs.add(pcNumber);
   await conn.invoke('EndSession', pcNumber);
 }
 
@@ -711,7 +1059,7 @@ function setSrvMode(mode) {
     const panel = document.getElementById('srvPanel' + m.charAt(0).toUpperCase() + m.slice(1));
     const tab   = document.getElementById('srvTab'   + m.charAt(0).toUpperCase() + m.slice(1));
     if (panel) panel.style.display = (m === mode) ? '' : 'none';
-    if (tab)   { tab.style.background = (m === mode) ? '#3d3d6b' : 'transparent'; tab.style.color = (m === mode) ? 'white' : '#aaa'; }
+    if (tab)   { tab.classList.toggle('on', m === mode); tab.style.background = ''; tab.style.color = ''; }
   });
   document.getElementById('serverZipUploadStatus').textContent = '';
   document.getElementById('folderUpdateStatus').textContent = '';
@@ -722,7 +1070,7 @@ function setCliMode(mode) {
     const panel = document.getElementById('cliPanel' + m.charAt(0).toUpperCase() + m.slice(1));
     const tab   = document.getElementById('cliTab'   + m.charAt(0).toUpperCase() + m.slice(1));
     if (panel) panel.style.display = (m === mode) ? '' : 'none';
-    if (tab)   { tab.style.background = (m === mode) ? '#3d3d6b' : 'transparent'; tab.style.color = (m === mode) ? 'white' : '#aaa'; }
+    if (tab)   { tab.classList.toggle('on', m === mode); tab.style.background = ''; tab.style.color = ''; }
   });
   document.getElementById('clientZipUploadStatus').textContent   = '';
   document.getElementById('clientZipCmdStatus').textContent      = '';
@@ -934,16 +1282,21 @@ function openExtend(pcNumber) {
   activePc = pcNumber;
   _extTariff = settings?.tariff || 0;
   document.getElementById('dlgExtPc').textContent = pcNumber;
-  document.getElementById('dlgExtMin').value = 30;
+  document.getElementById('dlgExtHours').value = 0;
+  document.getElementById('dlgExtMins').value  = 30;
   document.getElementById('dlgExtAmount').value = _extTariff ? Math.round(_extTariff * 30 / 60) : 0;
-  document.getElementById('dlgExtend').style.display = 'flex';
+  document.getElementById('dlgExtend').classList.add('open');
 }
 
 function calcExtAmount() {
   if (_extSyncing || !_extTariff) return;
   _extSyncing = true;
-  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
-  document.getElementById('dlgExtAmount').value = Math.round(_extTariff * min / 60);
+  const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
+  const cost = Math.round(_extTariff * min / 60);
+  document.getElementById('dlgExtAmount').value = cost;
+  const hint = document.getElementById('dlgExtAmountHint');
+  if (hint) { hint.textContent = min > 0 ? `${min} мин = ${cost.toLocaleString()} сум` : ''; hint.style.display = min > 0 ? '' : 'none'; }
   _extSyncing = false;
 }
 
@@ -951,25 +1304,130 @@ function calcExtTime() {
   if (_extSyncing || !_extTariff) return;
   _extSyncing = true;
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
-  document.getElementById('dlgExtMin').value = Math.round(amount * 60 / _extTariff) || 0;
+  const totalMins = Math.round(amount * 60 / _extTariff) || 0;
+  document.getElementById('dlgExtHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgExtMins').value  = totalMins % 60;
+  const hint = document.getElementById('dlgExtAmountHint');
+  if (hint) { hint.textContent = totalMins > 0 ? `${totalMins} мин = ${amount.toLocaleString()} сум` : ''; hint.style.display = totalMins > 0 ? '' : 'none'; }
   _extSyncing = false;
 }
 
 async function confirmExtend() {
-  const min = parseInt(document.getElementById('dlgExtMin').value) || 0;
+  const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
   if (min <= 0) { toast('Укажите время', 'warn'); return; }
   closeDlg('dlgExtend');
   await conn.invoke('ExtendSession', activePc, min * 60, amount);
 }
 
+let _subSyncing = false;
+
+function openSubtract(pcNumber) {
+  activePc = pcNumber;
+  _extTariff = settings?.tariff || 0;
+  document.getElementById('dlgSubPc').textContent = pcNumber;
+  document.getElementById('dlgSubHours').value = 0;
+  document.getElementById('dlgSubMins').value  = 10;
+  document.getElementById('dlgSubAmount').value = _extTariff ? Math.round(_extTariff * 10 / 60) : 0;
+  document.getElementById('dlgSubtract').classList.add('open');
+}
+
+function calcSubAmount() {
+  if (_subSyncing || !_extTariff) return;
+  _subSyncing = true;
+  const h = parseInt(document.getElementById('dlgSubHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgSubMins').value) || 0);
+  const cost = Math.round(_extTariff * min / 60);
+  document.getElementById('dlgSubAmount').value = cost;
+  const hint = document.getElementById('dlgSubAmountHint');
+  if (hint) { hint.textContent = min > 0 ? `Возврат за ${min} мин = ${cost.toLocaleString()} сум` : ''; hint.style.display = min > 0 ? '' : 'none'; }
+  _subSyncing = false;
+}
+
+function calcSubTime() {
+  if (_subSyncing || !_extTariff) return;
+  _subSyncing = true;
+  const amount = parseInt(document.getElementById('dlgSubAmount').value) || 0;
+  const totalMins = Math.round(amount * 60 / _extTariff) || 0;
+  document.getElementById('dlgSubHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgSubMins').value  = totalMins % 60;
+  const hint = document.getElementById('dlgSubAmountHint');
+  if (hint) { hint.textContent = totalMins > 0 ? `Убрать ${totalMins} мин = ${amount.toLocaleString()} сум` : ''; hint.style.display = totalMins > 0 ? '' : 'none'; }
+  _subSyncing = false;
+}
+
+async function confirmSubtract() {
+  const h = parseInt(document.getElementById('dlgSubHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgSubMins').value) || 0);
+  const amount = parseInt(document.getElementById('dlgSubAmount').value) || 0;
+  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  closeDlg('dlgSubtract');
+  await conn.invoke('SubtractTime', activePc, min * 60, amount);
+}
+
+let _penSyncing = false;
+
+function openPenalty(pcNumber) {
+  activePc = pcNumber;
+  _extTariff = settings?.tariff || 0;
+  const pc = pcs[pcNumber];
+  const isVip = pc?.sessionType === 'VIP';
+  document.getElementById('dlgPenPc').textContent = pcNumber;
+  document.getElementById('penTimeRow').style.display = isVip ? 'none' : '';
+  document.getElementById('dlgPenHours').value = 0;
+  document.getElementById('dlgPenMins').value = 10;
+  document.getElementById('dlgPenAmount').value = (!isVip && _extTariff) ? Math.round(_extTariff * 10 / 60) : 0;
+  document.getElementById('dlgPenalty').classList.add('open');
+}
+
+function calcPenAmount() {
+  if (_penSyncing || !_extTariff) return;
+  const pc = pcs[activePc];
+  if (pc?.sessionType === 'VIP') return;
+  _penSyncing = true;
+  const h = parseInt(document.getElementById('dlgPenHours').value) || 0;
+  const min = h * 60 + (parseInt(document.getElementById('dlgPenMins').value) || 0);
+  document.getElementById('dlgPenAmount').value = Math.round(_extTariff * min / 60);
+  _penSyncing = false;
+}
+
+function calcPenTime() {
+  if (_penSyncing || !_extTariff) return;
+  const pc = pcs[activePc];
+  if (pc?.sessionType === 'VIP') return;
+  _penSyncing = true;
+  const amount = parseInt(document.getElementById('dlgPenAmount').value) || 0;
+  const totalMins = Math.round(amount * 60 / _extTariff) || 0;
+  document.getElementById('dlgPenHours').value = Math.floor(totalMins / 60);
+  document.getElementById('dlgPenMins').value = totalMins % 60;
+  _penSyncing = false;
+}
+
+async function confirmPenalty() {
+  const pc = pcs[activePc];
+  const isVip = pc?.sessionType === 'VIP';
+  const h = isVip ? 0 : (parseInt(document.getElementById('dlgPenHours').value) || 0);
+  const min = isVip ? 0 : (h * 60 + (parseInt(document.getElementById('dlgPenMins').value) || 0));
+  const amount = parseInt(document.getElementById('dlgPenAmount').value) || 0;
+  if (!isVip && min <= 0) { toast('Укажите время штрафа', 'warn'); return; }
+  if (isVip && amount <= 0) { toast('Укажите сумму штрафа', 'warn'); return; }
+  closeDlg('dlgPenalty');
+  await conn.invoke('ApplyPenalty', activePc, min * 60, amount);
+}
+
 let _adminSummaryReaderId = '';
 let _adminSummaryPcNumber = '';
 
-function showSummary(d) {
+function showSummary(d, isManual = false) {
   const h = Math.floor(d.duration / 3600), m = Math.floor((d.duration % 3600) / 60), s = d.duration % 60;
   _adminSummaryReaderId = d.readerId || '';
   _adminSummaryPcNumber = d.pcNumber || '';
+  if (!isManual) {
+    const name = d.userName || d.readerId || 'Анонимный';
+    bibNotify(`✅ ${d.pcNumber} — сессия завершена`,
+      `${name} · ${h}ч ${m}м · ${d.earned.toLocaleString()} сум`);
+  }
 
   let html = `
     <b>ПК:</b> ${esc(d.pcNumber)}<br>
@@ -979,6 +1437,8 @@ function showSummary(d) {
     <b>Оплачено:</b> ${d.paidAmount.toLocaleString()} сум<br>
     <b>Возврат:</b> ${d.refund.toLocaleString()} сум
   `;
+  if ((d.additionalCharge || 0) > 0)
+    html += `<div class="charge-highlight">⚠️ Доплатить: ${d.additionalCharge.toLocaleString()} сум</div>`;
 
   const debts = d.serviceDebts || [];
   const payBtn = document.getElementById('btnSummaryPayDebts');
@@ -1093,6 +1553,7 @@ function showOfflineAlert(d) {
     `<b>${esc(d.pcNumber)}</b> потерял связь во время сессии <b>${d.sessionType}</b>.<br>
      Прошло: ${h}ч ${m}м ${s}с.<br><br>Что сделать с сессией?`;
   document.getElementById('dlgOffline').style.display = 'flex';
+  bibNotify(`⚠️ ${d.pcNumber} — потеря связи`, `Сессия ${d.sessionType} · ${h}ч ${m}м ${s}с`);
 }
 
 async function resolveOffline(decision) {
@@ -1216,8 +1677,9 @@ function buildCtxHtml(c) {
      </div>`;
 
   let html = item('✎', 'Переименовать', `rename:${c.pcNumberValue}:${encodeURIComponent(c.customName || '')}`);
-  if (c.isSession)
+  if (c.isSession) {
     html += item('↔', 'Пересадить пользователя', `transfer:${c.pcNumber}`);
+  }
   html += sep;
 
   // Settings submenu
@@ -1246,6 +1708,7 @@ function buildCtxHtml(c) {
   html += sep;
   html += item('⟳', 'Переподключить клиент', `reconnect:${c.pcNumber}`);
   if (c.isOnline) {
+    html += item('💬', 'Отправить сообщение', `message:${c.pcNumber}`);
     html += item('↺', 'Перезагрузить ПК', `restart:${c.pcNumber}`);
     html += item('⏻', 'Выключить ПК', `shutdown:${c.pcNumber}`, true);
     html += sep;
@@ -1275,16 +1738,105 @@ document.addEventListener('click', async e => {
       break;
     case 'toggleGlob': await conn.invoke('ToggleGlobalSetting', args[0], args[1]); break;
     case 'reconnect': await conn.invoke('SendCommandToPc', args[0], 'RECONNECT', 'true'); break;
+    case 'message':   openSendMessage(args[0]); break;
     case 'restart':
       if (confirm(`Перезагрузить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'RESTART', 'true');
       break;
     case 'shutdown':
       if (confirm(`Выключить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'SHUTDOWN', 'true');
       break;
-    case 'delete':  deletePc(args[0]); break;
-    case 'logs':    requestClientLogs(args[0]); break;
+    case 'delete':     deletePc(args[0]); break;
+    case 'logs':       requestClientLogs(args[0]); break;
   }
 });
+
+// ─── Смена типа сессии (admin) ────────────────────────────────────────────────
+
+let _actData = null;
+
+function openAdminChangeTypeDlg(pcNumber) {
+  const pc = pcs[pcNumber];
+  if (!pc?.isSession) return;
+  activePc = pcNumber;
+  document.getElementById('dlgActPc').textContent = pcNumber;
+
+  const isLimit = pc.sessionType === 'Лимит';
+  const elapsed = pc.elapsedSeconds || 0;
+  const paid = pc.paidAmount || 0;
+  const limitSec = pc.limitSeconds || 0;
+  const t = _extTariff || settings?.tariff || 3000;
+
+  const fmtSecs = s => {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
+  };
+
+  let bodyHtml;
+  if (isLimit) {
+    bodyHtml = `
+      <div class="ct-info">
+        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-limit">Лимит</span></span></div>
+        <div class="ct-row"><span>Оплачено</span><span class="val">${paid.toLocaleString()} сум / ${fmtSecs(limitSec)}</span></div>
+        <div class="ct-row"><span>Прошло</span><span class="val">${fmtSecs(elapsed)}</span></div>
+      </div>
+      <div class="ct-note">Время сверх оплаченных <strong>${fmtSecs(limitSec)}</strong> будет начислено по тарифу в конце сессии.</div>`;
+    document.getElementById('dlgActConfirm').textContent = 'Перевести на VIP';
+    _actData = { newType: 'VIP', remainingMinutes: 0 };
+  } else {
+    bodyHtml = `
+      <div class="ct-info">
+        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-vip">VIP</span></span></div>
+        <div class="ct-row"><span>Прошло</span><span class="val">${fmtSecs(elapsed)}</span></div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label>Ещё осталось</label>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <input id="actRemH" type="number" min="0" max="23" value="1" class="tinput" style="width:60px;text-align:center" oninput="updateActHint()">
+            <span style="font-size:13px;color:var(--ink-3)">ч</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input id="actRemM" type="number" min="0" max="59" value="0" class="tinput" style="width:60px;text-align:center" oninput="updateActHint()">
+            <span style="font-size:13px;color:var(--ink-3)">мин</span>
+          </div>
+        </div>
+        <div id="actRemHint" class="dlg-end-time-hint" style="margin-top:6px"></div>
+      </div>
+      <div class="ct-note" style="margin-top:8px">Оплата за всё время сессии начислится по тарифу при завершении.</div>`;
+    document.getElementById('dlgActConfirm').textContent = 'Ограничить сессию';
+    _actData = { newType: 'Лимит', remainingMinutes: 60 };
+  }
+
+  document.getElementById('dlgActBody').innerHTML = bodyHtml;
+  if (!isLimit) updateActHint();
+  document.getElementById('dlgAdminChangeType').classList.add('open');
+}
+
+function updateActHint() {
+  const h = parseInt(document.getElementById('actRemH')?.value) || 0;
+  const m = h * 60 + (parseInt(document.getElementById('actRemM')?.value) || 0);
+  _actData = { newType: 'Лимит', remainingMinutes: m };
+  const hint = document.getElementById('actRemHint');
+  if (!hint) return;
+  if (m > 0) {
+    const end = new Date(Date.now() + m * 60000);
+    hint.textContent = 'Сессия завершится в ' + end.getHours().toString().padStart(2,'0') + ':' + end.getMinutes().toString().padStart(2,'0');
+    hint.style.display = '';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+async function confirmAdminChangeType() {
+  if (!activePc || !_actData) return;
+  if (_actData.newType === 'Лимит' && _actData.remainingMinutes <= 0) {
+    toast('Укажите оставшееся время', 'warn'); return;
+  }
+  closeDlg('dlgAdminChangeType');
+  try {
+    await conn.invoke('ChangeSessionType', activePc, _actData.newType, _actData.remainingMinutes);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
 
 // ─── Base64 helper (chunked, works for large files) ──────────────────────────
 function arrayBufferToBase64(buffer) {
@@ -1362,21 +1914,22 @@ function renderFinance() {
   if (statusF === 'unpaid') services = services.filter(t => !t.isPaid);
 
   // Stats
-  const today = new Date(); today.setHours(0,0,0,0);
-  const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay() + 1);
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const periodLabels = { today: 'За сегодня', week: 'За неделю', month: 'За месяц', year: 'За год' };
+  document.getElementById('statTotalLabel').textContent = periodLabels[period] || 'Итого';
 
-  if (finTab === 'sessions' || finTab === 'all') {
-    document.getElementById('statToday').textContent = fmt(finSessions.filter(s => new Date(s.endTime) >= today).reduce((a,s)=>a+s.earnedAmount,0));
-    document.getElementById('statWeek').textContent  = fmt(finSessions.filter(s => new Date(s.endTime) >= weekStart).reduce((a,s)=>a+s.earnedAmount,0));
-    document.getElementById('statMonth').textContent = fmt(finSessions.filter(s => new Date(s.endTime) >= monthStart).reduce((a,s)=>a+s.earnedAmount,0));
-    document.getElementById('statCount').textContent = finSessions.length;
+  let statTotal, statCount;
+  if (finTab === 'sessions') {
+    statTotal = sessions.reduce((a, s) => a + s.earnedAmount, 0);
+    statCount = sessions.length;
+  } else if (finTab === 'services') {
+    statTotal = services.reduce((a, t) => a + t.totalAmount, 0);
+    statCount = services.length;
   } else {
-    document.getElementById('statToday').textContent = fmt(finServices.filter(t => new Date(t.createdAt) >= today).reduce((a,t)=>a+t.totalAmount,0));
-    document.getElementById('statWeek').textContent  = fmt(finServices.filter(t => new Date(t.createdAt) >= weekStart).reduce((a,t)=>a+t.totalAmount,0));
-    document.getElementById('statMonth').textContent = fmt(finServices.filter(t => new Date(t.createdAt) >= monthStart).reduce((a,t)=>a+t.totalAmount,0));
-    document.getElementById('statCount').textContent = finServices.length;
+    statTotal = sessions.reduce((a, s) => a + s.earnedAmount, 0) + services.reduce((a, t) => a + t.totalAmount, 0);
+    statCount = sessions.length + services.length;
   }
+  document.getElementById('statTotal').textContent = fmt(statTotal);
+  document.getElementById('statCount').textContent = statCount;
 
   const table = document.getElementById('finTable');
   if (finTab === 'sessions')  table.innerHTML = renderSessionsTable(sessions);
@@ -1577,6 +2130,7 @@ function fillSettingsForm() {
   // Поля сессии
   document.getElementById('sRequireReaderId').checked = settings.requireReaderId !== false;
   document.getElementById('sRequireUserName').checked = !!settings.requireUserName;
+  document.getElementById('sWorkdayEnd').value = settings.workdayEnd || '';
 
   // Sort mode selector
   const sortSel = document.getElementById('sortMode');
@@ -1766,6 +2320,7 @@ function readSettingsForm() {
     updatesPath: document.getElementById('sUpdatesPath').value.trim(),
     requireReaderId: document.getElementById('sRequireReaderId').checked,
     requireUserName: document.getElementById('sRequireUserName').checked,
+    workdayEnd: document.getElementById('sWorkdayEnd').value.trim(),
   };
 }
 
@@ -1859,25 +2414,27 @@ function renderOperators(list) {
   const el = document.getElementById('operatorsList');
   if (!list.length) { el.innerHTML = '<div style="color:#555;padding:12px">Нет операторов</div>'; return; }
   el.innerHTML = list.map(op => `
-    <div class="op-row" style="flex-wrap:wrap;gap:8px">
+    <div class="op-row">
       <div class="op-info">
         <div class="op-name">${esc(op.displayName)}</div>
         <div class="op-login">${esc(op.login)}</div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#aaa">
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр списка читателей">
-          <input type="checkbox" id="opChkReaders_${op.id}" ${op.canViewReaders ? 'checked' : ''}
-            style="width:13px;height:13px">
-          👁 Читатели
+      <div class="op-perms">
+        <label class="op-perm-chk" title="Доступ к разделу Читатели">
+          <input type="checkbox" id="opChkReaders_${op.id}" ${op.canViewReaders ? 'checked' : ''}>
+          <span>👁 Читатели</span>
         </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Просмотр истории финансов">
-          <input type="checkbox" id="opChkFinance_${op.id}" ${op.canViewFinance ? 'checked' : ''}
-            style="width:13px;height:13px">
-          💰 Финансы
+        <label class="op-perm-chk" title="Доступ к истории финансов">
+          <input type="checkbox" id="opChkFinance_${op.id}" ${op.canViewFinance ? 'checked' : ''}>
+          <span>💰 Финансы</span>
         </label>
-        <button class="btn btn-outline" onclick="applyOpPermissions('${op.id}')"
-          style="font-size:11px;padding:3px 10px">Применить</button>
-        <span id="opPermSaved_${op.id}" style="display:none;color:#1D9E75;font-size:11px">✓ Сохранено</span>
+        <label class="op-perm-chk" title="Доступ к статистике">
+          <input type="checkbox" id="opChkStats_${op.id}" ${op.canViewStats ? 'checked' : ''}>
+          <span>📊 Статистика</span>
+        </label>
+        <div class="op-perm-divider"></div>
+        <button class="btn btn-outline op-perm-apply" onclick="applyOpPermissions('${op.id}')">Применить</button>
+        <span id="opPermSaved_${op.id}" class="op-perm-saved">✓</span>
       </div>
       <span class="op-active-badge ${op.isActive ? 'active' : 'inactive'}">${op.isActive ? 'Активен' : 'Отключён'}</span>
       <div class="op-actions">
@@ -1896,10 +2453,11 @@ async function addOperator() {
   if (!name || !login || !pwd) { toast('Заполните все поля', 'warn'); return; }
   const canViewReaders = document.getElementById('newOpReaders').checked;
   const canViewFinance = document.getElementById('newOpFinance').checked;
+  const canViewStats   = document.getElementById('newOpStats').checked;
   const r = await fetch('/api/admin/operators', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ displayName: name, login, password: pwd, canViewReaders, canViewFinance })
+    body: JSON.stringify({ displayName: name, login, password: pwd, canViewReaders, canViewFinance, canViewStats })
   });
   if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка', 'warn'); return; }
   document.getElementById('newOpName').value = '';
@@ -1907,6 +2465,7 @@ async function addOperator() {
   document.getElementById('newOpPwd').value = '';
   document.getElementById('newOpReaders').checked = false;
   document.getElementById('newOpFinance').checked = false;
+  document.getElementById('newOpStats').checked   = false;
   const badge = document.getElementById('opSaved');
   badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2000);
   await loadOperators();
@@ -1915,14 +2474,15 @@ async function addOperator() {
 async function applyOpPermissions(id) {
   const canViewReaders = document.getElementById(`opChkReaders_${id}`)?.checked ?? false;
   const canViewFinance = document.getElementById(`opChkFinance_${id}`)?.checked ?? false;
+  const canViewStats   = document.getElementById(`opChkStats_${id}`)?.checked   ?? false;
   const r = await fetch(`/api/admin/operators/${id}/permissions`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ canViewReaders, canViewFinance })
+    body: JSON.stringify({ canViewReaders, canViewFinance, canViewStats })
   });
   if (r.ok) {
     const badge = document.getElementById(`opPermSaved_${id}`);
-    if (badge) { badge.style.display = 'inline'; setTimeout(() => badge.style.display = 'none', 2500); }
+    if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 2500); }
   } else {
     toast('Ошибка сохранения прав', 'warn');
   }
@@ -2019,12 +2579,41 @@ async function logout() {
 
 // ─── Dialog helpers ───────────────────────────────────────────────────────────
 function closeDlg(id) {
-  document.getElementById(id).style.display = 'none';
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('modal-scrim')) {
+    el.classList.remove('open');
+  } else {
+    el.style.display = 'none';
+  }
 }
 
-// Close on overlay click
+function closeDlgIfOverlay(event, id) {
+  if (event.target === document.getElementById(id)) closeDlg(id);
+}
+
+function stepDur(id, delta, min, max) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let v = parseInt(el.value) || 0;
+  el.value = Math.min(max, Math.max(min, v + delta));
+  el.dispatchEvent(new Event('input'));
+}
+
+function ssSetCardType(val) {
+  document.getElementById(val === 'temp' ? 'rbSsCardTemp' : 'rbSsCardRegular').checked = true;
+  document.getElementById('ssBtnCardRegular').classList.toggle('on', val === 'regular');
+  document.getElementById('ssBtnCardTemp').classList.toggle('on', val === 'temp');
+  ssOnCardTypeChanged();
+}
+
+// Close on overlay click — only if mousedown also started on the overlay,
+// so text selection inside the dialog doesn't accidentally close it.
+let _dlgMousedownTarget = null;
+document.addEventListener('mousedown', e => { _dlgMousedownTarget = e.target; });
 document.addEventListener('click', e => {
-  if (e.target.classList.contains('dlg-overlay')) e.target.style.display = 'none';
+  if (e.target.classList.contains('dlg-overlay') && _dlgMousedownTarget === e.target)
+    e.target.style.display = 'none';
 });
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -2052,12 +2641,51 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 // ─── Screen viewer ────────────────────────────────────────────────────────────
+// ─── Сообщение на клиентский ПК ──────────────────────────────────────────────
+let _msgPc = null;
+function openSendMessage(pcNumber) {
+  _msgPc = pcNumber;
+  if (!_msgPc) return;
+  document.getElementById('dlgSendMessagePc').textContent = _msgPc;
+  document.getElementById('dlgMessageText').value = '';
+  document.getElementById('dlgSendMessage').style.display = 'flex';
+  setTimeout(() => document.getElementById('dlgMessageText')?.focus(), 50);
+}
+function closeSendMessage() { document.getElementById('dlgSendMessage').style.display = 'none'; }
+async function confirmSendMessage() {
+  const text = document.getElementById('dlgMessageText').value.trim();
+  if (!text) { toast('Введите текст сообщения', 'warn'); return; }
+  if (!_msgPc) return;
+  try {
+    await conn.invoke('SendCommandToPc', _msgPc, 'SHOW_MESSAGE', text);
+    closeSendMessage();
+    toast('Сообщение отправлено на ' + _msgPc);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+// ─── Размер окна просмотра экрана ─────────────────────────────────────────────
+let _screenExpanded = false;
+function toggleScreenSize() {
+  _screenExpanded = !_screenExpanded;
+  _applyScreenSize();
+}
+function _applyScreenSize() {
+  const dlg = document.querySelector('#dlgScreenView .dlg');
+  const img = document.getElementById('screenViewImg');
+  const btn = document.getElementById('screenSizeBtn');
+  if (dlg) { dlg.style.maxWidth = _screenExpanded ? '96vw' : ''; dlg.style.width = _screenExpanded ? '96vw' : ''; }
+  if (img) img.style.maxHeight = _screenExpanded ? '86vh' : '65vh';
+  if (btn) btn.textContent = _screenExpanded ? 'Свернуть' : 'Развернуть';
+}
+
 async function openScreenView(pcNumber) {
   if (_screenPc) await closeScreenView();
   _screenPc = pcNumber;
   document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
   document.getElementById('screenViewImg').src = '';
   document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  _screenExpanded = false;
+  _applyScreenSize();
   document.getElementById('dlgScreenView').style.display = 'flex';
   try { await fetch(`/api/screenshot/${encodeURIComponent(pcNumber)}/watch`, { method: 'POST' }); }
   catch (e) { /* ignore */ }
@@ -2124,47 +2752,147 @@ function periodFrom(p) {
   if (p === 'today') return t;
   if (p === 'week')  { const w = new Date(t); w.setDate(t.getDate() - t.getDay() + 1); return w; }
   if (p === 'month') return new Date(t.getFullYear(), t.getMonth(), 1);
+  if (p === 'year')  return new Date(t.getFullYear(), 0, 1);
   return null;
 }
 
 // ─── Readers ──────────────────────────────────────────────────────────────────
-let readersData = [];
+let readersData  = [];        // текущая страница (для диалогов редактирования)
+let readersTotal = 0;         // всего записей на сервере
+let readersSortCol = 'fullName';
+let readersSortAsc = true;
+let readersPage    = 0;
+let readersPageSize = 25;     // по умолчанию
 
-async function loadReaders(search = '') {
-  const url = '/api/admin/readers' + (search ? `?search=${encodeURIComponent(search)}` : '');
-  readersData = await fetch(url).then(r => r.json()).catch(() => []);
+const INVALID_DATE = '30-12-1899';
+
+function parseReaderDate(s) {
+  if (!s || s === INVALID_DATE) return 0;
+  const p = s.split('-');
+  if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]).getTime();
+  return 0;
+}
+
+function cleanUpdatedAt(r) {
+  // treat 30-12-1899 (Excel -1) same as empty — fall back to registeredAt
+  return (r.updatedAt && r.updatedAt !== INVALID_DATE) ? r.updatedAt : '';
+}
+
+function cardIdNum(id) {
+  // FAA220500035 → берём только цифровую часть
+  const m = id.match(/\d+/);
+  return m ? parseInt(m[0], 10) : 0;
+}
+
+function sortReaders(col) {
+  if (readersSortCol === col) readersSortAsc = !readersSortAsc;
+  else { readersSortCol = col; readersSortAsc = true; }
+  readersPage = 0;
+  loadReaders();
+}
+
+function sortArrow(col) {
+  if (readersSortCol !== col) return '<span style="color:#444;margin-left:4px">⇅</span>';
+  return readersSortAsc
+    ? '<span style="color:#1d9e75;margin-left:4px">↑</span>'
+    : '<span style="color:#1d9e75;margin-left:4px">↓</span>';
+}
+
+async function loadReaders() {
+  const search = document.getElementById('readersSearch')?.value.trim() || '';
+  const params = new URLSearchParams({
+    page:     readersPage,
+    pageSize: readersPageSize,
+    sort:     readersSortCol,
+    order:    readersSortAsc ? 'asc' : 'desc',
+  });
+  if (search) params.set('search', search);
+
+  const res = await fetch('/api/admin/readers?' + params).catch(() => null);
+  if (!res || !res.ok) return;
+  const data = await res.json();
+
+  readersData  = data.items  || [];
+  readersTotal = data.total  || 0;
   renderReadersTable();
+
+  const q = search ? ` (поиск: «${search}»)` : '';
   document.getElementById('readersCount').textContent =
-    `Читателей в базе: ${readersData.length}${search ? ` (по запросу «${search}»)` : ''}`;
+    `Читателей в базе: ${readersTotal}${q}`;
 }
 
 function searchReaders() {
-  const q = document.getElementById('readersSearch').value.trim();
-  loadReaders(q);
+  readersPage = 0;
+  loadReaders();
+}
+
+function readersSetPageSize(size) {
+  readersPageSize = parseInt(size) || 25;
+  readersPage = 0;
+  loadReaders();
 }
 
 function renderReadersTable() {
   const el = document.getElementById('readersTable');
-  if (!readersData.length) {
-    el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel».</div>';
+  if (!readersData.length && readersTotal === 0) {
+    el.innerHTML = '<div class="fin-empty">Нет читателей. Загрузите данные через «Импорт Excel» или добавьте вручную.</div>';
     return;
   }
-  const cols = '170px 1fr 110px 60px 180px 120px';
-  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    <span>ID билета</span><span>ФИО</span><span>Дата рождения</span><span>Пол</span><span>Категория</span><span>Дата регистрации</span>
-  </div>`;
-  readersData.forEach(r => {
-    const age = calcReaderAge(r.birthDate);
-    html += `<div class="fin-row" style="grid-template-columns:${cols}">
-      <span style="font-family:monospace;font-size:12px">${esc(r.cardId)}</span>
-      <b>${esc(r.fullName)}</b>
-      <span>${esc(r.birthDate)}${age !== null ? ` <span style="color:#555">(${age} л.)</span>` : ''}</span>
-      <span>${esc(r.gender)}</span>
-      <span>${esc(r.category)}</span>
-      <span style="color:#555">${esc(r.registeredAt)}</span>
-    </div>`;
-  });
+
+  const pages = Math.ceil(readersTotal / readersPageSize);
+  const start = readersPage * readersPageSize + 1;
+  const end   = Math.min(start + readersData.length - 1, readersTotal);
+
+  const cols = '160px 1fr 110px 55px 170px 115px 115px 74px';
+  const th = (label, col) =>
+    '<span onclick="sortReaders(\'' + col + '\')" style="cursor:pointer;user-select:none">' + label + sortArrow(col) + '</span>';
+
+  var html = '<div class="fin-table-header" style="grid-template-columns:' + cols + '">' +
+    th('ID билета','cardId') + th('ФИО','fullName') +
+    '<span>Дата рождения</span><span>Пол</span><span>Категория</span>' +
+    th('Дата регистрации','registeredAt') + th('Дата обновления','updatedAt') +
+    '<span></span></div>';
+
+  for (var i = 0; i < readersData.length; i++) {
+    var r = readersData[i];
+    var age = calcReaderAge(r.birthDate);
+    html += '<div class="fin-row" style="grid-template-columns:' + cols + '">' +
+      '<span style="font-family:monospace;font-size:12px">' + esc(r.cardId) + '</span>' +
+      '<b>' + esc(r.fullName) + '</b>' +
+      '<span>' + esc(r.birthDate) + (age !== null ? ' <span style="color:#555">(' + age + ' л.)</span>' : '') + '</span>' +
+      '<span>' + esc(r.gender) + '</span>' +
+      '<span>' + esc(r.category) + '</span>' +
+      '<span style="color:#555">' + esc(r.registeredAt) + '</span>' +
+      '<span style="color:' + (cleanUpdatedAt(r) ? '#aaa' : '#444') + '">' + esc(cleanUpdatedAt(r) || r.registeredAt || '—') + '</span>' +
+      '<span style="display:flex;gap:4px">' +
+        '<button data-action="edit" data-id="' + esc(r.cardId) + '" title="Редактировать" style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa">&#9998;</button>' +
+        '<button data-action="del" data-id="' + esc(r.cardId) + '" data-name="' + esc(r.fullName || r.cardId) + '" title="Удалить" style="padding:2px 7px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #5D2A2A;background:#2D1A1A;color:#F87171">&#128465;</button>' +
+      '</span></div>';
+  }
+
+  // Панель пагинации
+  var btnStyle = 'padding:4px 12px;border-radius:4px;cursor:pointer;border:1px solid #3D3D6B;background:#1A1A2E;color:#aaa';
+  var selStyle = 'background:#1A1A2E;border:1px solid #3D3D6B;border-radius:4px;color:#aaa;padding:3px 6px;font-size:12px';
+  html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #1a1a30;background:#111128;flex-wrap:wrap">' +
+    '<button onclick="readersPageNav(-1)" ' + (readersPage === 0 ? 'disabled' : '') + ' style="' + btnStyle + '">&#8249;</button>' +
+    '<span style="color:#666;font-size:13px">' + start + '–' + end + ' из ' + readersTotal + '</span>' +
+    '<button onclick="readersPageNav(1)" ' + (readersPage >= pages - 1 ? 'disabled' : '') + ' style="' + btnStyle + '">&#8250;</button>' +
+    '<span style="color:#444;font-size:12px">|</span>' +
+    '<span style="color:#666;font-size:12px">Строк:</span>' +
+    '<select onchange="readersSetPageSize(this.value)" style="' + selStyle + '">' +
+    [25,50,100,250].map(function(n) {
+      return '<option value="' + n + '"' + (n === readersPageSize ? ' selected' : '') + '>' + n + '</option>';
+    }).join('') +
+    '</select>' +
+  '</div>';
+
   el.innerHTML = html;
+}
+
+function readersPageNav(dir) {
+  var pages = Math.ceil(readersTotal / readersPageSize);
+  readersPage = Math.max(0, Math.min(pages - 1, readersPage + dir));
+  loadReaders();
 }
 
 function calcReaderAge(birthDate) {
@@ -2186,6 +2914,7 @@ function openImportDlg() {
   const btn = document.getElementById('importBtn');
   btn.disabled = false;
   btn.textContent = 'Загрузить';
+  btn.style.display = '';
   document.getElementById('dlgImportReaders').style.display = 'flex';
 }
 
@@ -2202,51 +2931,17 @@ async function doImport() {
     const data = await r.json();
     if (!r.ok) { toast(data.error || 'Ошибка', 'warn'); btn.disabled = false; btn.textContent = 'Загрузить'; return; }
 
-    _importConflictNewData = data.conflictNewData || {};
-    const byReader = {};
-    (data.conflicts || []).forEach(c => {
-      if (!byReader[c.cardId]) byReader[c.cardId] = { name: c.fullName, fields: [] };
-      byReader[c.cardId].fields.push(c);
-    });
-    const readerConflictCount = Object.keys(byReader).length;
-    let html = `<div style="display:flex;gap:20px;margin-bottom:${readerConflictCount ? 12 : 0}px">
+    const html = `<div style="display:flex;gap:20px">
       <span style="color:#1d9e75">✓ Добавлено: <b>${data.added}</b></span>
+      ${data.updated ? `<span style="color:#60a5fa">↻ Обновлено: <b>${data.updated}</b></span>` : ''}
       <span style="color:#666">Пропущено: <b>${data.skipped}</b></span>
-      ${readerConflictCount ? `<span style="color:#f59e0b">⚠ Конфликтов: <b>${readerConflictCount}</b></span>` : ''}
     </div>`;
-    if (readerConflictCount) {
-      html += `<div style="font-size:12px;color:#888;margin-bottom:8px">Записи с изменёнными данными. Нажмите «Обновить» чтобы применить новые значения:</div>
-      <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">`;
-      for (const [cardId, info] of Object.entries(byReader)) {
-        html += `<div style="background:#111128;border:1px solid #222240;border-radius:6px;padding:8px 10px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-            <span style="font-family:monospace;font-size:11px;color:#888">${esc(cardId)}</span>
-            <span style="font-size:12px;color:#ccc;flex:1">${esc(info.name)}</span>
-            <button id="updBtn_${esc(cardId)}" onclick="updateImportedReader(${JSON.stringify(cardId)})"
-              style="padding:2px 12px;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid #1d9e7566;background:#1d9e7522;color:#1d9e75">
-              Обновить
-            </button>
-          </div>`;
-        info.fields.forEach(f => {
-          html += `<div style="font-size:11px;display:flex;gap:6px;color:#666">
-            <span style="color:#f59e0b;width:110px;flex-shrink:0">${esc(f.field)}</span>
-            <span>${esc(f.oldValue || '—')}</span>
-            <span style="color:#444">→</span>
-            <span style="color:#ccc">${esc(f.newValue || '—')}</span>
-          </div>`;
-        });
-        html += `</div>`;
-      }
-      html += `</div>`;
-    }
     const resultEl = document.getElementById('importResult');
     resultEl.innerHTML = html;
     resultEl.style.display = 'block';
-    btn.textContent = 'Закрыть';
-    btn.disabled = false;
-    btn.onclick = () => { closeDlg('dlgImportReaders'); btn.onclick = doImport; };
+    btn.style.display = 'none';
     await loadReaders();
-    toast(`Импорт завершён: добавлено ${data.added}`, 'success');
+    toast(`Импорт завершён: добавлено ${data.added}, обновлено ${data.updated ?? 0}`, 'success');
   } catch (e) {
     toast('Ошибка импорта: ' + e.message, 'warn');
     btn.disabled = false;
@@ -2258,54 +2953,327 @@ function exportReaderStats() {
   window.open('/api/admin/readers/stats/export', '_blank');
 }
 
-let _importConflictNewData = {};  // cardId → Reader (новые данные из Excel)
+// ─── Категории читателей (фиксированный список) ───────────────────────────────
+var READER_CATEGORIES = [
+  'Абитуриент','Академик','Веб-пользователь','Доцент','Другой',
+  'Иностранец','Магистр','Научный сотрудник','Не работающий','Пенсионер',
+  'Профессор','Рабочий','Служащий','Студент','Учащийся'
+];
 
-async function updateImportedReader(cardId) {
-  const reader = _importConflictNewData[cardId];
-  if (!reader) return;
-  const btnId = 'updBtn_' + cardId;
-  const btn = document.getElementById(btnId);
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+function buildCatOptions(selected) {
+  var opts = '<option value="">—</option>';
+  for (var i = 0; i < READER_CATEGORIES.length; i++) {
+    var c = READER_CATEGORIES[i];
+    opts += '<option value="' + c + '"' + (c === selected ? ' selected' : '') + '>' + c + '</option>';
+  }
+  return opts;
+}
+
+function autoFormatDate(el) {
+  var v = el.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length >= 5) v = v.slice(0,2) + '-' + v.slice(2,4) + '-' + v.slice(4);
+  else if (v.length >= 3) v = v.slice(0,2) + '-' + v.slice(2);
+  el.value = v;
+}
+
+function onReaderIdNumInput(el) {
+  el.value = el.value.replace(/\D/g,'').slice(0,9);
+}
+
+function openEditReader(cardId) {
+  var r = readersData.find(function(x) { return x.cardId === cardId; });
+  if (!r) return;
+  document.getElementById('editReaderCardIdRow').style.display = 'none';
+  document.getElementById('editReaderId').value      = r.cardId;
+  document.getElementById('editReaderIdInput').value = r.cardId.replace(/^[A-Za-z]+/,'');
+  document.getElementById('editReaderIdInput').setAttribute('readonly','true');
+  document.getElementById('editReaderName').value    = r.fullName;
+  document.getElementById('editReaderBirth').value   = r.birthDate;
+  document.getElementById('editReaderCat').innerHTML = buildCatOptions(r.category);
+  document.getElementById('editReaderGender').value  = r.gender;
+  document.getElementById('editReaderReg').value     = r.registeredAt;
+  document.getElementById('editReaderUpd').value     = cleanUpdatedAt(r) || r.registeredAt || '';
+  document.getElementById('dlgEditReaderTitle').textContent = 'Редактировать читателя';
+  document.getElementById('editReaderSaveBtn').onclick = saveEditReader;
+  document.getElementById('dlgEditReader').style.display = 'flex';
+}
+
+async function saveEditReader() {
+  var reader = {
+    cardId:       document.getElementById('editReaderId').value,
+    fullName:     document.getElementById('editReaderName').value.trim(),
+    birthDate:    document.getElementById('editReaderBirth').value.trim(),
+    category:     document.getElementById('editReaderCat').value,
+    gender:       document.getElementById('editReaderGender').value,
+    registeredAt: document.getElementById('editReaderReg').value.trim(),
+    updatedAt:    document.getElementById('editReaderUpd').value.trim(),
+  };
+  var btn = document.getElementById('editReaderSaveBtn');
+  btn.disabled = true; btn.textContent = '...';
   try {
-    const r = await fetch('/api/admin/readers', {
+    var r = await fetch('/api/admin/readers', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reader)
     });
     if (r.ok) {
-      if (btn) { btn.textContent = '✓ Обновлено'; btn.style.background = '#0f3d2e'; btn.style.color = '#1d9e75'; }
+      closeDlg('dlgEditReader');
       await loadReaders();
+      toast('Читатель обновлён', 'success');
     } else {
-      if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
-      toast('Ошибка обновления', 'warn');
+      toast('Ошибка сохранения', 'warn');
     }
-  } catch {
-    if (btn) { btn.disabled = false; btn.textContent = 'Обновить'; }
-  }
+  } catch(e) { toast('Ошибка сохранения', 'warn'); }
+  btn.disabled = false; btn.textContent = 'Сохранить';
 }
 
-// ─── Readers Report ───────────────────────────────────────────────────────────
-let currentReadersTab = 'list';
-let reportPeriod = 'day';
+// ─── Statistics Page ──────────────────────────────────────────────────────────
+let currentStatsTab  = 'analytics';
+let analyticsPeriod  = 'day';
+let analyticsQuarter = 1;
+let reportPeriod     = 'day';
 
-function switchReadersTab(tab) {
-  currentReadersTab = tab;
-  document.getElementById('readersTabList').style.display = tab === 'list' ? '' : 'none';
-  document.getElementById('readersTabReport').style.display = tab === 'report' ? '' : 'none';
-  document.getElementById('tabBtnList').classList.toggle('active', tab === 'list');
-  document.getElementById('tabBtnReport').classList.toggle('active', tab === 'report');
-  if (tab === 'report') {
+function initStatsPage() {
+  if (currentStatsTab === 'report') {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
-    const monthStr = dateStr.substring(0, 7);
-    if (!document.getElementById('rptDateDay').value)
-      document.getElementById('rptDateDay').value = dateStr;
-    if (!document.getElementById('rptDateMonth').value)
-      document.getElementById('rptDateMonth').value = monthStr;
+    if (!document.getElementById('rptDateDay').value)   document.getElementById('rptDateDay').value   = dateStr;
+    if (!document.getElementById('rptDateMonth').value) document.getElementById('rptDateMonth').value = dateStr.substring(0, 7);
     loadReport();
   }
 }
 
+function switchStatsTab(tab) {
+  currentStatsTab = tab;
+  document.getElementById('statsTabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
+  document.getElementById('statsTabReport').style.display    = tab === 'report'    ? '' : 'none';
+  document.getElementById('statsBtnAnalytics').classList.toggle('active', tab === 'analytics');
+  document.getElementById('statsBtnReport').classList.toggle('active',    tab === 'report');
+  if (tab === 'report') {
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    if (!document.getElementById('rptDateDay').value)   document.getElementById('rptDateDay').value   = dateStr;
+    if (!document.getElementById('rptDateMonth').value) document.getElementById('rptDateMonth').value = dateStr.substring(0, 7);
+    loadReport();
+  }
+}
+
+function setAnalyticsPeriod(period) {
+  analyticsPeriod = period;
+  ['day','month','quarter','year'].forEach(p => {
+    document.getElementById('anlBtn' + p.charAt(0).toUpperCase() + p.slice(1)).classList.toggle('active', p === period);
+  });
+  document.getElementById('anlDateDay').style.display     = period === 'day'     ? ''     : 'none';
+  document.getElementById('anlDateMonth').style.display   = period === 'month'   ? ''     : 'none';
+  document.getElementById('anlDateQuarter').style.display = period === 'quarter' ? 'flex' : 'none';
+  document.getElementById('anlDateYear').style.display    = period === 'year'    ? ''     : 'none';
+}
+
+function setQuarter(q) {
+  analyticsQuarter = q;
+  [1,2,3,4].forEach(i => document.getElementById('anlQ' + i).classList.toggle('active', i === q));
+}
+
+function getAnalyticsDateStr() {
+  switch (analyticsPeriod) {
+    case 'day':     return document.getElementById('anlDateDay').value;
+    case 'month':   return document.getElementById('anlDateMonth').value;
+    case 'quarter': return (document.getElementById('anlYearQuarter').value || new Date().getFullYear()) + '-Q' + analyticsQuarter;
+    case 'year':    return String(document.getElementById('anlDateYear').value || new Date().getFullYear());
+  }
+  return '';
+}
+
+async function loadAnalytics() {
+  const dateStr = getAnalyticsDateStr();
+  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+
+  const emptyEl = document.getElementById('anlEmpty');
+  emptyEl.style.display = '';
+  emptyEl.textContent = 'Загрузка…';
+  document.getElementById('anlSummary').style.display = 'none';
+  document.getElementById('anlContent').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/admin/readers/analytics?period=${analyticsPeriod}&date=${encodeURIComponent(dateStr)}`);
+    const data = await r.json();
+    if (!r.ok) { emptyEl.textContent = data.error || 'Ошибка'; return; }
+    renderAnalytics(data);
+  } catch {
+    emptyEl.textContent = 'Ошибка загрузки';
+  }
+}
+
+function renderAnalytics(data) {
+  const sumEl = document.getElementById('anlSummary');
+  sumEl.style.display = 'flex';
+  sumEl.innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Визитов всего</div><div class="stat-val">${data.totalVisits}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Анонимных визитов</div><div class="stat-val orange">${data.anonymousVisits}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Уникальных читателей</div><div class="stat-val">${data.totalUniqueReaders}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Выручка (сум)</div><div class="stat-val blue">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
+    <div class="stat-card" style="flex:2;min-width:160px"><div class="stat-label">Период</div><div style="font-size:13px;color:#ccc;margin-top:4px">${esc(data.periodLabel)}</div></div>`;
+
+  const emptyEl = document.getElementById('anlEmpty');
+  if (!data.totalVisits) {
+    emptyEl.style.display = '';
+    emptyEl.textContent = 'Нет данных о посещениях зарегистрированных читателей за выбранный период';
+    document.getElementById('anlContent').style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  document.getElementById('anlContent').style.display = '';
+
+  document.getElementById('anlGenderTable').innerHTML = buildAnalyticsTable(
+    ['Пол', 'Визиты', 'Уникальных'],
+    data.gender.map(g => [g.name, g.visits, g.uniqueReaders]), true);
+
+  document.getElementById('anlCategoryTable').innerHTML = buildAnalyticsTable(
+    ['Категория', 'Визиты', 'Уникальных'],
+    data.categories.map(c => [c.name, c.visits, c.uniqueReaders]), true);
+
+  // Age groups: show only gender columns that have at least one non-zero value
+  const knownGenders = [...new Set(data.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
+  const activeGenders = knownGenders.filter(gn =>
+    data.ageGroups.some(ag => (ag.byGender[gn]?.visits ?? 0) > 0 || (ag.byGender[gn]?.uniqueReaders ?? 0) > 0));
+  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...activeGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
+  const ageRows = data.ageGroups.map(g => {
+    const byG = g.byGender || {};
+    return [g.group, g.visits, g.uniqueReaders, ...activeGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+  });
+  document.getElementById('anlAgeTable').innerHTML = buildAnalyticsTable(ageHeaders, ageRows, true);
+
+  // Services table with «Компьютер» row and «Итого» footer
+  document.getElementById('anlServicesTable').innerHTML = buildServicesTable(data.services, data.pcStats);
+
+  // PC stats block
+  renderPcStats(data.pcStats);
+}
+
+function buildServicesTable(services, pcStats) {
+  const pc = pcStats || {};
+  const border = '1px solid #2A2A4A';
+  const rowBorder = '1px solid #1E1E38';
+  const thS = h => `<th style="padding:7px 14px;white-space:nowrap;color:#777;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;background:#111128">${esc(h)}</th>`;
+  const thC = h => `<th style="padding:7px 14px;text-align:center;color:#777;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;border-left:${border};background:#111128">${esc(h)}</th>`;
+
+  let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse">
+    <thead><tr>${thS('Услуга')}${thC('Кол-во')}${thC('Сумма (сум)')}</tr></thead><tbody>`;
+
+  const tdN = (v, ri) => `<td style="padding:7px 14px;border-bottom:${rowBorder};font-size:13px;color:#d0d0e8;${ri%2?'background:#0e0e22':''}">${esc(String(v))}</td>`;
+  const tdC = (v, ri, color) => `<td style="padding:7px 14px;border-bottom:${rowBorder};border-left:${border};text-align:center;font-size:13px;color:${color||((v===0||v==='0')?'#444':'#aaa')};${ri%2?'background:#0e0e22':''}">${typeof v==='number'?v.toLocaleString('ru-RU'):esc(String(v))}</td>`;
+
+  // «Компьютер» row first
+  if ((pc.totalSessions ?? 0) > 0) {
+    html += `<tr><td style="padding:7px 14px;border-bottom:${rowBorder};font-size:13px;color:#7799cc;font-weight:500">🖥 Компьютер (сессии)</td>
+      <td style="padding:7px 14px;border-bottom:${rowBorder};border-left:${border};text-align:center;font-size:13px;color:#aaa">${(pc.totalSessions||0).toLocaleString('ru-RU')}</td>
+      <td style="padding:7px 14px;border-bottom:${rowBorder};border-left:${border};text-align:center;font-size:13px;color:#aaa">${(pc.totalRevenue||0).toLocaleString('ru-RU')}</td></tr>`;
+  }
+
+  services.forEach((s, i) => {
+    html += `<tr>${tdN(s.name, i)}${tdC(s.quantity, i)}${tdC(s.totalAmount, i)}</tr>`;
+  });
+
+  // «Итого» footer row
+  const totalQty = (pc.totalSessions || 0) + services.reduce((sum, s) => sum + s.quantity, 0);
+  const totalAmt = (pc.totalRevenue  || 0) + services.reduce((sum, s) => sum + s.totalAmount, 0);
+  if (totalQty > 0 || totalAmt > 0) {
+    html += `<tr style="border-top:2px solid #2A2A4A">
+      <td style="padding:8px 14px;font-size:13px;font-weight:700;color:#e0e0f0">Итого</td>
+      <td style="padding:8px 14px;border-left:${border};text-align:center;font-size:13px;font-weight:700;color:#e0e0f0">${totalQty.toLocaleString('ru-RU')}</td>
+      <td style="padding:8px 14px;border-left:${border};text-align:center;font-size:13px;font-weight:700;color:#1d9e75">${totalAmt.toLocaleString('ru-RU')}</td></tr>`;
+  }
+
+  if (!services.length && !(pc.totalSessions > 0)) {
+    html += `<tr><td colspan="3" style="padding:16px;text-align:center;color:#444;font-size:13px">Услуги в данном периоде не использовались</td></tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderPcStats(pc) {
+  if (!pc) return;
+  // Summary cards
+  document.getElementById('anlPcSummary').innerHTML = `
+    <div class="stat-card" style="flex:1"><div class="stat-label">Сессий за ПК</div><div class="stat-val">${pc.totalSessions}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Анонимных сессий</div><div class="stat-val orange">${pc.anonSessions}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Уникальных читателей</div><div class="stat-val">${pc.uniqueReaders}</div></div>
+    <div class="stat-card" style="flex:1"><div class="stat-label">Выручка ПК (сум)</div><div class="stat-val blue">${pc.totalRevenue.toLocaleString('ru-RU')}</div></div>`;
+
+  // Gender / Category breakdowns
+  document.getElementById('anlPcGenderTable').innerHTML = buildAnalyticsTable(
+    ['Пол', 'Сессий', 'Уникальных'],
+    pc.gender.map(g => [g.name, g.sessions, g.uniqueReaders]), true);
+
+  document.getElementById('anlPcCategoryTable').innerHTML = buildAnalyticsTable(
+    ['Категория', 'Сессий', 'Уникальных'],
+    pc.categories.map(c => [c.name, c.sessions, c.uniqueReaders]), true);
+
+  // Age groups for PC (same auto-hide logic)
+  const pcGenders = [...new Set(pc.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
+  const pcActiveG = pcGenders.filter(gn =>
+    pc.ageGroups.some(ag => (ag.byGender[gn]?.sessions ?? 0) > 0 || (ag.byGender[gn]?.uniqueReaders ?? 0) > 0));
+  const pcAgeHdr = ['Группа', 'Сессий', 'Уникальных', ...pcActiveG.flatMap(g => [`${g} сессий`, `${g} уник.`])];
+  const pcAgeRows = pc.ageGroups.map(g => {
+    const byG = g.byGender || {};
+    return [g.group, g.sessions, g.uniqueReaders, ...pcActiveG.flatMap(gn => [byG[gn]?.sessions ?? 0, byG[gn]?.uniqueReaders ?? 0])];
+  });
+  document.getElementById('anlPcAgeTable').innerHTML = buildAnalyticsTable(pcAgeHdr, pcAgeRows, true);
+
+  // Top tables
+  const topHdr = ['Читатель', 'Категория', 'Визитов', 'Часов'];
+  const topVisitRows = pc.topByVisits.map(u => [u.readerName, u.category, u.visits, +(u.totalMinutes / 60).toFixed(1)]);
+  const topHoursRows = pc.topByHours.map(u => [u.readerName, u.category, u.visits, +(u.totalMinutes / 60).toFixed(1)]);
+  document.getElementById('anlPcTopVisits').innerHTML = topVisitRows.length
+    ? buildAnalyticsTable(topHdr, topVisitRows, false)
+    : '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+  document.getElementById('anlPcTopHours').innerHTML = topHoursRows.length
+    ? buildAnalyticsTable(topHdr, topHoursRows, false)
+    : '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+}
+
+function buildAnalyticsTable(headers, rows, numericFromCol1 = true) {
+  const borderCol = '1px solid #2A2A4A';
+  const borderRow = '1px solid #1E1E38';
+  const th = (h, i) => {
+    const align = (numericFromCol1 && i > 0) ? 'center' : 'left';
+    const bl = i > 0 ? `border-left:${borderCol};` : '';
+    return `<th style="padding:7px 14px;white-space:nowrap;color:#777;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #2A2A4A;text-align:${align};${bl}background:#111128">${esc(String(h))}</th>`;
+  };
+  const td = (v, i) => {
+    const isNum = numericFromCol1 && i > 0;
+    const align = isNum ? 'center' : 'left';
+    const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : esc(String(v));
+    const color = i === 0 ? '#d0d0e8' : (typeof v === 'number' && v === 0 ? '#444' : '#b0b0cc');
+    const bl = i > 0 ? `border-left:${borderCol};` : '';
+    return `<td style="padding:7px 14px;border-bottom:${borderRow};font-size:13px;text-align:${align};color:${color};${bl}">${val}</td>`;
+  };
+  if (!rows.length) return '<div class="fin-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+  // Hide columns where every numeric value is 0
+  const keep = headers.map((_, ci) =>
+    ci === 0 || rows.some(r => { const v = r[ci]; return typeof v === 'number' ? v !== 0 : v !== '0'; })
+  );
+  const hdr2 = headers.filter((_, ci) => keep[ci]);
+  const rows2 = rows.map(r => r.filter((_, ci) => keep[ci]));
+  let html = `<div style="overflow-x:auto;border:1px solid #2A2A4A;border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse">
+    <thead><tr>${hdr2.map((h, i) => th(h, i)).join('')}</tr></thead><tbody>`;
+  rows2.forEach((row, ri) => {
+    const bg = ri % 2 === 1 ? 'background:#0e0e22;' : '';
+    html += `<tr style="${bg}">${row.map((v, i) => td(v, i)).join('')}</tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function exportAnalytics() {
+  const dateStr = getAnalyticsDateStr();
+  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+  window.open(`/api/admin/readers/analytics/export?period=${analyticsPeriod}&date=${encodeURIComponent(dateStr)}`, '_blank');
+}
+
+// ─── Readers Report ───────────────────────────────────────────────────────────
 function setReportPeriod(period) {
   reportPeriod = period;
   document.getElementById('rptBtnDay').classList.toggle('active', period === 'day');
@@ -2313,6 +3281,83 @@ function setReportPeriod(period) {
   document.getElementById('rptDateDay').style.display = period === 'day' ? '' : 'none';
   document.getElementById('rptDateMonth').style.display = period === 'month' ? '' : 'none';
   loadReport();
+}
+
+// ─── Delete reader ────────────────────────────────────────────────────────────
+async function deleteReader(cardId, name) {
+  if (!confirm(`Удалить читателя «${name}»?\nЭто действие нельзя отменить.`)) return;
+  const r = await fetch(`/api/admin/readers/${encodeURIComponent(cardId)}`, { method: 'DELETE' });
+  if (r.ok) { await loadReaders(); toast('Читатель удалён', 'success'); }
+  else toast('Ошибка удаления', 'warn');
+}
+
+async function deleteAllReaders() {
+  if (!confirm('Удалить ВСЕХ читателей (' + readersData.length + ' записей)?\nЭто действие нельзя отменить.')) return;
+  const r = await fetch('/api/admin/readers', { method: 'DELETE' });
+  if (r.ok) { await loadReaders(); toast('База читателей очищена', 'success'); }
+  else toast('Ошибка очистки', 'warn');
+}
+
+// ─── Add reader manually ──────────────────────────────────────────────────────
+function openAddReader() {
+  document.getElementById('editReaderCardIdRow').style.display = '';
+  document.getElementById('editReaderId').value = '';
+  document.getElementById('editReaderIdInput').removeAttribute('readonly');
+  document.getElementById('editReaderIdInput').value = '';
+  document.getElementById('editReaderName').value  = '';
+  document.getElementById('editReaderBirth').value = '';
+  document.getElementById('editReaderCat').innerHTML = buildCatOptions('Студент');
+  document.getElementById('editReaderGender').value = '';
+  var d = new Date();
+  var dd = String(d.getDate()).padStart(2,'0');
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var yyyy = d.getFullYear();
+  var today = dd + '-' + mm + '-' + yyyy;
+  document.getElementById('editReaderReg').value = today;
+  document.getElementById('editReaderUpd').value = today;
+  document.getElementById('dlgEditReaderTitle').textContent = 'Добавить читателя';
+  document.getElementById('editReaderSaveBtn').onclick = saveAddReader;
+  document.getElementById('dlgEditReader').style.display = 'flex';
+}
+
+async function saveAddReader() {
+  var numPart = document.getElementById('editReaderIdInput').value.trim();
+  if (!numPart) { toast('Введите номер билета (цифры)', 'warn'); return; }
+  var prefix = (settings && settings.readerCardPrefix) || 'FAA';
+  var cardId = prefix + numPart;
+  var reader = {
+    cardId:       cardId,
+    fullName:     document.getElementById('editReaderName').value.trim(),
+    birthDate:    document.getElementById('editReaderBirth').value.trim(),
+    category:     document.getElementById('editReaderCat').value,
+    gender:       document.getElementById('editReaderGender').value,
+    registeredAt: document.getElementById('editReaderReg').value.trim(),
+    updatedAt:    document.getElementById('editReaderUpd').value.trim(),
+  };
+  var btn = document.getElementById('editReaderSaveBtn');
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    var res = await fetch('/api/admin/readers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reader)
+    });
+    var data = await res.json();
+    if (res.ok) {
+      closeDlg('dlgEditReader');
+      await loadReaders();
+      toast('Читатель добавлен', 'success');
+    } else {
+      toast(data.error || 'Ошибка добавления', 'warn');
+    }
+  } catch(e) { toast('Ошибка добавления', 'warn'); }
+  btn.disabled = false; btn.textContent = 'Сохранить';
+}
+
+// ─── Clear readers report ─────────────────────────────────────────────────────
+function clearReadersReport() {
+  document.getElementById('reportTable').innerHTML  = '<div class="fin-empty">Выберите период и нажмите «Показать»</div>';
+  document.getElementById('reportSummary').style.display = 'none';
 }
 
 async function loadReport() {
@@ -2445,7 +3490,7 @@ function openAdminServiceDlg(pcNumber) {
   renderAdminSvcRows();
   updateAdminSvcTotal();
   onAdminSvcPcChanged();
-  document.getElementById('dlgAdminService').style.display = 'flex';
+  document.getElementById('dlgAdminService').classList.add('open');
 }
 
 function addAdminSvcRow() {

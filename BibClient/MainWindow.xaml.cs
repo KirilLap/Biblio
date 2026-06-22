@@ -95,6 +95,9 @@ namespace BibClient
                 if (paused) PauseLock();
                 else PauseUnlock();
             });
+
+            // Текстовое сообщение от администратора/оператора — окно по центру экрана
+            PolicyEngine.ShowMessageRequested += (text) => Dispatcher.Invoke(() => ShowAdminMessage(text));
         }
 
         private void StartNetwork()
@@ -416,6 +419,88 @@ namespace BibClient
             TxtClockWarning.Visibility = Visibility.Visible;
         }
 
+        // Окно сообщения от администратора/оператора — поверх всего, по центру экрана
+        private Window? _adminMsgWindow;
+        private void ShowAdminMessage(string text)
+        {
+            try
+            {
+                // Не копим окна: закрываем предыдущее сообщение, если оно ещё открыто
+                _adminMsgWindow?.Close();
+
+                var win = new Window
+                {
+                    WindowStyle = WindowStyle.None,
+                    ResizeMode = ResizeMode.NoResize,
+                    AllowsTransparency = true,
+                    Background = WpfBrushes.Transparent,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                    Topmost = true,
+                    ShowInTaskbar = false,
+                    SizeToContent = SizeToContent.WidthAndHeight
+                };
+
+                var card = new Border
+                {
+                    CornerRadius = new CornerRadius(16),
+                    Background = new SolidColorBrush(WpfColor.FromRgb(0x1A, 0x1A, 0x2E)),
+                    BorderBrush = new SolidColorBrush(WpfColor.FromRgb(0x3D, 0x3D, 0x6B)),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(30),
+                    MaxWidth = 560,
+                    Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 45, ShadowDepth = 0, Opacity = 0.55 }
+                };
+
+                var stack = new StackPanel();
+
+                stack.Children.Add(new TextBlock
+                {
+                    Text = "Сообщение от администратора",
+                    FontSize = 14,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(WpfColor.FromRgb(0x8A, 0x8A, 0xE0)),
+                    Margin = new Thickness(0, 0, 0, 14)
+                });
+
+                stack.Children.Add(new TextBlock
+                {
+                    Text = text,
+                    FontSize = 19,
+                    LineHeight = 27,
+                    Foreground = WpfBrushes.White,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 24)
+                });
+
+                var okBtn = new WpfButton
+                {
+                    Content = "OK",
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = WpfBrushes.White,
+                    Background = new SolidColorBrush(WpfColor.FromRgb(0x3B, 0x82, 0xF6)),
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(30, 10, 30, 10),
+                    Cursor = WpfCursors.Hand,
+                    HorizontalAlignment = WpfHorizontalAlignment.Right
+                };
+                okBtn.Click += (_, __) => win.Close();
+                stack.Children.Add(okBtn);
+
+                card.Child = stack;
+                win.Content = card;
+                win.Closed += (_, __) => { if (_adminMsgWindow == win) _adminMsgWindow = null; };
+                _adminMsgWindow = win;
+                win.Show();
+                win.Activate();
+                Logger.Info($"Показано сообщение администратора: {text}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Ошибка показа сообщения администратора: {ex.Message}");
+            }
+        }
+
         // =====================
         // Сессия
         // =====================
@@ -446,7 +531,7 @@ namespace BibClient
             // Подписки на события сессии
             _sessionManager.SessionExpired += OnSessionExpired;
             _sessionManager.ElapsedUpdated += (elapsed) =>
-                _ = _networkManager?.SendStatusUpdateAsync(sessionType, elapsed);
+                _ = _networkManager?.SendStatusUpdateAsync(PolicyEngine.ActiveSessionType, elapsed);
 
             // 4. Отправляем статус на сервер
             _ = _networkManager?.SendStatusAsync(sessionType);

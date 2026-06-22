@@ -60,8 +60,7 @@ namespace BibAdminWeb
             }
             if (path == "/api/admin/finance/sessions" && method == "DELETE")
             {
-                FinanceStore.Sessions.Clear();
-                FinanceStore.SaveHistory();
+                FinanceStore.ClearAll();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
                 return;
             }
@@ -204,11 +203,12 @@ namespace BibAdminWeb
                 }
                 var canReaders = data.TryGetProperty("canViewReaders", out var rvr) && rvr.GetBoolean();
                 var canFinance = data.TryGetProperty("canViewFinance", out var rvf) && rvf.GetBoolean();
+                var canStats   = data.TryGetProperty("canViewStats",   out var rvs) && rvs.GetBoolean();
                 s.Operators.Add(new OperatorAccount
                 {
                     Login = login, DisplayName = displayName,
                     PasswordHash = HashPassword(password), IsActive = true,
-                    CanViewReaders = canReaders, CanViewFinance = canFinance
+                    CanViewReaders = canReaders, CanViewFinance = canFinance, CanViewStats = canStats
                 });
                 s.Save();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
@@ -252,6 +252,7 @@ namespace BibAdminWeb
                     {
                         if (data.TryGetProperty("canViewReaders", out var rvr)) op.CanViewReaders = rvr.GetBoolean();
                         if (data.TryGetProperty("canViewFinance", out var rvf)) op.CanViewFinance = rvf.GetBoolean();
+                        if (data.TryGetProperty("canViewStats",   out var rvs)) op.CanViewStats   = rvs.GetBoolean();
                         s.Save();
                         // Уведомляем оператора в реальном времени — его браузер обновит вкладки
                         if (OperatorBroadcaster.Instance != null)
@@ -401,12 +402,12 @@ namespace BibAdminWeb
                     // Исключаем все файлы настроек и runtime-данных, чтобы обновление
                     // не перезаписало порт, пароль, реестр ПК и историю финансов.
                     $"robocopy \"{sourcePath}\" \"{appDir}\" /E /IS /IT" +
-                    // Настройки — самое важное
-                    $" /XF global_settings.json" +
-                    // Прочие конфиги
+                    // Папка с данными (настройки, БД, история) — никогда не перезаписывать
+                    $" /XD data" +
+                    // Прочие runtime-файлы рядом с exe
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
-                    // Runtime JSON-данные (реестр ПК, сессии, история)
-                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     // Папка с загруженными фоновыми изображениями
                     $" /XD Files" +
@@ -487,16 +488,20 @@ namespace BibAdminWeb
                 var exePath  = Path.Combine(appDir, "BibAdminWeb.exe");
                 var flagPath = Path.Combine(appDir, "update_restart.flag");
                 var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate_zip.bat");
+                var logPath = Path.Combine(appDir, "update_log.txt");
                 var script = string.Join("\r\n",
                     "@echo off",
+                    $"echo Update started %DATE% %TIME% > \"{logPath}\"",
                     "timeout /t 5 /nobreak >nul",
                     $"robocopy \"{tempDir}\" \"{appDir}\" /E /IS /IT" +
                     $" /XF global_settings.json" +
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
-                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     $" /XD Files" +
-                    $" /NFL /NDL /NJH /NJS /NC /NS /NP",
+                    $" /LOG+:\"{logPath}\"",
+                    $"echo Robocopy exit code: %ERRORLEVEL% >> \"{logPath}\"",
                     $"rmdir /s /q \"{tempDir}\"",
                     $"echo.> \"{flagPath}\"",
                     $"start \"\" \"{exePath}\""
@@ -696,6 +701,18 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Operator: быстрое добавление читателя по номеру билета ──────
+            if (path == "/api/op/readers/quick-add" && method == "POST")
+            {
+                string body = await ReadBody(ctx);
+                string cardId = "";
+                try { using var doc = JsonDocument.Parse(body); cardId = doc.RootElement.GetProperty("cardId").GetString()?.Trim() ?? ""; } catch { }
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан cardId\"}"); return; }
+                ReaderStore.QuickAdd(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Operator: список/поиск читателей ─────────────────────────────
             if (path == "/api/op/readers" && method == "GET")
             {
@@ -750,6 +767,57 @@ namespace BibAdminWeb
                 ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
                 ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 await ctx.Response.Body.WriteAsync(bytes);
+                return;
+            }
+
+            // ─── Operator: аналитика посещений ────────────────────────────────
+            if (path == "/api/op/readers/analytics" && method == "GET")
+            {
+                if (!op.CanViewStats)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к статистике\"}");
+                    return;
+                }
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var result = ReadersApi.BuildAnalyticsPublic(period, dateStr);
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result, _json));
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
+            // ─── Operator: экспорт аналитики ──────────────────────────────────
+            if (path == "/api/op/readers/analytics/export" && method == "GET")
+            {
+                if (!op.CanViewStats)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к статистике\"}");
+                    return;
+                }
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var bytes = ReadersApi.BuildAnalyticsExcelPublic(period, dateStr);
+                    ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    ctx.Response.Headers["Content-Disposition"] =
+                        $"attachment; filename=analytics_{dateStr.Replace("-", "")}.xlsx";
+                    await ctx.Response.Body.WriteAsync(bytes);
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
                 return;
             }
 

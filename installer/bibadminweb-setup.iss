@@ -29,9 +29,7 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 [Files]
 Source: "{#SrcAdminWeb}\*"; DestDir: "{app}\BibAdminWeb"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
-    Excludes: "global_settings.json"
-Source: "{#SrcAdminWeb}\global_settings.json"; DestDir: "{app}\BibAdminWeb"; \
-    Flags: onlyifdoesntexist skipifsourcedoesntexist
+    Excludes: "global_settings.json,data\*"
 
 [Icons]
 Name: "{autodesktop}\BibAdmin Web"; Filename: "{app}\BibAdminWeb\BibAdminWeb.exe"

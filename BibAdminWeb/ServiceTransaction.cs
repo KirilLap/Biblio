@@ -29,11 +29,16 @@ namespace BibAdminWeb
         public static List<ServiceTransaction> All { get; } = new();
 
         private static readonly string FilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "BibAdmin", "service_history.json");
+            AppDomain.CurrentDomain.BaseDirectory, "data", "service_history.json");
 
         public static void LoadHistory()
         {
+            // Миграция: перенести service_history.json из %APPDATA%\BibAdmin\ в data\
+            var oldPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BibAdmin", "service_history.json");
+            if (!File.Exists(FilePath) && File.Exists(oldPath))
+            {
+                try { Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!); File.Copy(oldPath, FilePath); File.Delete(oldPath); } catch { }
+            }
             try
             {
                 if (!File.Exists(FilePath)) return;

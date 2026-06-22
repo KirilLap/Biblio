@@ -39,19 +39,95 @@ namespace BibAdminWeb
                     gender       = reader.Gender,
                     birthDate    = reader.BirthDate,
                     registeredAt = reader.RegisteredAt,
+                    updatedAt    = reader.UpdatedAt,
                     age          = age >= 0 ? age : (int?)null,
                 }, _json));
                 return;
             }
 
-            // ─── Admin: list readers ────────────────────────────────────────
-            // Note: admin auth already enforced by AdminApi middleware for /api/admin/* paths
+            // ─── Admin: list readers (с пагинацией и сортировкой) ─────────────
             if (path == "/api/admin/readers" && method == "GET")
             {
-                var search = ctx.Request.Query["search"].ToString();
-                var list = ReaderStore.GetAll(string.IsNullOrWhiteSpace(search) ? null : search);
+                var search   = ctx.Request.Query["search"].ToString();
+                var sortCol  = ctx.Request.Query["sort"].ToString();
+                var sortDir  = ctx.Request.Query["order"].ToString();
+                var pageStr  = ctx.Request.Query["page"].ToString();
+                var sizeStr  = ctx.Request.Query["pageSize"].ToString();
+
+                // Если параметров нет — старый режим (полный список) для совместимости
+                if (string.IsNullOrEmpty(pageStr) && string.IsNullOrEmpty(sizeStr))
+                {
+                    var list = ReaderStore.GetAll(string.IsNullOrWhiteSpace(search) ? null : search);
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(list, _json));
+                    return;
+                }
+
+                int page     = int.TryParse(pageStr, out var p) ? Math.Max(0, p) : 0;
+                int pageSize = int.TryParse(sizeStr, out var s) ? Math.Clamp(s, 10, 500) : 25;
+                bool sortAsc = sortDir != "desc";
+                if (string.IsNullOrEmpty(sortCol)) sortCol = "fullName";
+
+                var (items, total) = ReaderStore.GetPaged(
+                    string.IsNullOrWhiteSpace(search) ? null : search,
+                    sortCol, sortAsc, page, pageSize);
+
                 ctx.Response.ContentType = "application/json";
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(list, _json));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(
+                    new { items, total, page, pageSize }, _json));
+                return;
+            }
+
+            // ─── Admin: add reader manually (full data) ───────────────────────
+            if (path == "/api/admin/readers" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    var reader = await JsonSerializer.DeserializeAsync<Reader>(ctx.Request.Body, _json);
+                    if (reader == null || string.IsNullOrWhiteSpace(reader.CardId))
+                    { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан ID билета\"}"); return; }
+                    if (ReaderStore.GetByCardId(reader.CardId) != null)
+                    { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsync("{\"error\":\"Читатель с таким ID уже существует\"}"); return; }
+                    if (string.IsNullOrEmpty(reader.RegisteredAt)) reader.RegisteredAt = DateTime.Today.ToString("dd-MM-yyyy");
+                    if (string.IsNullOrEmpty(reader.UpdatedAt))    reader.UpdatedAt    = reader.RegisteredAt;
+                    ReaderStore.Import(new System.Collections.Generic.List<Reader> { reader });
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex) { ctx.Response.StatusCode = 500; await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json)); }
+                return;
+            }
+
+            // ─── Admin: delete reader ──────────────────────────────────────────
+            if (path.StartsWith("/api/admin/readers/") && method == "DELETE" && !path.Contains("quick-add"))
+            {
+                ctx.Response.ContentType = "application/json";
+                var cardId = Uri.UnescapeDataString(path["/api/admin/readers/".Length..]);
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан ID\"}"); return; }
+                ReaderStore.Delete(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
+            // ─── Admin: delete ALL readers ─────────────────────────────────────
+            if (path == "/api/admin/readers" && method == "DELETE")
+            {
+                ctx.Response.ContentType = "application/json";
+                var count = ReaderStore.DeleteAll();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true, deleted = count }, _json));
+                return;
+            }
+
+            // ─── Quick-add reader by card ID (admin) ──────────────────────────
+            if (path == "/api/admin/readers/quick-add" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                string body = await new System.IO.StreamReader(ctx.Request.Body).ReadToEndAsync();
+                string cardId = "";
+                try { using var doc = System.Text.Json.JsonDocument.Parse(body); cardId = doc.RootElement.GetProperty("cardId").GetString()?.Trim() ?? ""; } catch { }
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан cardId\"}"); return; }
+                ReaderStore.QuickAdd(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
                 return;
             }
 
@@ -177,6 +253,48 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Admin: visit analytics ────────────────────────────────────────
+            if (path == "/api/admin/readers/analytics" && method == "GET")
+            {
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    var result = BuildAnalytics(period, dateStr);
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result, _json));
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
+            // ─── Admin: visit analytics export ─────────────────────────────────
+            if (path == "/api/admin/readers/analytics/export" && method == "GET")
+            {
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var bytes = BuildAnalyticsExcel(period, dateStr);
+                    ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    ctx.Response.Headers["Content-Disposition"] =
+                        $"attachment; filename=analytics_{dateStr.Replace("-", "")}.xlsx";
+                    await ctx.Response.Body.WriteAsync(bytes);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Ошибка экспорта аналитики: {ex.Message}");
+                    ctx.Response.StatusCode = 400;
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
             await next(ctx);
         }
 
@@ -230,7 +348,22 @@ namespace BibAdminWeb
                 var f = new DateTime(int.Parse(p[0]), int.Parse(p[1]), 1);
                 return (f, f.AddMonths(1));
             }
-            throw new ArgumentException($"Неверный период: {period}");
+            if (period == "quarter")
+        {
+            // dateStr = "2026-Q1" … "2026-Q4"
+            var p  = dateStr.Split('-');
+            var yr = int.Parse(p[0]);
+            var q  = int.Parse(p[1].TrimStart('Q', 'q'));
+            var startMonth = (q - 1) * 3 + 1;
+            var f  = new DateTime(yr, startMonth, 1);
+            return (f, f.AddMonths(3));
+        }
+        if (period == "year")
+        {
+            var f = new DateTime(int.Parse(dateStr), 1, 1);
+            return (f, f.AddYears(1));
+        }
+        throw new ArgumentException($"Неверный период: {period}");
         }
 
         private static object BuildReport(string period, string dateStr)
@@ -486,24 +619,26 @@ namespace BibAdminWeb
             var ws = wb.Worksheet(1);
 
             // Find column indices from header row
-            var colCardId   = -1;
-            var colName     = -1;
-            var colBirth    = -1;
-            var colCategory = -1;
-            var colRegDate  = -1;
-            var colGender   = -1;
+            var colCardId    = -1;
+            var colName      = -1;
+            var colBirth     = -1;
+            var colCategory  = -1;
+            var colRegDate   = -1;
+            var colUpdatedAt = -1;
+            var colGender    = -1;
 
             var headerRow = ws.Row(1);
             foreach (var cell in headerRow.CellsUsed())
             {
                 var hdr = cell.GetString().Trim().ToLower();
                 var col = cell.Address.ColumnNumber;
-                if (hdr.Contains("id пользователя") || hdr == "id")          colCardId   = col;
-                else if (hdr.Contains("имя пользователя"))                    colName     = col;
-                else if (hdr.Contains("дата рождения"))                       colBirth    = col;
-                else if (hdr.Contains("категория"))                           colCategory = col;
-                else if (hdr.Contains("дата регистрации"))                    colRegDate  = col;
-                else if (hdr.Contains("пол"))                                 colGender   = col;
+                if (hdr.Contains("id пользователя") || hdr == "id")          colCardId    = col;
+                else if (hdr.Contains("имя пользователя"))                    colName      = col;
+                else if (hdr.Contains("дата рождения"))                       colBirth     = col;
+                else if (hdr.Contains("категория"))                           colCategory  = col;
+                else if (hdr.Contains("дата последнего обновления"))          colUpdatedAt = col;
+                else if (hdr.Contains("дата регистрации"))                    colRegDate   = col;
+                else if (hdr.Contains("пол"))                                 colGender    = col;
             }
 
             if (colCardId < 0 || colName < 0)
@@ -515,13 +650,19 @@ namespace BibAdminWeb
                 var cardId = ws.Cell(row, colCardId).GetString().Trim();
                 if (string.IsNullOrWhiteSpace(cardId)) continue;
 
+                var registeredAt = colRegDate  > 0 ? NormalizeDate(ws.Cell(row, colRegDate))  : "";
+                var updatedAt    = colUpdatedAt > 0 ? NormalizeDate(ws.Cell(row, colUpdatedAt)) : "";
+                // -1 or unparseable means no renewal — treat as registration date
+                if (string.IsNullOrEmpty(updatedAt)) updatedAt = registeredAt;
+
                 var reader = new Reader
                 {
                     CardId       = cardId,
                     FullName     = colName     > 0 ? ws.Cell(row, colName).GetString().Trim()     : "",
                     BirthDate    = colBirth    > 0 ? NormalizeDate(ws.Cell(row, colBirth))         : "",
                     Category     = colCategory > 0 ? ws.Cell(row, colCategory).GetString().Trim() : "",
-                    RegisteredAt = colRegDate  > 0 ? NormalizeDate(ws.Cell(row, colRegDate))       : "",
+                    RegisteredAt = registeredAt,
+                    UpdatedAt    = updatedAt,
                     Gender       = colGender   > 0 ? NormalizeGender(ws.Cell(row, colGender).GetString().Trim()) : "",
                 };
                 result.Add(reader);
@@ -536,6 +677,9 @@ namespace BibAdminWeb
             {
                 try
                 {
+                    // -1 or any non-positive number means "no date" (e.g. not renewed)
+                    if (cell.DataType == XLDataType.Number && cell.GetDouble() <= 0)
+                        return "";
                     var dt = cell.GetDateTime();
                     return dt.ToString("dd-MM-yyyy");
                 }
@@ -665,6 +809,389 @@ namespace BibAdminWeb
                 cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#4472C4");
                 cell.Style.Font.FontColor = XLColor.White;
             }
+        }
+
+        // ── Visit analytics ──────────────────────────────────────────────────
+        public static object BuildAnalyticsPublic(string period, string dateStr)
+            => BuildAnalytics(period, dateStr);
+
+        public static byte[] BuildAnalyticsExcelPublic(string period, string dateStr)
+            => BuildAnalyticsExcel(period, dateStr);
+
+        private static object BuildAnalytics(string period, string dateStr)
+        {
+            var (from, to) = ParsePeriod(period, dateStr);
+            var cultureRu  = new System.Globalization.CultureInfo("ru-RU");
+            var today      = DateTime.Today;
+
+            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
+
+            var sessions = FinanceStore.Sessions
+                .Where(s => s.EndTime >= from && s.EndTime < to).ToList();
+            var allSvc = ServiceTransaction.All
+                .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+
+            // IsReg=true → registered reader; IsReg=false → anonymous/temp
+            // Deleted registered readers (non-numeric ID not in DB) are skipped
+            var usedSvcIds = new HashSet<string>();
+            var visits = new List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)>();
+
+            foreach (var s in sessions)
+            {
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(s.ReaderId))
+                {
+                    if (readerMap.TryGetValue(s.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!s.ReaderId.All(char.IsDigit))
+                    {
+                        // Deleted registered reader — mark linked services used but skip the visit
+                        var sl2 = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                        allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
+                            && t.CreatedAt.ToLocalTime() >= sl2 && t.CreatedAt.ToLocalTime() <= s.EndTime)
+                            .ToList().ForEach(t => usedSvcIds.Add(t.Id));
+                        continue;
+                    }
+                    // else: purely numeric = temp card → treat as anonymous
+                }
+                var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                var linked = allSvc.Where(t =>
+                    !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
+                    && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= s.EndTime).ToList();
+                foreach (var t in linked) usedSvcIds.Add(t.Id);
+                visits.Add((s.ReaderId ?? "", rd, isReg, s.EarnedAmount, linked));
+            }
+
+            foreach (var grp in allSvc
+                .Where(t => !usedSvcIds.Contains(t.Id))
+                .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : "b:" + t.BatchId))
+            {
+                var items = grp.ToList(); var first = items[0];
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(first.ReaderId))
+                {
+                    if (readerMap.TryGetValue(first.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!first.ReaderId.All(char.IsDigit)) continue; // deleted registered reader
+                }
+                visits.Add((first.ReaderId ?? "", rd, isReg, 0, items));
+            }
+
+            int totalVisits        = visits.Count;
+            int anonymousVisits    = visits.Count(v => !v.IsReg);
+            int totalUniqueReaders = visits.Where(v => v.IsReg).Select(v => v.Id)
+                                          .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            int totalRevenue       = visits.Sum(v => v.Earned + v.Svcs.Sum(s => s.TotalAmount));
+
+            var genderVisits  = new Dictionary<string, int>();
+            var genderUniq    = new Dictionary<string, HashSet<string>>();
+            var catVisits     = new Dictionary<string, int>();
+            var catUniq       = new Dictionary<string, HashSet<string>>();
+
+            var ageKeys  = new[] { "до 14", "14–17", "18–30", "31–60", "60+", "Не указан" };
+            var ageVis   = ageKeys.ToDictionary(g => g, g => 0);
+            var ageUniq  = ageKeys.ToDictionary(g => g, g => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            var ageGVis  = ageKeys.ToDictionary(g => g, g => new Dictionary<string, int>());
+            var ageGUniq = ageKeys.ToDictionary(g => g, g => new Dictionary<string, HashSet<string>>());
+
+            var svcQty = new Dictionary<string, int>();
+            var svcAmt = new Dictionary<string, int>();
+            var svcNm  = new Dictionary<string, string>();
+
+            foreach (var (readerId, rd, isReg, _, svcs) in visits)
+            {
+                var gender   = (rd == null || string.IsNullOrEmpty(rd.Gender))   ? "Не указан"  : rd.Gender;
+                var category = (rd == null || string.IsNullOrEmpty(rd.Category)) ? "Не указана" : rd.Category;
+
+                string ageGroup;
+                if (rd != null && DateTime.TryParseExact(rd.BirthDate, "dd-MM-yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var bd))
+                {
+                    var age = today.Year - bd.Year;
+                    if (bd > today.AddYears(-age)) age--;
+                    ageGroup = age < 14 ? "до 14" : age <= 17 ? "14–17" : age <= 30 ? "18–30" : age <= 60 ? "31–60" : "60+";
+                }
+                else ageGroup = "Не указан";
+
+                if (!genderVisits.ContainsKey(gender)) { genderVisits[gender] = 0; genderUniq[gender] = new(StringComparer.OrdinalIgnoreCase); }
+                genderVisits[gender]++;
+                if (isReg) genderUniq[gender].Add(readerId);
+
+                if (!catVisits.ContainsKey(category)) { catVisits[category] = 0; catUniq[category] = new(StringComparer.OrdinalIgnoreCase); }
+                catVisits[category]++;
+                if (isReg) catUniq[category].Add(readerId);
+
+                ageVis[ageGroup]++;
+                if (isReg) ageUniq[ageGroup].Add(readerId);
+
+                if (!ageGVis[ageGroup].ContainsKey(gender))
+                { ageGVis[ageGroup][gender] = 0; ageGUniq[ageGroup][gender] = new(StringComparer.OrdinalIgnoreCase); }
+                ageGVis[ageGroup][gender]++;
+                if (isReg) ageGUniq[ageGroup][gender].Add(readerId);
+
+                foreach (var svc in svcs)
+                {
+                    if (!svcQty.ContainsKey(svc.ServiceTypeId))
+                    { svcQty[svc.ServiceTypeId] = 0; svcAmt[svc.ServiceTypeId] = 0; svcNm[svc.ServiceTypeId] = svc.ServiceName; }
+                    svcQty[svc.ServiceTypeId] += svc.Quantity;
+                    svcAmt[svc.ServiceTypeId] += svc.TotalAmount;
+                }
+            }
+
+            // ── PC session statistics ──────────────────────────────────────────
+            var pcList = new List<(string Id, Reader? Rd, bool IsReg, int DurSecs, int Earned)>();
+            foreach (var s in sessions)
+            {
+                Reader? pcRd = null; bool pcReg = false;
+                if (!string.IsNullOrEmpty(s.ReaderId))
+                {
+                    if (readerMap.TryGetValue(s.ReaderId, out var fr)) { pcRd = fr; pcReg = true; }
+                    else if (!s.ReaderId.All(char.IsDigit)) continue;
+                }
+                pcList.Add((s.ReaderId ?? "", pcRd, pcReg, s.DurationSeconds, s.EarnedAmount));
+            }
+
+            var pcGVis  = new Dictionary<string, int>(); var pcGUniq  = new Dictionary<string, HashSet<string>>();
+            var pcCVis  = new Dictionary<string, int>(); var pcCUniq  = new Dictionary<string, HashSet<string>>();
+            var pcAVis  = ageKeys.ToDictionary(g => g, g => 0);
+            var pcAUniq = ageKeys.ToDictionary(g => g, g => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            var pcAGVis = ageKeys.ToDictionary(g => g, g => new Dictionary<string, int>());
+            var pcAGUniq= ageKeys.ToDictionary(g => g, g => new Dictionary<string, HashSet<string>>());
+
+            foreach (var (pcId, pcRd, pcReg, _, _) in pcList)
+            {
+                var g2 = (pcRd == null || string.IsNullOrEmpty(pcRd.Gender))   ? "Не указан"  : pcRd.Gender;
+                var c2 = (pcRd == null || string.IsNullOrEmpty(pcRd.Category)) ? "Не указана" : pcRd.Category;
+                string ag2;
+                if (pcRd != null && DateTime.TryParseExact(pcRd.BirthDate, "dd-MM-yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var bd2))
+                { var a2 = today.Year - bd2.Year; if (bd2 > today.AddYears(-a2)) a2--; ag2 = a2 < 14 ? "до 14" : a2 <= 17 ? "14–17" : a2 <= 30 ? "18–30" : a2 <= 60 ? "31–60" : "60+"; }
+                else ag2 = "Не указан";
+
+                if (!pcGVis.ContainsKey(g2))  { pcGVis[g2]  = 0; pcGUniq[g2]  = new(StringComparer.OrdinalIgnoreCase); }
+                pcGVis[g2]++;  if (pcReg) pcGUniq[g2].Add(pcId);
+                if (!pcCVis.ContainsKey(c2))  { pcCVis[c2]  = 0; pcCUniq[c2]  = new(StringComparer.OrdinalIgnoreCase); }
+                pcCVis[c2]++;  if (pcReg) pcCUniq[c2].Add(pcId);
+                pcAVis[ag2]++; if (pcReg) pcAUniq[ag2].Add(pcId);
+                if (!pcAGVis[ag2].ContainsKey(g2)) { pcAGVis[ag2][g2] = 0; pcAGUniq[ag2][g2] = new(StringComparer.OrdinalIgnoreCase); }
+                pcAGVis[ag2][g2]++; if (pcReg) pcAGUniq[ag2][g2].Add(pcId);
+            }
+
+            var pcTop = pcList.Where(v => v.IsReg)
+                .GroupBy(v => v.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(grp => new {
+                    readerName   = grp.First().Rd?.FullName ?? grp.Key,
+                    category     = grp.First().Rd?.Category ?? "",
+                    visits       = grp.Count(),
+                    totalMinutes = grp.Sum(v => v.DurSecs / 60)
+                }).ToList();
+
+            var pcStats = new {
+                totalSessions = pcList.Count,
+                anonSessions  = pcList.Count(v => !v.IsReg),
+                uniqueReaders = pcList.Where(v => v.IsReg).Select(v => v.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                totalRevenue  = pcList.Sum(v => v.Earned),
+                gender     = pcGVis.Keys.OrderBy(k => k).Select(k => new { name = k, sessions = pcGVis[k], uniqueReaders = pcGUniq[k].Count }).ToList(),
+                categories = pcCVis.Keys.OrderByDescending(k => pcCVis[k]).Select(k => new { name = k, sessions = pcCVis[k], uniqueReaders = pcCUniq[k].Count }).ToList(),
+                ageGroups  = ageKeys.Select(g => new {
+                    group = g, sessions = pcAVis[g], uniqueReaders = pcAUniq[g].Count,
+                    byGender = pcAGVis[g].Keys.OrderBy(k => k).ToDictionary(k => k,
+                        k => new { sessions = pcAGVis[g][k], uniqueReaders = pcAGUniq[g][k].Count })
+                }).ToList(),
+                topByVisits = pcTop.OrderByDescending(x => x.visits).Take(10).ToList(),
+                topByHours  = pcTop.OrderByDescending(x => x.totalMinutes).Take(10).ToList()
+            };
+
+            string periodLabel = period switch
+            {
+                "day"     => from.ToString("dd MMMM yyyy г.", cultureRu),
+                "month"   => char.ToUpper(from.ToString("MMMM", cultureRu)[0]) + from.ToString("MMMM yyyy г.", cultureRu)[1..],
+                "quarter" => $"Q{(from.Month - 1) / 3 + 1} {from.Year} ({from.ToString("MMMM", cultureRu)} – {to.AddDays(-1).ToString("MMMM", cultureRu)} {from.Year} г.)",
+                "year"    => $"{from.Year} г.",
+                _         => dateStr
+            };
+
+            return new
+            {
+                periodLabel,
+                totalVisits,
+                anonymousVisits,
+                totalUniqueReaders,
+                totalRevenue,
+                gender = genderVisits.Keys.OrderBy(k => k).Select(k => new {
+                    name = k, visits = genderVisits[k], uniqueReaders = genderUniq[k].Count }).ToList(),
+                categories = catVisits.Keys.OrderByDescending(k => catVisits[k]).Select(k => new {
+                    name = k, visits = catVisits[k], uniqueReaders = catUniq[k].Count }).ToList(),
+                ageGroups = ageKeys.Select(g => new {
+                    group = g,
+                    visits = ageVis[g],
+                    uniqueReaders = ageUniq[g].Count,
+                    byGender = ageGVis[g].Keys.OrderBy(k => k).ToDictionary(
+                        k => k,
+                        k => new { visits = ageGVis[g][k], uniqueReaders = ageGUniq[g][k].Count })
+                }).ToList(),
+                services = svcQty.Keys.OrderByDescending(k => svcAmt[k]).Select(k => new {
+                    name = svcNm[k], quantity = svcQty[k], totalAmount = svcAmt[k] }).ToList(),
+                pcStats
+            };
+        }
+
+        private static byte[] BuildAnalyticsExcel(string period, string dateStr)
+        {
+            var (from, to)  = ParsePeriod(period, dateStr);
+            var cultureRu   = new System.Globalization.CultureInfo("ru-RU");
+            var today       = DateTime.Today;
+
+            // Reuse BuildAnalytics to get structured data — simpler than duplicating logic
+            // We call the raw aggregation again to get typed objects for Excel writing
+            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
+
+            var sessions = FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList();
+            var allSvc   = ServiceTransaction.All.Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+
+            var usedSvcIds = new HashSet<string>();
+            var visits     = new List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)>();
+
+            foreach (var s in sessions)
+            {
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(s.ReaderId))
+                {
+                    if (readerMap.TryGetValue(s.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!s.ReaderId.All(char.IsDigit))
+                    {
+                        var sl2 = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                        allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
+                            && t.CreatedAt.ToLocalTime() >= sl2 && t.CreatedAt.ToLocalTime() <= s.EndTime)
+                            .ToList().ForEach(t => usedSvcIds.Add(t.Id));
+                        continue;
+                    }
+                }
+                var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
+                var linked = allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
+                    && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= s.EndTime).ToList();
+                foreach (var t in linked) usedSvcIds.Add(t.Id);
+                visits.Add((s.ReaderId ?? "", rd, isReg, s.EarnedAmount, linked));
+            }
+            foreach (var grp in allSvc.Where(t => !usedSvcIds.Contains(t.Id))
+                .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : "b:" + t.BatchId))
+            {
+                var items = grp.ToList(); var first = items[0];
+                Reader? rd = null; bool isReg = false;
+                if (!string.IsNullOrEmpty(first.ReaderId))
+                {
+                    if (readerMap.TryGetValue(first.ReaderId, out var found)) { rd = found; isReg = true; }
+                    else if (!first.ReaderId.All(char.IsDigit)) continue;
+                }
+                visits.Add((first.ReaderId ?? "", rd, isReg, 0, items));
+            }
+
+            var genderVisits = new Dictionary<string, int>(); var genderUniq = new Dictionary<string, HashSet<string>>();
+            var catVisits    = new Dictionary<string, int>(); var catUniq    = new Dictionary<string, HashSet<string>>();
+            var ageKeys  = new[] { "до 14", "14–17", "18–30", "31–60", "60+", "Не указан" };
+            var ageVis   = ageKeys.ToDictionary(g => g, g => 0);
+            var ageUniq  = ageKeys.ToDictionary(g => g, g => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            var ageGVis  = ageKeys.ToDictionary(g => g, g => new Dictionary<string, int>());
+            var ageGUniq = ageKeys.ToDictionary(g => g, g => new Dictionary<string, HashSet<string>>());
+            var svcQty   = new Dictionary<string, int>(); var svcAmt = new Dictionary<string, int>(); var svcNm = new Dictionary<string, string>();
+
+            foreach (var (readerId, rd, isReg, _, svcs) in visits)
+            {
+                var gender   = (rd == null || string.IsNullOrEmpty(rd.Gender))   ? "Не указан"  : rd.Gender;
+                var category = (rd == null || string.IsNullOrEmpty(rd.Category)) ? "Не указана" : rd.Category;
+                string ageGroup;
+                if (rd != null && DateTime.TryParseExact(rd.BirthDate, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var bd))
+                { var age = today.Year - bd.Year; if (bd > today.AddYears(-age)) age--; ageGroup = age < 14 ? "до 14" : age <= 17 ? "14–17" : age <= 30 ? "18–30" : age <= 60 ? "31–60" : "60+"; }
+                else ageGroup = "Не указан";
+
+                if (!genderVisits.ContainsKey(gender)) { genderVisits[gender] = 0; genderUniq[gender] = new(StringComparer.OrdinalIgnoreCase); }
+                genderVisits[gender]++; if (isReg) genderUniq[gender].Add(readerId);
+                if (!catVisits.ContainsKey(category)) { catVisits[category] = 0; catUniq[category] = new(StringComparer.OrdinalIgnoreCase); }
+                catVisits[category]++; if (isReg) catUniq[category].Add(readerId);
+                ageVis[ageGroup]++; if (isReg) ageUniq[ageGroup].Add(readerId);
+                if (!ageGVis[ageGroup].ContainsKey(gender)) { ageGVis[ageGroup][gender] = 0; ageGUniq[ageGroup][gender] = new(StringComparer.OrdinalIgnoreCase); }
+                ageGVis[ageGroup][gender]++; if (isReg) ageGUniq[ageGroup][gender].Add(readerId);
+                foreach (var svc in svcs) { if (!svcQty.ContainsKey(svc.ServiceTypeId)) { svcQty[svc.ServiceTypeId] = 0; svcAmt[svc.ServiceTypeId] = 0; svcNm[svc.ServiceTypeId] = svc.ServiceName; } svcQty[svc.ServiceTypeId] += svc.Quantity; svcAmt[svc.ServiceTypeId] += svc.TotalAmount; }
+            }
+
+            int anonymousVisits    = visits.Count(v => !v.IsReg);
+            int totalUniqueReaders = visits.Where(v => v.IsReg).Select(v => v.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+            string periodLabel = period switch
+            {
+                "day"     => from.ToString("dd MMMM yyyy г.", cultureRu),
+                "month"   => char.ToUpper(from.ToString("MMMM", cultureRu)[0]) + from.ToString("MMMM yyyy г.", cultureRu)[1..],
+                "quarter" => $"Q{(from.Month - 1) / 3 + 1} {from.Year} ({from.ToString("MMMM", cultureRu)} – {to.AddDays(-1).ToString("MMMM", cultureRu)} {from.Year} г.)",
+                "year"    => $"{from.Year} г.",
+                _         => dateStr
+            };
+
+            using var wb = new XLWorkbook();
+
+            // ── Sheet 1: Сводка ─────────────────────────────────────────────
+            var ws1 = wb.Worksheets.Add("Сводка");
+            ws1.Column(1).Width = 26; ws1.Column(2).Width = 12; ws1.Column(3).Width = 14;
+            int r = 1;
+            WriteHeader(ws1, r++, $"Аналитика посещений — {periodLabel}");
+            ws1.Cell(r, 1).Value = "Визитов всего:";       ws1.Cell(r++, 2).Value = visits.Count;
+            ws1.Cell(r, 1).Value = "Анонимных визитов:";   ws1.Cell(r++, 2).Value = anonymousVisits;
+            ws1.Cell(r, 1).Value = "Уникальных читателей (рег.):"; ws1.Cell(r++, 2).Value = totalUniqueReaders;
+            ws1.Cell(r, 1).Value = "Выручка (сум):";       ws1.Cell(r++, 2).Value = visits.Sum(v => v.Earned + v.Svcs.Sum(s => s.TotalAmount));
+
+            r++;
+            WriteSubHeader(ws1, r, "По полу"); ws1.Cell(r, 2).Value = "Визиты"; ws1.Cell(r++, 3).Value = "Уникальных";
+            foreach (var k in genderVisits.Keys.OrderBy(k => k))
+            { ws1.Cell(r, 1).Value = k; ws1.Cell(r, 2).Value = genderVisits[k]; ws1.Cell(r++, 3).Value = genderUniq[k].Count; }
+
+            r++;
+            WriteSubHeader(ws1, r, "По категориям"); ws1.Cell(r, 2).Value = "Визиты"; ws1.Cell(r++, 3).Value = "Уникальных";
+            foreach (var k in catVisits.Keys.OrderByDescending(k => catVisits[k]))
+            { ws1.Cell(r, 1).Value = k; ws1.Cell(r, 2).Value = catVisits[k]; ws1.Cell(r++, 3).Value = catUniq[k].Count; }
+
+            // ── Sheet 2: Возрастные группы ──────────────────────────────────
+            var ws2 = wb.Worksheets.Add("Возрастные группы");
+            var genders = genderVisits.Keys.OrderBy(k => k).ToList();
+            int colCount = 3 + genders.Count * 2;
+            ws2.Column(1).Width = 14;
+            for (int i = 2; i <= colCount; i++) ws2.Column(i).Width = 13;
+            WriteHeader(ws2, 1, $"По возрастным группам — {periodLabel}");
+            int hCol = 1;
+            ws2.Cell(2, hCol).Value = "Группа"; hCol++;
+            ws2.Cell(2, hCol).Value = "Визиты"; hCol++;
+            ws2.Cell(2, hCol).Value = "Уникальных"; hCol++;
+            foreach (var g in genders) { ws2.Cell(2, hCol).Value = $"{g} визиты"; hCol++; ws2.Cell(2, hCol).Value = $"{g} уникальных"; hCol++; }
+            StyleHeader(ws2.Row(2), colCount);
+            int row2 = 3;
+            foreach (var ag in ageKeys)
+            {
+                int c = 1;
+                ws2.Cell(row2, c++).Value = ag;
+                ws2.Cell(row2, c++).Value = ageVis[ag];
+                ws2.Cell(row2, c++).Value = ageUniq[ag].Count;
+                foreach (var g in genders)
+                {
+                    ws2.Cell(row2, c++).Value = ageGVis[ag].TryGetValue(g, out var gv) ? gv : 0;
+                    ws2.Cell(row2, c++).Value = ageGUniq[ag].TryGetValue(g, out var gu) ? gu.Count : 0;
+                }
+                row2++;
+            }
+
+            // ── Sheet 3: Услуги ─────────────────────────────────────────────
+            var ws3 = wb.Worksheets.Add("Услуги");
+            ws3.Column(1).Width = 28; ws3.Column(2).Width = 12; ws3.Column(3).Width = 16;
+            WriteHeader(ws3, 1, $"Использование услуг — {periodLabel}");
+            ws3.Cell(2, 1).Value = "Услуга"; ws3.Cell(2, 2).Value = "Кол-во"; ws3.Cell(2, 3).Value = "Сумма (сум)";
+            StyleHeader(ws3.Row(2), 3);
+            int row3 = 3;
+            foreach (var k in svcQty.Keys.OrderByDescending(k => svcAmt[k]))
+            { ws3.Cell(row3, 1).Value = svcNm[k]; ws3.Cell(row3, 2).Value = svcQty[k]; ws3.Cell(row3++, 3).Value = svcAmt[k]; }
+            if (!svcQty.Any()) ws3.Cell(row3, 1).Value = "Услуги не использовались";
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
         }
     }
 }

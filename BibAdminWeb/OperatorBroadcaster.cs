@@ -29,6 +29,10 @@ namespace BibAdminWeb
         public void NotifyOfflineResolved(string pcNumber, string decision)
             => _ = _ctx.Clients.All.SendAsync("offlineResolved", new { pcNumber, decision });
 
+        public void NotifySessionEndedByStaff(string pcNumber, string userName, int durationSeconds, int earned)
+            => _ = _ctx.Clients.All.SendAsync("sessionEndedByStaff",
+                new { pcNumber, userName, durationSeconds, earned });
+
         public Task NotifyServerRestartingAsync(string reason)
             => _ctx.Clients.All.SendAsync("serverRestarting", new { reason });
 
@@ -48,12 +52,27 @@ namespace BibAdminWeb
             _ = _ctx.Clients.All.SendAsync("serviceTypes", services);
         }
 
+        public void PushSessionFields()
+        {
+            var settings = GlobalSettings.Load();
+            _ = _ctx.Clients.All.SendAsync("sessionFields", new
+            {
+                requireReaderId = settings.RequireReaderId,
+                requireUserName = settings.RequireUserName,
+                workdayEnd = settings.WorkdayEnd
+            });
+        }
+
         public static object ClientDto(ClientState cs) => new
         {
             pcNumber = cs.PcNumber, pcNumberValue = cs.PcNumberValue, status = cs.Status,
             sessionType = cs.SessionType, isOnline = cs.IsOnline, isSession = cs.IsSession,
             isPaused = cs.IsPaused, isLocked = cs.IsLocked, isFree = cs.IsFree,
-            elapsedSeconds = cs.ElapsedSeconds, limitSeconds = cs.LimitSeconds, paidAmount = cs.PaidAmount,
+            // Для offline+Continue считаем elapsed с учётом времени с момента обрыва
+            elapsedSeconds = (!cs.IsOnline && cs.IsSession && !cs.IsPaused && cs.DisconnectedAt.HasValue)
+                ? cs.ElapsedAtDisconnect + (int)(System.DateTime.UtcNow - cs.DisconnectedAt.Value).TotalSeconds
+                : cs.ElapsedSeconds,
+            limitSeconds = cs.LimitSeconds, paidAmount = cs.PaidAmount,
             accumulatedSeconds = cs.AccumulatedSeconds, sessionStart = cs.SessionStart?.ToString("o"),
             userName = cs.UserName, readerId = cs.ReaderId, ip = cs.Ip,
             disconnectedAt = cs.DisconnectedAt?.ToString("o"), elapsedAtDisconnect = cs.ElapsedAtDisconnect

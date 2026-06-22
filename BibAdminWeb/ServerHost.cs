@@ -155,7 +155,7 @@ namespace BibAdminWeb
                                 ctx.Response.ContentType = "application/json";
                                 await ctx.Response.WriteAsync(
                                     System.Text.Json.JsonSerializer.Serialize(
-                                        new { requireReaderId = sf.RequireReaderId, requireUserName = sf.RequireUserName },
+                                        new { requireReaderId = sf.RequireReaderId, requireUserName = sf.RequireUserName, workdayEnd = sf.WorkdayEnd },
                                         new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                                 return;
                             }
