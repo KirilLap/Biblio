@@ -506,8 +506,11 @@ function renderActionBar() {
   const warnSvg    = '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
   const playSvg    = '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/>';
   const stopSvg    = '<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" stroke="none"/>';
+  const msgSvg     = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>';
 
   let btns = '';
+  if (pc.isOnline)
+    btns += `<button class="abtn" title="Отправить сообщение" onclick="openSendMessage('${esc(pc.pcNumber)}')">${ico(msgSvg)}Сообщение</button>`;
   if (pc.isOnline && !pc.isSession) {
     btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
     btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico(playSvg)}Начать сессию</button>`;
@@ -1489,12 +1492,50 @@ async function doLogout() {
 }
 
 // ── Просмотр экрана ───────────────────────────────────────────────────────────
+// ── Сообщение на клиентский ПК ────────────────────────────────────────────────
+let _msgPc = null;
+function openSendMessage(pcNumber) {
+  _msgPc = pcNumber || selectedPc;
+  if (!_msgPc) return;
+  document.getElementById('dlgSendMessagePc').textContent = _msgPc;
+  document.getElementById('dlgMessageText').value = '';
+  openDlg('dlgSendMessage');
+  setTimeout(() => document.getElementById('dlgMessageText')?.focus(), 50);
+}
+async function confirmSendMessage() {
+  const text = document.getElementById('dlgMessageText').value.trim();
+  if (!text) { toast('Введите текст сообщения', 'warn'); return; }
+  if (!_msgPc) return;
+  try {
+    await connection.invoke('SendMessageToPc', _msgPc, text);
+    closeDlg('dlgSendMessage');
+    toast('Сообщение отправлено на ' + _msgPc, 'success');
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+// ── Размер окна просмотра экрана ──────────────────────────────────────────────
+let _screenExpanded = false;
+function toggleScreenSize() {
+  _screenExpanded = !_screenExpanded;
+  _applyScreenSize();
+}
+function _applyScreenSize() {
+  const modal = document.querySelector('#dlgScreenView .modal');
+  const img = document.getElementById('screenViewImg');
+  const btn = document.getElementById('screenSizeBtn');
+  if (modal) modal.style.maxWidth = _screenExpanded ? '96vw' : '700px';
+  if (img) img.style.maxHeight = _screenExpanded ? '86vh' : '65vh';
+  if (btn) btn.textContent = _screenExpanded ? 'Свернуть' : 'Развернуть';
+}
+
 async function openScreenView(pcNumber) {
   if (_screenPc) await closeScreenView();
   _screenPc = pcNumber;
   document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
   document.getElementById('screenViewImg').src = '';
   document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  _screenExpanded = false;
+  _applyScreenSize();
   openDlg('dlgScreenView');
   try { await fetch(`/api/screenshot/${encodeURIComponent(pcNumber)}/watch`, { method: 'POST' }); }
   catch (e) { /* ignore */ }

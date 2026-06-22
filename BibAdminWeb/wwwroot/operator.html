@@ -633,7 +633,27 @@
       <div class="screen-view-status" id="screenViewStatus">Подключение...</div>
     </div>
     <div class="modal-foot">
+      <button class="mbtn ghost" id="screenSizeBtn" onclick="toggleScreenSize()">Развернуть</button>
       <button class="mbtn primary" onclick="closeScreenView()">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div id="dlgSendMessage" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgSendMessage')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Сообщение на ПК</div><div class="modal-sub" id="dlgSendMessagePc"></div></div>
+      <button class="modal-x" onclick="closeDlg('dlgSendMessage')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Текст сообщения</label>
+        <textarea id="dlgMessageText" class="tinput" rows="4" style="resize:vertical;min-height:96px;font-family:inherit" placeholder="Сообщение появится по центру экрана пользователя…"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgSendMessage')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmSendMessage()">Отправить</button>
     </div>
   </div>
 </div>

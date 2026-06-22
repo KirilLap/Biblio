@@ -57,6 +57,9 @@ namespace BibClient
         /// <summary>Вызывается с содержимым лог-файла когда сервер запрашивает GET_LOGS.</summary>
         public static event Action<string>? LogsReady;
 
+        /// <summary>Показать текстовое сообщение от администратора по центру экрана клиента.</summary>
+        public static event Action<string>? ShowMessageRequested;
+
         public static async Task HandleCommand(string json)
         {
             try
@@ -175,6 +178,12 @@ namespace BibClient
                             ClockMismatchDetected?.Invoke(drift);
                             Logger.Warn($"⚠️ Расхождение часов с сервером: {drift:F1}с");
                         }
+                        break;
+
+                    // ── Сообщение от администратора/оператора ─────────────────────────────
+                    case "SHOW_MESSAGE":
+                        if (!string.IsNullOrWhiteSpace(value))
+                            ShowMessageRequested?.Invoke(value);
                         break;
 
                     // ── Настройки отображения экрана блокировки ───────────────────────────

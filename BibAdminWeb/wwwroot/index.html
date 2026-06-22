@@ -1211,7 +1211,25 @@
     </div>
     <div style="font-size:12px;color:var(--ink-3);margin-top:8px;text-align:center" id="screenViewStatus">Подключение...</div>
     <div class="dlg-btns">
+      <button class="btn btn-outline" id="screenSizeBtn" onclick="toggleScreenSize()">Развернуть</button>
       <button class="btn btn-primary" onclick="closeScreenView()">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Send message to client PC -->
+<div id="dlgSendMessage" class="dlg-overlay" style="display:none" onclick="if(event.target===this)closeSendMessage()">
+  <div class="dlg">
+    <div class="dlg-title">Сообщение на ПК</div>
+    <div class="dlg-pc-name" id="dlgSendMessagePc"></div>
+    <div style="margin:14px 0">
+      <textarea id="dlgMessageText" rows="4" placeholder="Сообщение появится по центру экрана пользователя…"
+        style="width:100%;box-sizing:border-box;resize:vertical;min-height:96px;padding:10px 12px;border-radius:8px;
+               border:1px solid var(--line);background:var(--card-muted);color:var(--ink);font-size:14px;font-family:inherit"></textarea>
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-outline" onclick="closeSendMessage()">Отмена</button>
+      <button class="btn btn-primary" onclick="confirmSendMessage()">Отправить</button>
     </div>
   </div>
 </div>

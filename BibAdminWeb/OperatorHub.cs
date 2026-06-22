@@ -490,6 +490,17 @@ namespace BibAdminWeb
             return Task.CompletedTask;
         }
 
+        // Отправить текстовое сообщение на клиентский ПК (показывается по центру экрана клиента).
+        public async Task SendMessageToPc(string pcNumber, string text)
+        {
+            if (!IsAuthorized()) return;
+            if (string.IsNullOrWhiteSpace(text)) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            var json = JsonSerializer.Serialize(new { Type = "SHOW_MESSAGE", Value = text });
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+        }
+
         public async Task ShutdownAll()
         {
             if (!IsAuthorized()) return;

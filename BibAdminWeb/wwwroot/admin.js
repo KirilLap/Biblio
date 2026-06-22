@@ -1708,6 +1708,7 @@ function buildCtxHtml(c) {
   html += sep;
   html += item('⟳', 'Переподключить клиент', `reconnect:${c.pcNumber}`);
   if (c.isOnline) {
+    html += item('💬', 'Отправить сообщение', `message:${c.pcNumber}`);
     html += item('↺', 'Перезагрузить ПК', `restart:${c.pcNumber}`);
     html += item('⏻', 'Выключить ПК', `shutdown:${c.pcNumber}`, true);
     html += sep;
@@ -1737,6 +1738,7 @@ document.addEventListener('click', async e => {
       break;
     case 'toggleGlob': await conn.invoke('ToggleGlobalSetting', args[0], args[1]); break;
     case 'reconnect': await conn.invoke('SendCommandToPc', args[0], 'RECONNECT', 'true'); break;
+    case 'message':   openSendMessage(args[0]); break;
     case 'restart':
       if (confirm(`Перезагрузить ${args[0]}?`)) await conn.invoke('SendCommandToPc', args[0], 'RESTART', 'true');
       break;
@@ -2639,12 +2641,51 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 // ─── Screen viewer ────────────────────────────────────────────────────────────
+// ─── Сообщение на клиентский ПК ──────────────────────────────────────────────
+let _msgPc = null;
+function openSendMessage(pcNumber) {
+  _msgPc = pcNumber;
+  if (!_msgPc) return;
+  document.getElementById('dlgSendMessagePc').textContent = _msgPc;
+  document.getElementById('dlgMessageText').value = '';
+  document.getElementById('dlgSendMessage').style.display = 'flex';
+  setTimeout(() => document.getElementById('dlgMessageText')?.focus(), 50);
+}
+function closeSendMessage() { document.getElementById('dlgSendMessage').style.display = 'none'; }
+async function confirmSendMessage() {
+  const text = document.getElementById('dlgMessageText').value.trim();
+  if (!text) { toast('Введите текст сообщения', 'warn'); return; }
+  if (!_msgPc) return;
+  try {
+    await conn.invoke('SendCommandToPc', _msgPc, 'SHOW_MESSAGE', text);
+    closeSendMessage();
+    toast('Сообщение отправлено на ' + _msgPc);
+  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+}
+
+// ─── Размер окна просмотра экрана ─────────────────────────────────────────────
+let _screenExpanded = false;
+function toggleScreenSize() {
+  _screenExpanded = !_screenExpanded;
+  _applyScreenSize();
+}
+function _applyScreenSize() {
+  const dlg = document.querySelector('#dlgScreenView .dlg');
+  const img = document.getElementById('screenViewImg');
+  const btn = document.getElementById('screenSizeBtn');
+  if (dlg) { dlg.style.maxWidth = _screenExpanded ? '96vw' : ''; dlg.style.width = _screenExpanded ? '96vw' : ''; }
+  if (img) img.style.maxHeight = _screenExpanded ? '86vh' : '65vh';
+  if (btn) btn.textContent = _screenExpanded ? 'Свернуть' : 'Развернуть';
+}
+
 async function openScreenView(pcNumber) {
   if (_screenPc) await closeScreenView();
   _screenPc = pcNumber;
   document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
   document.getElementById('screenViewImg').src = '';
   document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  _screenExpanded = false;
+  _applyScreenSize();
   document.getElementById('dlgScreenView').style.display = 'flex';
   try { await fetch(`/api/screenshot/${encodeURIComponent(pcNumber)}/watch`, { method: 'POST' }); }
   catch (e) { /* ignore */ }
