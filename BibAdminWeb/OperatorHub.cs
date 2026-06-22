@@ -527,6 +527,18 @@ namespace BibAdminWeb
             }
         }
 
+        // Перезагрузить один ПК (раньше метод отсутствовал — кнопка перезагрузки у оператора не работала).
+        public async Task RestartPc(string pcNumber)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            var json = JsonSerializer.Serialize(new { Type = "RESTART", Value = "true" });
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
+            else
+                AdminHub.AddPendingCommand(pcNumber, "RESTART", "true");
+        }
+
         private bool IsAuthorized()
         {
             var cookie = Context.GetHttpContext()?.Request.Cookies["bib_op"];
