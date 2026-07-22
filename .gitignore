@@ -1,83 +1,36 @@
 ```
 # Build artifacts
-obj/
-bin/
 *.exe
 *.dll
 *.pdb
-*.userprefs
+*.obj
+*.ilk
+*.lib
+*.so
+*.dylib
+*.a
 
 # Dependencies
 packages/
-node_modules/
-venv/
-.venv/
+bin/
+obj/
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
-*.temp
 
-# Environment
+# User-specific files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Environment specific
 .env
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # OS generated files
-.DS_Store
-Thumbs.db
-
-# Compiled and binary files
-*.o
-*.obj
-*.a
-*.lib
-*.so
-*.dylib
-*.class
-*.jar
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# Python specific
-__pycache__/
-*.pyc
-*.pyo
-.Python
-*.egg-info/
-.eggs/
-
-# MyPy cache
-.mypy_cache/
-
-# PyTest cache
-.pytest_cache/
-
-# Distribution / packaging
-.Python
-env/
-venv/
-ENV/
-.venv/
-env.bak/
-venv.bak/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# System files
 .DS_Store
 Thumbs.db
 ```
