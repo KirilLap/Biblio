@@ -162,6 +162,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
 
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
@@ -189,6 +191,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.None;
@@ -212,6 +216,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
 
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
@@ -239,6 +245,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.None;
