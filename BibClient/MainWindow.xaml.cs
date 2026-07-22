@@ -680,6 +680,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.SingleBorderWindow;
@@ -798,6 +800,8 @@ namespace BibClient
             // ✅ 5. Пересоздаём хук
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             Logger.Info("🔐 KeyboardHook установлен в режиме LockScreen");
 
             // ✅ 6. Показываем и активируем
