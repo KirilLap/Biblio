@@ -162,6 +162,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
 
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
@@ -189,6 +191,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.None;
@@ -212,6 +216,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
 
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
@@ -239,6 +245,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.None;
@@ -515,7 +523,13 @@ namespace BibClient
             _sessionManager?.Dispose();
             _sessionManager = null;
 
-            // 2. Скрываем экран блокировки
+            // 2. Освобождаем хуки - сессия активна, блокировка не нужна
+            _lockHook?.Dispose();
+            _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
+
+            // 3. Скрываем экран блокировки
             this.Hide();
 
             // 3. Создаём SessionManager (с восстановленным временем если нужно)
@@ -680,6 +694,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.SingleBorderWindow;
@@ -798,6 +814,8 @@ namespace BibClient
             // ✅ 5. Пересоздаём хук
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             Logger.Info("🔐 KeyboardHook установлен в режиме LockScreen");
 
             // ✅ 6. Показываем и активируем

@@ -47,16 +47,16 @@ namespace BibClient
                 int vkCode = Marshal.ReadInt32(lParam);
                 Keys key = (Keys)vkCode;
 
-                // Блокируем всегда
-                if (key == Keys.LWin || key == Keys.RWin || key == Keys.Apps)
+                // Ctrl+Shift+Esc (диспетчер задач) — блокируем всегда, в любом режиме
+                if (Control.ModifierKeys == (Keys.Control | Keys.Shift) && key == Keys.Escape)
                     return (IntPtr)1;
 
                 if (_mode == KeyboardHookMode.LockScreen)
                 {
-                    // Блокируем Alt+Tab, Ctrl+Esc, Ctrl+Shift+Esc, Alt+F4
-                    if ((Control.ModifierKeys == Keys.Alt && (key == Keys.Tab || key == Keys.F4)) ||
-                        (Control.ModifierKeys == Keys.Control && key == Keys.Escape) ||
-                        (Control.ModifierKeys == (Keys.Control | Keys.Shift) && key == Keys.Escape))
+                    // Блокируем Win (открытие Пуска), Apps, Alt+Tab, Ctrl+Esc, Alt+F4
+                    if (key == Keys.LWin || key == Keys.RWin || key == Keys.Apps ||
+                        (Control.ModifierKeys == Keys.Alt && (key == Keys.Tab || key == Keys.F4)) ||
+                        (Control.ModifierKeys == Keys.Control && key == Keys.Escape))
                     {
                         return (IntPtr)1;
                     }
