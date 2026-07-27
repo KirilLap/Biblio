@@ -162,6 +162,7 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            // _alwaysHook не трогаем — он должен оставаться активным во всех состояниях
 
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
@@ -189,6 +190,7 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            // _alwaysHook не трогаем — он должен оставаться активным во всех состояниях
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.None;
@@ -212,6 +214,7 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            // _alwaysHook не трогаем — он должен оставаться активным во всех состояниях
 
             this.WindowStyle = WindowStyle.None;
             this.WindowState = WindowState.Maximized;
@@ -239,6 +242,7 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            // _alwaysHook не трогаем — он должен оставаться активным во всех состояниях
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.None;
@@ -515,7 +519,12 @@ namespace BibClient
             _sessionManager?.Dispose();
             _sessionManager = null;
 
-            // 2. Скрываем экран блокировки
+            // 2. Снимаем хук блокировки экрана — сессия активна, Alt+Tab/Win должны работать.
+            // _alwaysHook НЕ трогаем: он держит Ctrl+Shift+Esc заблокированным даже во время сессии
+            _lockHook?.Dispose();
+            _lockHook = null;
+
+            // 3. Скрываем экран блокировки
             this.Hide();
 
             // 3. Создаём SessionManager (с восстановленным временем если нужно)
@@ -680,6 +689,8 @@ namespace BibClient
 
             _lockHook?.Dispose();
             _lockHook = null;
+            _alwaysHook?.Dispose();
+            _alwaysHook = null;
             _clockTimer.Stop();
 
             this.WindowStyle = WindowStyle.SingleBorderWindow;
@@ -795,9 +806,13 @@ namespace BibClient
                 _originalContent = (UIElement?)this.Content;
             }
 
-            // ✅ 5. Пересоздаём хук
+            // ✅ 5. Пересоздаём хуки
             _lockHook?.Dispose();
             _lockHook = new KeyboardHook(KeyboardHookMode.LockScreen);
+            // Пересоздаём _alwaysHook (а не просто обнуляем!) — иначе после Unlock()
+            // он потеряется навсегда и следующая сессия останется без защиты Ctrl+Shift+Esc
+            _alwaysHook?.Dispose();
+            _alwaysHook = new KeyboardHook(KeyboardHookMode.Always);
             Logger.Info("🔐 KeyboardHook установлен в режиме LockScreen");
 
             // ✅ 6. Показываем и активируем
