@@ -2370,6 +2370,7 @@ function renderServicesList() {
     row.className = 'service-row';
     row.innerHTML = `
       <input type="text" value="${esc(svc.name)}" placeholder="Название" data-si="${i}" data-field="name">
+      <input type="text" value="${esc(svc.nameUz || '')}" placeholder="Название (UZ)" title="Название на узбекском — показывается оператору при выборе языка UZ" data-si="${i}" data-field="nameUz">
       <input type="text" value="${esc(svc.unit)}" placeholder="Ед." data-si="${i}" data-field="unit">
       <input type="number" value="${svc.price}" placeholder="Цена" data-si="${i}" data-field="price" min="0">
       <div class="service-chk"><input type="checkbox" ${svc.isActive ? 'checked' : ''} data-si="${i}" data-field="isActive" title="Активна"></div>
@@ -2395,7 +2396,7 @@ function readServicesForm() {
 
 function addService() {
   if (!settings.services) settings.services = [];
-  settings.services.push({ id: crypto.randomUUID(), name: 'Новая услуга', unit: 'лист', price: 500, isActive: true });
+  settings.services.push({ id: crypto.randomUUID(), name: 'Новая услуга', nameUz: '', unit: 'лист', price: 500, isActive: true });
   renderServicesList();
 }
 

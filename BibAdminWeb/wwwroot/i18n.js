@@ -373,7 +373,14 @@ const I18N_UZ_PATTERNS = [
   [/^ПК (.+) не найден$/, '{1} kompyuteri topilmadi'],
   [/^Временный №(.+)$/, 'Vaqtinchalik №{1}'],
   [/^Незарег\. (.+)$/, 'Ro‘yxatsiz {1}'],
+  [/^(\d+) услуги$/, '{1} ta xizmat'],
 ];
+
+// Единицы услуг: «лист» → «varaq», «50 мб» → «50 MB»
+const I18N_UZ_UNITS = {
+  'лист': 'varaq', 'листов': 'varaq', 'страница': 'bet', 'стр': 'bet', 'штука': 'dona', 'шт': 'dona',
+  'мин': 'daq', 'час': 'soat', 'мб': 'MB', 'гб': 'GB',
+};
 
 const I18N_UZ_MONTHS = {
   'янв': 'yanvar', 'фев': 'fevral', 'мар': 'mart', 'апр': 'aprel', 'май': 'may', 'мая': 'may',
@@ -406,6 +413,19 @@ function tServer(s) {
     if (m) return tpl.replace(/\{(\d)\}/g, (x, i) => m[+i]);
   }
   return s;
+}
+
+// Название услуги на выбранном языке. Узбекское название задаётся в админке
+// (Настройки → Услуги, поле «Название (UZ)»); если оно пустое — остаётся русское.
+function svcName(name) {
+  if (_lang !== 'uz' || typeof serviceTypes === 'undefined') return name;
+  const s = serviceTypes.find(x => x.name === name);
+  return (s && s.nameUz) || name;
+}
+
+function tUnit(unit) {
+  if (_lang !== 'uz' || typeof unit !== 'string') return unit;
+  return unit.replace(/[А-Яа-яЁё]+/g, w => I18N_UZ_UNITS[w.toLowerCase()] || w);
 }
 
 // Подпись периода статистики: «05 октября 2026 г.» → «05 oktabr 2026-yil»

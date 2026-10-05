@@ -211,6 +211,8 @@ namespace BibAdminWeb
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; } = "";
+        // Название на узбекском — показывается оператору при выборе языка UZ (пусто = русское)
+        public string NameUz { get; set; } = "";
         public string Unit { get; set; } = "лист";
         public int Price { get; set; } = 0;
         public bool IsActive { get; set; } = true;

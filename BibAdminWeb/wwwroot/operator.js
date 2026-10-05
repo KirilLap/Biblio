@@ -233,7 +233,7 @@ function startSignalR() {
   });
 
   connection.on('serviceCreated', s => {
-    toast(t('Услуга "{name}" создана. Сумма: {sum} сум', { name: s.serviceName, sum: fmt(s.total) }) + (s.isPaid ? '' : ' ' + t('(отложено)')), 'good');
+    toast(t('Услуга "{name}" создана. Сумма: {sum} сум', { name: tServer(svcName(s.serviceName)), sum: fmt(s.total) }) + (s.isPaid ? '' : ' ' + t('(отложено)')), 'good');
   });
 
   connection.onreconnecting(() => {
@@ -1286,8 +1286,8 @@ function renderSvcList() {
     return `<div class="svc-row${qty > 0 ? ' on' : ''}" id="svc-row-${esc(s.id)}">
       <span class="svc-ic">${iconSvg}</span>
       <div class="svc-info">
-        <span class="svc-name">${esc(s.name)}</span>
-        <span class="svc-sub">${fmt(s.price)} ${t('сум')} / ${esc(s.unit)}</span>
+        <span class="svc-name">${esc(svcName(s.name))}</span>
+        <span class="svc-sub">${fmt(s.price)} ${t('сум')} / ${esc(tUnit(s.unit))}</span>
       </div>
       <div class="svc-step">
         <button onclick="stepSvcQty('${esc(s.id)}',-1)" ${!qty ? 'disabled' : ''}>${svgIcon('minus', 14)}</button>
@@ -1403,7 +1403,7 @@ function showSessionSummary(s) {
     let debtInner = `<div style="font-weight:600;color:var(--warn);margin-bottom:8px">${t('Неоплаченные услуги')}</div>`;
     debts.forEach(d => {
       debtInner += `<div class="summary-row" style="font-size:13px">
-        <span>${esc(d.name)} × ${d.qty} ${esc(d.unit)}</span>
+        <span>${esc(svcName(d.name))} × ${d.qty} ${esc(tUnit(d.unit))}</span>
         <span class="val" style="color:var(--warn)">${fmt(d.debt)} ${t('сум')}</span>
       </div>`;
     });
@@ -1459,8 +1459,8 @@ function renderDebtsDlg(debts) {
     const pc = d.pcNumber || '—';
     html += `<div class="summary-row" style="border-bottom:1px solid #f0f0f0;padding:10px 0;align-items:center">
       <span style="flex:1">
-        <strong>${esc(d.serviceName)}</strong>
-        <span style="color:#888;font-size:12px"> × ${d.quantity} ${esc(d.unit)}</span><br>
+        <strong>${esc(svcName(d.serviceName))}</strong>
+        <span style="color:#888;font-size:12px"> × ${d.quantity} ${esc(tUnit(d.unit))}</span><br>
         <span style="color:#888;font-size:12px">${t('ПК')}: ${esc(pc)} · ${t('Читатель')}: ${esc(reader)}</span>
       </span>
       <span style="color:#854F0B;font-weight:700;margin:0 16px">${fmt(d.debtAmount)} ${t('сум')}</span>
@@ -1774,7 +1774,7 @@ function opBuildServicesTable(services, pc) {
   services.forEach(s => {
     const zQ = s.quantity === 0 ? ' class="anl-zero"' : '';
     const zA = s.totalAmount === 0 ? ' class="anl-zero"' : '';
-    html += `<tr><td>${opEsc(s.name)}</td><td${zQ}>${s.quantity.toLocaleString('ru-RU')}</td><td${zA}>${s.totalAmount.toLocaleString('ru-RU')}</td></tr>`;
+    html += `<tr><td>${opEsc(svcName(s.name))}</td><td${zQ}>${s.quantity.toLocaleString('ru-RU')}</td><td${zA}>${s.totalAmount.toLocaleString('ru-RU')}</td></tr>`;
   });
   const totalQty = (pc.totalSessions||0) + services.reduce((s,r)=>s+r.quantity,0);
   const totalAmt = (pc.totalRevenue||0)  + services.reduce((s,r)=>s+r.totalAmount,0);
@@ -1953,8 +1953,8 @@ function renderFinanceServices() {
       </tr></thead>
       <tbody>
         ${_finServices.map(t => `<tr>
-          <td>${esc(t.serviceName)}</td>
-          <td>${esc(t.unit)}</td>
+          <td>${esc(svcName(t.serviceName))}</td>
+          <td>${esc(tUnit(t.unit))}</td>
           <td>${t.quantity}</td>
           <td>${fmt(t.pricePerUnit)}</td>
           <td>${fmt(t.totalAmount)}</td>

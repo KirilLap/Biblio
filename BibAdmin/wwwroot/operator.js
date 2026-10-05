@@ -75,7 +75,7 @@ function startSignalR() {
   });
 
   connection.on('serviceCreated', s => {
-    toast(t('Услуга "{name}" создана. Сумма: {sum} сум', { name: s.serviceName, sum: fmt(s.total) }) + (s.isPaid ? '' : ' ' + t('(отложено)')), 'good');
+    toast(t('Услуга "{name}" создана. Сумма: {sum} сум', { name: tServer(svcName(s.serviceName)), sum: fmt(s.total) }) + (s.isPaid ? '' : ' ' + t('(отложено)')), 'good');
   });
 
   connection.onreconnecting(() => {
@@ -330,7 +330,7 @@ function openServiceDlg() {
   if (serviceTypes.length === 0) { toast(t('Нет доступных услуг'), 'warn'); return; }
   const sel = document.getElementById('dlgSvcType');
   sel.innerHTML = serviceTypes.map(s =>
-    `<option value="${esc(s.id)}" data-price="${s.price}" data-unit="${esc(s.unit)}">${esc(s.name)} — ${fmt(s.price)} ${t('сум')}/${esc(s.unit)}</option>`
+    `<option value="${esc(s.id)}" data-price="${s.price}" data-unit="${esc(s.unit)}">${esc(svcName(s.name))} — ${fmt(s.price)} ${t('сум')}/${esc(tUnit(s.unit))}</option>`
   ).join('');
   document.getElementById('dlgSvcQty').value = 1;
   document.getElementById('dlgSvcReader').value = '';

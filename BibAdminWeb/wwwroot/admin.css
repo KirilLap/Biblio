@@ -650,7 +650,7 @@ body {
 
 .service-row {
   display: grid;
-  grid-template-columns: 1fr 80px 90px 70px 30px;
+  grid-template-columns: 1fr 1fr 80px 90px 70px 30px;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
