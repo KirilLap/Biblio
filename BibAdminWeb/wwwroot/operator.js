@@ -48,14 +48,14 @@ function opUpdateNotifBtn() {
     btn.style.display = 'none'; // уже работает — кнопку прячем
   } else if (p === 'denied') {
     btn.style.display = '';
-    btn.title = 'Уведомления заблокированы — разрешите в настройках браузера';
+    btn.title = t('Уведомления заблокированы — разрешите в настройках браузера');
     btn.style.color = '#f87171';
     btn.style.borderColor = '#5D2A2A';
     btn.style.cursor = 'default';
     btn.onclick = null;
   } else {
     btn.style.display = '';
-    btn.title = 'Включить браузерные уведомления';
+    btn.title = t('Включить браузерные уведомления');
   }
 }
 
@@ -172,24 +172,24 @@ function startSignalR() {
     offlinePcNumber = data.pcNumber;
     const pc = pcs[data.pcNumber] || {};
     document.getElementById('dlgOfflineBody').innerHTML =
-      `<div class="summary-row"><span>ПК</span><span class="val">${esc(data.pcNumber)}</span></div>
-       <div class="summary-row"><span>Тип</span><span class="val">${esc(data.sessionType)}</span></div>
-       <div class="summary-row"><span>Время в сессии</span><span class="val">${fmtTime(data.elapsed)}</span></div>`;
+      `<div class="summary-row"><span>${t('ПК')}</span><span class="val">${esc(data.pcNumber)}</span></div>
+       <div class="summary-row"><span>${t('Тип')}</span><span class="val">${esc(t(data.sessionType))}</span></div>
+       <div class="summary-row"><span>${t('Время в сессии')}</span><span class="val">${fmtTime(data.elapsed)}</span></div>`;
     openDlg('dlgOffline');
-    bibNotify(`⚠️ ${data.pcNumber} — потеря связи`, `Сессия ${data.sessionType} · ${fmtTime(data.elapsed)}`);
+    bibNotify('⚠️ ' + t('{pc} — потеря связи', { pc: data.pcNumber }), t('Сессия {type} · {time}', { type: t(data.sessionType), time: fmtTime(data.elapsed) }));
   });
 
   connection.on('offlineResolved', data => {
     if (offlinePcNumber === data.pcNumber) {
       offlinePcNumber = null;
       closeDlg('dlgOffline');
-      toast(`Решение по ${data.pcNumber}: ${data.decision === 'Pause' ? 'пауза' : 'продолжить'}`, 'good');
+      toast(t('Решение по {pc}: {decision}', { pc: data.pcNumber, decision: t(data.decision === 'Pause' ? 'пауза' : 'продолжить') }), 'good');
     }
   });
 
   connection.on('serverRestarting', data => {
-    showRestartOverlay(data.reason || 'Обновление системы');
-    bibNotify('🔄 Обновление сервера', 'Сервер перезапускается. После обновления войдите в систему снова.');
+    showRestartOverlay(t(data.reason || 'Обновление системы'));
+    bibNotify('🔄 ' + t('Обновление сервера'), t('Сервер перезапускается. После обновления войдите в систему снова.'));
   });
 
   connection.on('permissionsUpdated', async data => {
@@ -206,7 +206,7 @@ function startSignalR() {
     if (_currentOpTab === 'readers' && !opPerms.canViewReaders) switchOpTab('pcs');
     if (_currentOpTab === 'finance' && !opPerms.canViewFinance) switchOpTab('pcs');
     if (_currentOpTab === 'stats'   && !opPerms.canViewStats)   switchOpTab('pcs');
-    toast('Права доступа обновлены', 'good');
+    toast(t('Права доступа обновлены'), 'good');
   });
 
   connection.on('sessionSummary', s => {
@@ -214,9 +214,9 @@ function startSignalR() {
     // Не удаляем из _opManuallyEndedPcs здесь — sessionEndedByStaff обработает это
     showSessionSummary(s);
     if (!isManual) {
-      const name = s.userName || s.readerId || 'Анонимный';
-      bibNotify(`✅ ${s.pcNumber} — сессия завершена`,
-        `${name} · ${fmtTime(s.duration)} · ${fmt(s.earned)} сум`);
+      const name = s.userName || s.readerId || t('Анонимный');
+      bibNotify('✅ ' + t('{pc} — сессия завершена', { pc: s.pcNumber }),
+        `${name} · ${fmtTime(s.duration)} · ${fmt(s.earned)} ${t('сум')}`);
     }
   });
 
@@ -225,35 +225,35 @@ function startSignalR() {
       _opManuallyEndedPcs.delete(data.pcNumber);
       return; // сами завершили — не уведомляем
     }
-    const name = data.userName || 'Анонимный';
+    const name = data.userName || t('Анонимный');
     const h = Math.floor(data.durationSeconds / 3600);
     const m = Math.floor((data.durationSeconds % 3600) / 60);
-    bibNotify(`✅ ${data.pcNumber} — сессия завершена`,
-      `${name} · ${h}ч ${m}м · ${(data.earned || 0).toLocaleString('ru-RU')} сум`);
+    bibNotify('✅ ' + t('{pc} — сессия завершена', { pc: data.pcNumber }),
+      `${name} · ${t('{h}ч {m}м', { h, m })} · ${(data.earned || 0).toLocaleString('ru-RU')} ${t('сум')}`);
   });
 
   connection.on('serviceCreated', s => {
-    toast(`Услуга "${s.serviceName}" создана. Сумма: ${fmt(s.total)} сум${s.isPaid ? '' : ' (отложено)'}`, 'good');
+    toast(t('Услуга "{name}" создана. Сумма: {sum} сум', { name: s.serviceName, sum: fmt(s.total) }) + (s.isPaid ? '' : ' ' + t('(отложено)')), 'good');
   });
 
   connection.onreconnecting(() => {
     setDot(false);
-    toast('Переподключение к серверу...', '');
+    toast(t('Переподключение к серверу...'), '');
   });
   connection.onreconnected(async () => {
     setDot(true);
-    toast('Связь восстановлена', 'good');
+    toast(t('Связь восстановлена'), 'good');
     try { await connection.invoke('RequestSnapshot'); } catch (e) { console.warn('snapshot error', e); }
   });
   connection.onclose(() => {
     setDot(false);
-    showRestartOverlay('Сервер недоступен');
+    showRestartOverlay(t('Сервер недоступен'));
     waitForServerAndReload();
   });
 
   connection.start()
     .then(() => setDot(true))
-    .catch(err => { setDot(false); console.error('SignalR error:', err); showRestartOverlay('Сервер недоступен'); waitForServerAndReload(); });
+    .catch(err => { setDot(false); console.error('SignalR error:', err); showRestartOverlay(t('Сервер недоступен')); waitForServerAndReload(); });
 }
 
 function showRestartOverlay(reason) {
@@ -278,7 +278,7 @@ function setDot(online) {
   const d = document.getElementById('connDot');
   if (!d) return;
   d.classList.toggle('offline', !online);
-  d.title = online ? 'Подключено' : 'Нет связи с сервером';
+  d.title = t(online ? 'Подключено' : 'Нет связи с сервером');
 }
 
 // ── Рендер грида ──────────────────────────────────────────────────────────────
@@ -339,9 +339,9 @@ function buildCardHtml(pc) {
     const nameLabel = pc.userName || pc.readerId || '';
     const tariffChip = pc.sessionType === 'VIP'
       ? `<span class="tariff-chip tariff-vip">VIP</span>`
-      : `<span class="tariff-chip tariff-limit">Лимит</span>`;
+      : `<span class="tariff-chip tariff-limit">${t('Лимит')}</span>`;
     const clientBadge = pc.clientVersion && latestClientVersion && pc.clientVersion !== latestClientVersion
-      ? `<span title="Обновление v${esc(latestClientVersion)}" style="font-size:10px;color:var(--warn)">⬆v${esc(pc.clientVersion)}</span>` : '';
+      ? `<span title="${t('Обновление')} v${esc(latestClientVersion)}" style="font-size:10px;color:var(--warn)">⬆v${esc(pc.clientVersion)}</span>` : '';
     const startTime = pc.sessionStart ? fmtClock(new Date(pc.sessionStart)) : null;
     const endTime = pc.sessionType === 'Лимит' && limit > 0
       ? fmtClock(new Date(Date.now() + rem * 1000)) : null;
@@ -357,27 +357,27 @@ function buildCardHtml(pc) {
              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
              <span data-pc-rem="${esc(n)}">${fmtTime(rem)}</span>
            </span>
-           <span class="sess-paid mono">${fmt(pc.paidAmount || 0)} сум</span>
+           <span class="sess-paid mono">${fmt(pc.paidAmount || 0)} ${t('сум')}</span>
          </div>`
       : `<div class="sess-meta">
-           <span class="sess-open-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>Открытая</span>
-           <span class="sess-cost mono" data-pc-cost="${esc(n)}">${fmt(cost)} сум</span>
+           <span class="sess-open-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>${t('Открытая')}</span>
+           <span class="sess-cost mono" data-pc-cost="${esc(n)}">${fmt(cost)} ${t('сум')}</span>
          </div>`;
 
     const pauseIco = pc.isPaused
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>`
       : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="none"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor"/></svg>`;
     const cardActions = `<div class="pccard-actions">
-      <button class="qbtn qbtn-ghost" title="Экран" onclick="cardAction(event,'${esc(n)}',()=>openScreenView('${esc(n)}'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
-      <button class="qbtn qbtn-ghost" title="${pc.isPaused ? 'Продолжить' : 'Пауза'}" onclick="cardAction(event,'${esc(n)}',doTogglePause)">${pauseIco}</button>
-      <button class="qbtn qbtn-danger qbtn-grow" onclick="cardAction(event,'${esc(n)}',doEndSession)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Завершить</button>
+      <button class="qbtn qbtn-ghost" title="${t('Экран')}" onclick="cardAction(event,'${esc(n)}',()=>openScreenView('${esc(n)}'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="qbtn qbtn-ghost" title="${t(pc.isPaused ? 'Продолжить' : 'Пауза')}" onclick="cardAction(event,'${esc(n)}',doTogglePause)">${pauseIco}</button>
+      <button class="qbtn qbtn-danger qbtn-grow" onclick="cardAction(event,'${esc(n)}',doEndSession)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>${t('Завершить')}</button>
     </div>`;
 
     return head + `<div class="pccard-body">
       ${nameLabel ? `<div class="sess-user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="sess-user-name">${esc(nameLabel)}</span>${clientBadge}</div>` : (clientBadge ? `<div style="margin-bottom:4px">${clientBadge}</div>` : '')}
       <div class="sess-timer">
         <span class="${isLow ? 'sess-clock low' : 'sess-clock'} mono" data-pc-clock="${esc(n)}">${fmtTime(elapsed)}</span>
-        <span class="sess-clock-cap">${pc.isPaused ? 'пауза' : 'прошло'}</span>
+        <span class="sess-clock-cap">${t(pc.isPaused ? 'пауза' : 'прошло')}</span>
       </div>
       ${sessTimesBlock}
       ${limMetaBlock}
@@ -395,13 +395,13 @@ function buildCardHtml(pc) {
   }
 
   const freeActions = pc.isOnline ? `<div class="pccard-actions">
-    <button class="qbtn qbtn-ghost" title="Экран" onclick="cardAction(event,'${esc(n)}',()=>openScreenView('${esc(n)}'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
-    <button class="qbtn qbtn-accent qbtn-grow" onclick="cardAction(event,'${esc(n)}',openSessionDlg)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>Начать сессию</button>
+    <button class="qbtn qbtn-ghost" title="${t('Экран')}" onclick="cardAction(event,'${esc(n)}',()=>openScreenView('${esc(n)}'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="qbtn qbtn-accent qbtn-grow" onclick="cardAction(event,'${esc(n)}',openSessionDlg)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20 6 4"/></svg>${t('Начать сессию')}</button>
   </div>` : '';
 
   return head + `<div class="pccard-body pccard-body-state">
     <div class="${stMark}">${icon}</div>
-    <span class="state-text">${pc.isOnline ? 'Готов к работе' : 'Нет связи'}</span>
+    <span class="state-text">${t(pc.isOnline ? 'Готов к работе' : 'Нет связи')}</span>
     ${freeActions}
   </div>`;
 }
@@ -422,7 +422,7 @@ function tickTimers() {
 
     if (pc.sessionType === 'VIP') {
       const costEl = document.querySelector(`[data-pc-cost="${n}"]`);
-      if (costEl) costEl.textContent = fmt(Math.floor(elapsed * tariff / 3600)) + ' сум';
+      if (costEl) costEl.textContent = fmt(Math.floor(elapsed * tariff / 3600)) + ' ' + t('сум');
     }
 
     if (pc.sessionType === 'Лимит' && pc.limitSeconds > 0) {
@@ -495,7 +495,7 @@ function renderActionBar() {
 
   const stKey = _stKey(pc);
   const badgeLabel = pc.isSession
-    ? (pc.sessionType === 'VIP' ? 'VIP' : 'Лимит')
+    ? (pc.sessionType === 'VIP' ? 'VIP' : t('Лимит'))
     : getStatusLabel(pc);
 
   const ico = (path, w = 14) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -510,27 +510,27 @@ function renderActionBar() {
 
   let btns = '';
   if (pc.isOnline)
-    btns += `<button class="abtn" title="Отправить сообщение" onclick="openSendMessage('${esc(pc.pcNumber)}')">${ico(msgSvg)}Сообщение</button>`;
+    btns += `<button class="abtn" title="${t('Отправить сообщение')}" onclick="openSendMessage('${esc(pc.pcNumber)}')">${ico(msgSvg)}${t('Сообщение')}</button>`;
   if (pc.isOnline && !pc.isSession) {
-    btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
-    btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico(playSvg)}Начать сессию</button>`;
+    btns += `<button class="abtn" title="${t('Перезагрузить')}" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
+    btns += `<button class="abtn abtn-accent" onclick="openSessionDlg()">${ico(playSvg)}${t('Начать сессию')}</button>`;
   }
   if (pc.isSession) {
-    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico(receiptSvg)}Услуга</button>`;
+    btns += `<button class="abtn" onclick="openServiceDlg('${esc(pc.pcNumber)}')">${ico(receiptSvg)}${t('Услуга')}</button>`;
     if (pc.sessionType === 'Лимит') {
       btns += `<div class="abtn-stepper">
-        <button onclick="openSubtractDlg()" title="Убрать время">${ico('<path d="M5 12h14"/>', 15)}</button>
-        <span>Время</span>
-        <button onclick="openExtendDlg()" title="Добавить время">${ico('<path d="M12 5v14M5 12h14"/>', 15)}</button>
+        <button onclick="openSubtractDlg()" title="${t('Убрать время')}">${ico('<path d="M5 12h14"/>', 15)}</button>
+        <span>${t('Время')}</span>
+        <button onclick="openExtendDlg()" title="${t('Добавить время')}">${ico('<path d="M12 5v14M5 12h14"/>', 15)}</button>
       </div>`;
     }
-    btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico(warnSvg)}Штраф</button>`;
+    btns += `<button class="abtn" onclick="openPenaltyDlg()">${ico(warnSvg)}${t('Штраф')}</button>`;
     const convertSvg = '<path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/>';
     const typeTarget = pc.sessionType === 'Лимит' ? 'VIP' : 'Лимит';
-    btns += `<button class="abtn" onclick="openChangeTypeDlg()">${ico(convertSvg)}→ ${typeTarget}</button>`;
-    btns += `<button class="abtn" onclick="openTransferDlg()">${ico(swapSvg)}Пересадить</button>`;
-    btns += `<button class="abtn" title="Перезагрузить" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
-    btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico(stopSvg)}Завершить</button>`;
+    btns += `<button class="abtn" onclick="openChangeTypeDlg()">${ico(convertSvg)}→ ${t(typeTarget)}</button>`;
+    btns += `<button class="abtn" onclick="openTransferDlg()">${ico(swapSvg)}${t('Пересадить')}</button>`;
+    btns += `<button class="abtn" title="${t('Перезагрузить')}" onclick="restartPc('${esc(pc.pcNumber)}')">${ico(rebootSvg)}</button>`;
+    btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico(stopSvg)}${t('Завершить')}</button>`;
   }
 
   bar.innerHTML = `
@@ -626,7 +626,7 @@ function openSessionDlg() {
   const rowName = document.getElementById('rowUserName');
   if (rowName) rowName.style.display = reqName ? '' : 'none';
   const lblName = document.getElementById('lblUserName');
-  if (lblName) lblName.innerHTML = reqName ? 'Имя *' : 'Имя читателя <span style="font-weight:500;color:var(--ink-3)">(заполняется автоматически)</span>';
+  if (lblName) lblName.innerHTML = reqName ? t('Имя *') : `${t('Имя читателя')} <span style="font-weight:500;color:var(--ink-3)">${t('(заполняется автоматически)')}</span>`;
 
   calcAmount();
   openDlg('dlgSession');
@@ -657,7 +657,7 @@ function _applyWorkdayCap(requestedMins) {
   }
   const cappedAmount = Math.round(tariff * cap / 60);
   if (hint) {
-    hint.textContent = `⏰ Рабочий день заканчивается в ${sessionFields.workdayEnd} — обрезано до ${cap} мин = ${fmt(cappedAmount)} сум`;
+    hint.textContent = '⏰ ' + t('Рабочий день заканчивается в {end} — обрезано до {cap} мин = {sum} сум', { end: sessionFields.workdayEnd, cap, sum: fmt(cappedAmount) });
     hint.style.display = '';
   }
   return cap;
@@ -671,7 +671,7 @@ function updateEndTimeHint() {
   const h = parseInt(document.getElementById('dlgLimitHours').value) || 0;
   const mins = h * 60 + (parseInt(document.getElementById('dlgLimitMins').value) || 0);
   if (!mins) { hint.style.display = 'none'; return; }
-  hint.textContent = 'Сессия закончится в ' + fmtClock(new Date(Date.now() + mins * 60000));
+  hint.textContent = t('Сессия закончится в {time}', { time: fmtClock(new Date(Date.now() + mins * 60000)) });
   hint.style.display = '';
 }
 
@@ -711,17 +711,17 @@ async function confirmStartSession() {
   const readerId = isTemp ? readerNums : (readerCardPrefix + readerNums);
 
   if (sessionFields.requireReaderId) {
-    if (!readerNums) { toast('Введите номер читательского билета', 'warn'); return; }
+    if (!readerNums) { toast(t('Введите номер читательского билета'), 'warn'); return; }
     if (!isTemp) {
       if (_readerLookupState === null || _readerLookedUpId !== readerId) await lookupReader();
-      if (_readerLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
-      if (_readerLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
-      if (_readerLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
+      if (_readerLookupState === 'not_found') { toast(t('Читатель не найден в базе'), 'warn'); return; }
+      if (_readerLookupState === 'expired')   { toast(t('Читательский билет просрочен'), 'warn'); return; }
+      if (_readerLookupState !== 'valid')     { toast(t('Проверьте номер читательского билета'), 'warn'); return; }
     }
   }
 
   const userName = document.getElementById('dlgUserName').value.trim();
-  if (!!sessionFields.requireUserName && !userName) { toast('Введите имя пользователя', 'warn'); return; }
+  if (!!sessionFields.requireUserName && !userName) { toast(t('Введите имя пользователя'), 'warn'); return; }
 
   closeDlg('dlgSession');
   try {
@@ -729,13 +729,13 @@ async function confirmStartSession() {
       sessionType === 'Лимит' ? limitMin * 60 : 0,
       sessionType === 'Лимит' ? paidAmount : 0,
       userName, readerId);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 // Deduplication wrapper — prevents two concurrent lookups (blur + button click)
 async function opQuickAddReader(cardId) {
   const infoEl = document.getElementById('dlgReaderInfo');
-  infoEl.innerHTML = `<span style="color:#aaa">Добавление…</span>`;
+  infoEl.innerHTML = `<span style="color:#aaa">${t('Добавление…')}</span>`;
   try {
     const r = await fetch('/api/op/readers/quick-add', {
       method: 'POST',
@@ -746,12 +746,12 @@ async function opQuickAddReader(cardId) {
       _readerLookupState = 'valid';
       _readerLookedUpId  = cardId;
       infoEl.style.cssText = 'display:block;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:12px;background:#1A2D1A;color:#6EE7B7;border:1px solid #2A5D2A';
-      infoEl.textContent = `✓ ${cardId} — добавлен как новый читатель`;
-      toast('Читатель добавлен', 'success');
+      infoEl.textContent = '✓ ' + t('{id} — добавлен как новый читатель', { id: cardId });
+      toast(t('Читатель добавлен'), 'success');
     } else {
-      toast('Ошибка добавления', 'warn');
+      toast(t('Ошибка добавления'), 'warn');
     }
-  } catch { toast('Ошибка добавления', 'warn'); }
+  } catch { toast(t('Ошибка добавления'), 'warn'); }
 }
 
 async function lookupReader() {
@@ -779,7 +779,7 @@ async function _lookupReaderImpl() {
     _readerLookedUpId = nums;
     infoEl.className = 'reader-info valid';
     infoEl.style.display = '';
-    infoEl.textContent = `✓ Временный билет №${nums} — посещение будет зафиксировано`;
+    infoEl.textContent = '✓ ' + t('Временный билет №{num} — посещение будет зафиксировано', { num: nums });
     return;
   }
 
@@ -795,10 +795,10 @@ async function _lookupReaderImpl() {
       infoEl.style.display = '';
       infoEl.style.cssText = '';
       Object.assign(infoEl.style, { display:'flex', alignItems:'center', gap:'10px', marginTop:'6px', padding:'7px 10px', borderRadius:'8px', fontSize:'12px', background:'var(--locked-bg)', color:'var(--locked)', border:'1px solid var(--locked-ring)' });
-      infoEl.innerHTML = `<span style="flex:1">✗ Читатель ${esc(cardId)} не найден в базе</span>
+      infoEl.innerHTML = `<span style="flex:1">✗ ${t('Читатель {id} не найден в базе', { id: esc(cardId) })}</span>
         <button data-quick-add="${esc(cardId)}"
           style="padding:3px 10px;font-size:11px;border-radius:6px;cursor:pointer;background:var(--free-bg);color:var(--free);border:1px solid var(--free-ring);white-space:nowrap">
-          + Добавить
+          + ${t('Добавить')}
         </button>`;
       infoEl.querySelector('[data-quick-add]').addEventListener('click', function() {
         opQuickAddReader(this.dataset.quickAdd);
@@ -820,7 +820,7 @@ async function _lookupReaderImpl() {
                      && regDate.getDate()     === today.getDate();
         if (!isToday) {
           expired = true;
-          expiredMsg = `⚠ ${data.fullName} · Временный билет выдан ${regDate.toLocaleDateString('ru-RU')}, действителен только в день выдачи`;
+          expiredMsg = `⚠ ${data.fullName} · ` + t('Временный билет выдан {date}, действителен только в день выдачи', { date: regDate.toLocaleDateString('ru-RU') });
         }
       } else {
         const updDate = parseRegDate(data.updatedAt);
@@ -830,7 +830,7 @@ async function _lookupReaderImpl() {
           const expDate = new Date(baseDate);
           expDate.setFullYear(expDate.getFullYear() + 3);
           expired = true;
-          expiredMsg = `⚠ ${data.fullName} · Билет просрочен с ${expDate.toLocaleDateString('ru-RU')}`;
+          expiredMsg = `⚠ ${data.fullName} · ` + t('Билет просрочен с {date}', { date: expDate.toLocaleDateString('ru-RU') });
         }
       }
       if (expired) {
@@ -854,9 +854,9 @@ async function _lookupReaderImpl() {
     const parts = [
       data.fullName,
       data.category,
-      data.gender,
-      data.age ? `${data.age} лет` : null,
-      expDate ? `до ${expDate.toLocaleDateString('ru-RU')}` : null
+      t(data.gender),
+      data.age ? t('{n} лет', { n: data.age }) : null,
+      expDate ? t('до {date}', { date: expDate.toLocaleDateString('ru-RU') }) : null
     ].filter(Boolean);
     infoEl.className = 'reader-info valid';
     infoEl.style.cssText = '';
@@ -881,14 +881,14 @@ async function doEndSession() {
   _opManuallyEndedPcs.add(selectedPc);
   try {
     await connection.invoke('EndSession', selectedPc);
-  } catch (e) { _opManuallyEndedPcs.delete(selectedPc); toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { _opManuallyEndedPcs.delete(selectedPc); toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 async function doTogglePause() {
   if (!selectedPc) return;
   try {
     await connection.invoke('TogglePause', selectedPc);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 // ── Extend session ────────────────────────────────────────────────────────────
@@ -926,11 +926,11 @@ async function confirmExtend() {
   const h = parseInt(document.getElementById('dlgExtHours').value) || 0;
   const min = h * 60 + (parseInt(document.getElementById('dlgExtMins').value) || 0);
   const amount = parseInt(document.getElementById('dlgExtAmount').value) || 0;
-  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  if (min <= 0) { toast(t('Укажите время'), 'warn'); return; }
   closeDlg('dlgExtend');
   try {
     await connection.invoke('ExtendSession', selectedPc, min * 60, amount);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 // ── Subtract time ─────────────────────────────────────────────────────────────
@@ -968,11 +968,11 @@ async function confirmSubtract() {
   const h = parseInt(document.getElementById('dlgSubHours').value) || 0;
   const min = h * 60 + (parseInt(document.getElementById('dlgSubMins').value) || 0);
   const amount = parseInt(document.getElementById('dlgSubAmount').value) || 0;
-  if (min <= 0) { toast('Укажите время', 'warn'); return; }
+  if (min <= 0) { toast(t('Укажите время'), 'warn'); return; }
   closeDlg('dlgSubtract');
   try {
     await connection.invoke('SubtractTime', selectedPc, min * 60, amount);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 let _penSyncing = false;
@@ -1018,12 +1018,12 @@ async function confirmPenalty() {
   const h = isVip ? 0 : (parseInt(document.getElementById('dlgPenHours').value) || 0);
   const min = isVip ? 0 : (h * 60 + (parseInt(document.getElementById('dlgPenMins').value) || 0));
   const amount = parseInt(document.getElementById('dlgPenAmount').value) || 0;
-  if (!isVip && min <= 0) { toast('Укажите время штрафа', 'warn'); return; }
-  if (isVip && amount <= 0) { toast('Укажите сумму штрафа', 'warn'); return; }
+  if (!isVip && min <= 0) { toast(t('Укажите время штрафа'), 'warn'); return; }
+  if (isVip && amount <= 0) { toast(t('Укажите сумму штрафа'), 'warn'); return; }
   closeDlg('dlgPenalty');
   try {
     await connection.invoke('ApplyPenalty', selectedPc, min * 60, amount);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 // ── Смена типа сессии ─────────────────────────────────────────────────────────
@@ -1045,37 +1045,37 @@ function openChangeTypeDlg() {
   if (isLimit) {
     bodyHtml = `
       <div class="ct-info">
-        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-limit">Лимит</span></span></div>
-        <div class="ct-row"><span>Оплачено</span><span class="val">${fmt(paid)} сум / ${fmtTime(limitSec)}</span></div>
-        <div class="ct-row"><span>Прошло</span><span class="val">${fmtTime(elapsed)}</span></div>
+        <div class="ct-row"><span>${t('Текущий тип')}</span><span class="val"><span class="badge-type badge-limit">${t('Лимит')}</span></span></div>
+        <div class="ct-row"><span>${t('Оплачено')}</span><span class="val">${fmt(paid)} ${t('сум')} / ${fmtTime(limitSec)}</span></div>
+        <div class="ct-row"><span>${t('Прошло')}</span><span class="val">${fmtTime(elapsed)}</span></div>
       </div>
-      <div class="ct-note">Время сверх оплаченных <strong>${fmtTime(limitSec)}</strong> будет начислено по тарифу в конце сессии.</div>`;
-    document.getElementById('dlgCtConfirm').textContent = 'Перевести на VIP';
+      <div class="ct-note">${t('Время сверх оплаченных {time} будет начислено по тарифу в конце сессии.', { time: '<strong>' + fmtTime(limitSec) + '</strong>' })}</div>`;
+    document.getElementById('dlgCtConfirm').textContent = t('Перевести на VIP');
     _changeTypeData = { newType: 'VIP', remainingMinutes: 0 };
   } else {
     bodyHtml = `
       <div class="ct-info">
-        <div class="ct-row"><span>Текущий тип</span><span class="val"><span class="badge-type badge-vip">VIP</span></span></div>
-        <div class="ct-row"><span>Прошло</span><span class="val">${fmtTime(elapsed)}</span></div>
+        <div class="ct-row"><span>${t('Текущий тип')}</span><span class="val"><span class="badge-type badge-vip">VIP</span></span></div>
+        <div class="ct-row"><span>${t('Прошло')}</span><span class="val">${fmtTime(elapsed)}</span></div>
       </div>
       <div class="field" style="margin-top:14px">
-        <label>Ещё осталось</label>
+        <label>${t('Ещё осталось')}</label>
         <div class="dur-field">
           <div class="dur-cell">
             <button type="button" onclick="stepDur('ctRemHours',1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-            <div class="dur-val"><input id="ctRemHours" type="number" min="0" max="23" value="1" oninput="updateCtHint()"><span>ч</span></div>
+            <div class="dur-val"><input id="ctRemHours" type="number" min="0" max="23" value="1" oninput="updateCtHint()"><span>${t('ч')}</span></div>
             <button type="button" onclick="stepDur('ctRemHours',-1,0,23)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
           </div>
           <div class="dur-cell">
             <button type="button" onclick="stepDur('ctRemMins',15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-            <div class="dur-val"><input id="ctRemMins" type="number" min="0" max="59" value="0" oninput="updateCtHint()"><span>мин</span></div>
+            <div class="dur-val"><input id="ctRemMins" type="number" min="0" max="59" value="0" oninput="updateCtHint()"><span>${t('мин')}</span></div>
             <button type="button" onclick="stepDur('ctRemMins',-15,0,59)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
           </div>
         </div>
         <div id="ctRemHint" class="dlg-end-time-hint" style="margin-top:6px"></div>
       </div>
-      <div class="ct-note" style="margin-top:8px">Оплата за всё время сессии начислится по тарифу при завершении.</div>`;
-    document.getElementById('dlgCtConfirm').textContent = 'Ограничить сессию';
+      <div class="ct-note" style="margin-top:8px">${t('Оплата за всё время сессии начислится по тарифу при завершении.')}</div>`;
+    document.getElementById('dlgCtConfirm').textContent = t('Ограничить сессию');
     _changeTypeData = { newType: 'Лимит', remainingMinutes: 60 };
   }
 
@@ -1091,7 +1091,7 @@ function updateCtHint() {
   const hint = document.getElementById('ctRemHint');
   if (!hint) return;
   if (m > 0) {
-    hint.textContent = 'Сессия завершится в ' + fmtClock(new Date(Date.now() + m * 60000));
+    hint.textContent = t('Сессия завершится в {time}', { time: fmtClock(new Date(Date.now() + m * 60000)) });
     hint.style.display = '';
   } else {
     hint.style.display = 'none';
@@ -1101,36 +1101,36 @@ function updateCtHint() {
 async function confirmChangeType() {
   if (!selectedPc || !_changeTypeData) return;
   if (_changeTypeData.newType === 'Лимит' && _changeTypeData.remainingMinutes <= 0) {
-    toast('Укажите оставшееся время', 'warn'); return;
+    toast(t('Укажите оставшееся время'), 'warn'); return;
   }
   closeDlg('dlgChangeType');
   try {
     await connection.invoke('ChangeSessionType', selectedPc, _changeTypeData.newType, _changeTypeData.remainingMinutes);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 // ── Управление всеми ПК ───────────────────────────────────────────────────────
 async function shutdownAll() {
-  if (!confirm('Выключить все ПК?')) return;
+  if (!confirm(t('Выключить все ПК?'))) return;
   try {
     await connection.invoke('ShutdownAll');
-    toast('Команда выключения отправлена всем ПК');
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+    toast(t('Команда выключения отправлена всем ПК'));
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 async function restartPc(pcNum) {
   try {
     await connection.invoke('RestartPc', pcNum || selectedPc);
-    toast('Команда перезагрузки отправлена на ' + (pcNum || selectedPc));
-  } catch (e) { toast('Ошибка перезагрузки: ' + e, 'warn'); }
+    toast(t('Команда перезагрузки отправлена на {pc}', { pc: pcNum || selectedPc }));
+  } catch (e) { toast(t('Ошибка перезагрузки: ') + e, 'warn'); }
 }
 
 async function restartAll() {
-  if (!confirm('Перезагрузить все ПК?')) return;
+  if (!confirm(t('Перезагрузить все ПК?'))) return;
   try {
     await connection.invoke('RestartAll');
-    toast('Команда перезагрузки отправлена всем ПК');
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+    toast(t('Команда перезагрузки отправлена всем ПК'));
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 async function resolveOffline(decision) {
@@ -1138,7 +1138,7 @@ async function resolveOffline(decision) {
   closeDlg('dlgOffline');
   try {
     await connection.invoke('ResolveOffline', offlinePcNumber, decision);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
   offlinePcNumber = null;
 }
 
@@ -1150,14 +1150,14 @@ async function openTransferDlg() {
   let targets;
   try {
     targets = await connection.invoke('GetTransferTargets', selectedPc);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); return; }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); return; }
 
   if (!targets || targets.length === 0) {
-    toast('Нет доступных ПК для пересадки (нужен свободный онлайн-ПК)', 'warn');
+    toast(t('Нет доступных ПК для пересадки (нужен свободный онлайн-ПК)'), 'warn');
     return;
   }
 
-  document.getElementById('dlgTransferFrom').textContent = `Сессия с: ${selectedPc}`;
+  document.getElementById('dlgTransferFrom').textContent = t('Сессия с: {pc}', { pc: selectedPc });
   const sortedTargets = targets.sort((a, b) => a.pcNumberValue - b.pcNumberValue);
   const sel = document.getElementById('dlgTransferTarget');
   sel.innerHTML = sortedTargets.map(t => `<option value="${esc(t.pcNumber)}">${esc(t.pcNumber)}</option>`).join('');
@@ -1182,17 +1182,17 @@ async function confirmTransfer() {
     const result = await connection.invoke('TransferSession', selectedPc, toPc);
     if (result === 'OK') {
       closeDlg('dlgTransfer');
-      toast(`Сессия перенесена на ${toPc}`, 'good');
+      toast(t('Сессия перенесена на {pc}', { pc: toPc }), 'good');
       deselectPc();
     } else {
-      errEl.textContent = result;
+      errEl.textContent = tServer(result);
       errEl.style.display = 'block';
     }
   } catch (e) { errEl.textContent = String(e); errEl.style.display = 'block'; }
 }
 
 function openServiceDlg(pcNum) {
-  if (serviceTypes.length === 0) { toast('Нет доступных услуг', 'warn'); return; }
+  if (serviceTypes.length === 0) { toast(t('Нет доступных услуг'), 'warn'); return; }
 
   // Инициализируем количества
   _svcQty = {};
@@ -1205,22 +1205,22 @@ function openServiceDlg(pcNum) {
 
   if (pcNum) {
     // Вызван из панели ПК — фиксируем ПК, скрываем селектор
-    if (titleEl) titleEl.textContent = 'Продажа услуги';
-    if (subEl)   subEl.textContent   = 'Привязать к ' + pcNum;
+    if (titleEl) titleEl.textContent = t('Продажа услуги');
+    if (subEl)   subEl.textContent   = t('Привязать к {pc}', { pc: pcNum });
     if (pcRowEl) pcRowEl.style.display = 'none';
     pcSel.innerHTML = `<option value="${esc(pcNum)}">${esc(pcNum)}</option>`;
     pcSel.value = pcNum;
   } else {
     // Вызван из верхней панели — без привязки
-    if (titleEl) titleEl.textContent = 'Продажа услуги';
+    if (titleEl) titleEl.textContent = t('Продажа услуги');
     if (subEl)   subEl.textContent   = '';
     if (pcRowEl) pcRowEl.style.display = '';
-    pcSel.innerHTML = '<option value="">— Без привязки —</option>';
+    pcSel.innerHTML = `<option value="">${t('— Без привязки —')}</option>`;
     Object.values(pcs)
       .filter(pc => pc.isSession)
       .sort((a, b) => (a.pcNumberValue || 0) - (b.pcNumberValue || 0))
       .forEach(pc => {
-        const reader = pc.userName || pc.readerId || '(анонимный)';
+        const reader = pc.userName || pc.readerId || t('(анонимный)');
         pcSel.innerHTML += `<option value="${esc(pc.pcNumber)}">${esc(pc.pcNumber)} — ${esc(reader)}</option>`;
       });
     pcSel.value = '';
@@ -1245,7 +1245,7 @@ function openServiceDlg(pcNum) {
 function addSvcRow() {
   const usedTypes = new Set(_svcRows.map(r => r.typeId));
   const nextType = serviceTypes.find(s => !usedTypes.has(s.id));
-  if (!nextType) { toast('Все доступные услуги уже добавлены', 'warn'); return; }
+  if (!nextType) { toast(t('Все доступные услуги уже добавлены'), 'warn'); return; }
   _svcRows.push({ id: Date.now(), typeId: nextType.id, qty: 1 });
   renderSvcRows();
   updateSvcTotal();
@@ -1276,7 +1276,7 @@ function renderSvcList() {
   const container = document.getElementById('dlgSvcList');
   if (!container) return;
   if (!serviceTypes.length) {
-    container.innerHTML = '<div style="color:var(--ink-3);font-size:13px;padding:12px 0">Нет доступных услуг</div>';
+    container.innerHTML = `<div style="color:var(--ink-3);font-size:13px;padding:12px 0">${t('Нет доступных услуг')}</div>`;
     return;
   }
   container.innerHTML = serviceTypes.map(s => {
@@ -1287,7 +1287,7 @@ function renderSvcList() {
       <span class="svc-ic">${iconSvg}</span>
       <div class="svc-info">
         <span class="svc-name">${esc(s.name)}</span>
-        <span class="svc-sub">${fmt(s.price)} сум / ${esc(s.unit)}</span>
+        <span class="svc-sub">${fmt(s.price)} ${t('сум')} / ${esc(s.unit)}</span>
       </div>
       <div class="svc-step">
         <button onclick="stepSvcQty('${esc(s.id)}',-1)" ${!qty ? 'disabled' : ''}>${svgIcon('minus', 14)}</button>
@@ -1308,7 +1308,7 @@ function updateSvcTotal() {
     if (svc) total += svc.price * qty;
   }
   const el = document.getElementById('dlgSvcTotal');
-  if (el) el.textContent = total > 0 ? fmt(total) + ' сум' : '0 сум';
+  if (el) el.textContent = (total > 0 ? fmt(total) : '0') + ' ' + t('сум');
 }
 
 function onSvcPcChanged() {
@@ -1326,8 +1326,8 @@ function onSvcPcChanged() {
     const pc = pcs[pcVal];
     const reader = pc.userName || pc.readerId || '';
     info.textContent = reader
-      ? `✓ Сессия на ${pcVal}: ${reader}`
-      : `✓ Сессия на ${pcVal} (анонимный пользователь)`;
+      ? '✓ ' + t('Сессия на {pc}: {reader}', { pc: pcVal, reader })
+      : '✓ ' + t('Сессия на {pc} (анонимный пользователь)', { pc: pcVal });
     info.style.display = 'block';
     if (readerRow) readerRow.style.display = 'none';
   } else {
@@ -1354,7 +1354,7 @@ function updateDeferNote() {
 
 async function confirmService() {
   const items = Object.entries(_svcQty).filter(([, q]) => q > 0);
-  if (items.length === 0) { toast('Выберите хотя бы одну услугу', 'warn'); return; }
+  if (items.length === 0) { toast(t('Выберите хотя бы одну услугу'), 'warn'); return; }
 
   const typeIds    = items.map(([id]) => id);
   const quantities = items.map(([, q]) => q);
@@ -1373,7 +1373,7 @@ async function confirmService() {
   closeDlg('dlgService');
   try {
     await connection.invoke('CreateServiceBatch', typeIds, quantities, pcNumber, readerId, readerName, payNow);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 let _summaryReaderId = '';
@@ -1387,33 +1387,33 @@ function showSessionSummary(s) {
   _summaryTotalDebt = s.totalServiceDebt || debtsForTotal.reduce((a, d) => a + d.debt, 0);
 
   let html = `
-    <div class="summary-row"><span>ПК</span><span class="val">${esc(s.pcNumber)}</span></div>
-    <div class="summary-row"><span>Тип</span><span class="val">${esc(s.sessionType)}</span></div>
-    <div class="summary-row"><span>Время</span><span class="val">${fmtTime(s.duration)}</span></div>
-    <div class="summary-row"><span>Оплачено</span><span class="val">${fmt(s.paidAmount)} сум</span></div>
-    <div class="summary-row"><span>Начислено</span><span class="val">${fmt(s.earned)} сум</span></div>`;
+    <div class="summary-row"><span>${t('ПК')}</span><span class="val">${esc(s.pcNumber)}</span></div>
+    <div class="summary-row"><span>${t('Тип')}</span><span class="val">${esc(t(s.sessionType))}</span></div>
+    <div class="summary-row"><span>${t('Время')}</span><span class="val">${fmtTime(s.duration)}</span></div>
+    <div class="summary-row"><span>${t('Оплачено')}</span><span class="val">${fmt(s.paidAmount)} ${t('сум')}</span></div>
+    <div class="summary-row"><span>${t('Начислено')}</span><span class="val">${fmt(s.earned)} ${t('сум')}</span></div>`;
   if (s.refund > 0)
-    html += `<div class="refund-highlight">💵 Возврат: ${fmt(s.refund)} сум</div>`;
+    html += `<div class="refund-highlight">💵 ${t('Возврат')}: ${fmt(s.refund)} ${t('сум')}</div>`;
   if ((s.additionalCharge || 0) > 0)
-    html += `<div class="charge-highlight">⚠️ Доплатить: ${fmt(s.additionalCharge)} сум</div>`;
+    html += `<div class="charge-highlight">⚠️ ${t('Доплатить')}: ${fmt(s.additionalCharge)} ${t('сум')}</div>`;
 
   const debts = s.serviceDebts || [];
   if (debts.length > 0) {
     const totalDebt = s.totalServiceDebt || debts.reduce((a, d) => a + d.debt, 0);
-    let debtInner = `<div style="font-weight:600;color:var(--warn);margin-bottom:8px">Неоплаченные услуги</div>`;
+    let debtInner = `<div style="font-weight:600;color:var(--warn);margin-bottom:8px">${t('Неоплаченные услуги')}</div>`;
     debts.forEach(d => {
       debtInner += `<div class="summary-row" style="font-size:13px">
         <span>${esc(d.name)} × ${d.qty} ${esc(d.unit)}</span>
-        <span class="val" style="color:var(--warn)">${fmt(d.debt)} сум</span>
+        <span class="val" style="color:var(--warn)">${fmt(d.debt)} ${t('сум')}</span>
       </div>`;
     });
     debtInner += `<div class="summary-row" style="font-weight:700;color:var(--warn);margin-top:6px">
-      <span>Итого долгов</span>
-      <span class="val">${fmt(totalDebt)} сум</span>
+      <span>${t('Итого долгов')}</span>
+      <span class="val">${fmt(totalDebt)} ${t('сум')}</span>
     </div>
     <div style="margin-top:10px">
       <button class="mbtn" style="background:var(--warn);color:#fff;border-color:var(--warn);width:100%"
-        onclick="paySessionDebts()">Оплатить долги по услугам</button>
+        onclick="paySessionDebts()">${t('Оплатить долги по услугам')}</button>
     </div>`;
     html += `<div id="dlgSummaryDebtSection" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${debtInner}</div>`;
   }
@@ -1431,12 +1431,12 @@ async function paySessionDebts() {
       const paid = result?.totalPaid || (typeof result === 'number' ? result : 0) || _summaryTotalDebt;
       debtSection.innerHTML = `
         <div style="margin-top:14px;padding:14px 16px;background:var(--free-bg);border:1px solid var(--free-ring);border-radius:10px;color:var(--free);font-weight:600;font-size:14px">
-          ✓ Долги оплачены: ${fmt(paid)} сум
+          ✓ ${t('Долги оплачены')}: ${fmt(paid)} ${t('сум')}
         </div>`;
     } else {
-      toast('Долги оплачены', 'good');
+      toast(t('Долги оплачены'), 'good');
     }
-  } catch (e) { toast('Ошибка оплаты: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка оплаты: ') + e, 'warn'); }
 }
 
 async function openDebtsDlg() {
@@ -1444,13 +1444,13 @@ async function openDebtsDlg() {
     const debts = await connection.invoke('GetAllDebts');
     renderDebtsDlg(debts);
     openDlg('dlgDebts');
-  } catch (e) { toast('Ошибка загрузки долгов: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка загрузки долгов: ') + e, 'warn'); }
 }
 
 function renderDebtsDlg(debts) {
   const body = document.getElementById('dlgDebtsBody');
   if (!debts || !debts.length) {
-    body.innerHTML = '<p style="text-align:center;color:#888;padding:24px">Нет непогашенных долгов</p>';
+    body.innerHTML = `<p style="text-align:center;color:#888;padding:24px">${t('Нет непогашенных долгов')}</p>`;
     return;
   }
   let html = '';
@@ -1461,16 +1461,16 @@ function renderDebtsDlg(debts) {
       <span style="flex:1">
         <strong>${esc(d.serviceName)}</strong>
         <span style="color:#888;font-size:12px"> × ${d.quantity} ${esc(d.unit)}</span><br>
-        <span style="color:#888;font-size:12px">ПК: ${esc(pc)} · Читатель: ${esc(reader)}</span>
+        <span style="color:#888;font-size:12px">${t('ПК')}: ${esc(pc)} · ${t('Читатель')}: ${esc(reader)}</span>
       </span>
-      <span style="color:#854F0B;font-weight:700;margin:0 16px">${fmt(d.debtAmount)} сум</span>
+      <span style="color:#854F0B;font-weight:700;margin:0 16px">${fmt(d.debtAmount)} ${t('сум')}</span>
       <button class="btn-primary" style="padding:4px 12px;font-size:12px"
-        onclick="payDebt('${esc(d.id)}', this)">Оплатить</button>
+        onclick="payDebt('${esc(d.id)}', this)">${t('Оплатить')}</button>
     </div>`;
   });
   const total = debts.reduce((a, d) => a + d.debtAmount, 0);
   html += `<div style="padding:12px 0;font-weight:700;color:#854F0B;text-align:right">
-    Итого: ${fmt(total)} сум
+    ${t('Итого')}: ${fmt(total)} ${t('сум')}
   </div>`;
   body.innerHTML = html;
 }
@@ -1482,8 +1482,8 @@ async function payDebt(id, btn) {
     await connection.invoke('PayDebt', id);
     const debts = await connection.invoke('GetAllDebts');
     renderDebtsDlg(debts);
-    toast('Долг оплачен', 'good');
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); btn.disabled = false; btn.textContent = 'Оплатить'; }
+    toast(t('Долг оплачен'), 'good');
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); btn.disabled = false; btn.textContent = t('Оплатить'); }
 }
 
 async function doLogout() {
@@ -1504,13 +1504,13 @@ function openSendMessage(pcNumber) {
 }
 async function confirmSendMessage() {
   const text = document.getElementById('dlgMessageText').value.trim();
-  if (!text) { toast('Введите текст сообщения', 'warn'); return; }
+  if (!text) { toast(t('Введите текст сообщения'), 'warn'); return; }
   if (!_msgPc) return;
   try {
     await connection.invoke('SendMessageToPc', _msgPc, text);
     closeDlg('dlgSendMessage');
-    toast('Сообщение отправлено на ' + _msgPc, 'success');
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+    toast(t('Сообщение отправлено на {pc}', { pc: _msgPc }), 'success');
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 // ── Размер окна просмотра экрана ──────────────────────────────────────────────
@@ -1525,15 +1525,15 @@ function _applyScreenSize() {
   const btn = document.getElementById('screenSizeBtn');
   if (modal) modal.style.maxWidth = _screenExpanded ? '96vw' : '700px';
   if (img) img.style.maxHeight = _screenExpanded ? '86vh' : '65vh';
-  if (btn) btn.textContent = _screenExpanded ? 'Свернуть' : 'Развернуть';
+  if (btn) btn.textContent = t(_screenExpanded ? 'Свернуть' : 'Развернуть');
 }
 
 async function openScreenView(pcNumber) {
   if (_screenPc) await closeScreenView();
   _screenPc = pcNumber;
-  document.getElementById('dlgScreenViewTitle').textContent = `Экран: ${pcNumber}`;
+  document.getElementById('dlgScreenViewTitle').textContent = `${t('Экран')}: ${pcNumber}`;
   document.getElementById('screenViewImg').src = '';
-  document.getElementById('screenViewStatus').textContent = 'Подключение...';
+  document.getElementById('screenViewStatus').textContent = t('Подключение...');
   _screenExpanded = false;
   _applyScreenSize();
   openDlg('dlgScreenView');
@@ -1559,7 +1559,7 @@ async function pollScreen() {
   try {
     const r = await fetch(`/api/screenshot/${encodeURIComponent(_screenPc)}`, { cache: 'no-store' });
     if (r.status === 204) {
-      document.getElementById('screenViewStatus').textContent = 'Ожидание кадра...';
+      document.getElementById('screenViewStatus').textContent = t('Ожидание кадра...');
       return;
     }
     if (!r.ok) return;
@@ -1569,7 +1569,7 @@ async function pollScreen() {
     const old = img.src;
     img.src = url;
     if (old.startsWith('blob:')) URL.revokeObjectURL(old);
-    document.getElementById('screenViewStatus').textContent = `Обновлено: ${new Date().toLocaleTimeString('ru-RU')}`;
+    document.getElementById('screenViewStatus').textContent = `${t('Обновлено')}: ${new Date().toLocaleTimeString('ru-RU')}`;
   } catch (e) { /* ignore */ }
 }
 
@@ -1609,12 +1609,12 @@ function getStatusClass(pc) {
 }
 
 function getStatusLabel(pc) {
-  if (!pc.isOnline && pc.isSession) return 'Оффлайн (сессия)';
-  if (!pc.isOnline) return 'Оффлайн';
-  if (pc.isPaused) return 'Пауза';
+  if (!pc.isOnline && pc.isSession) return t('Оффлайн (сессия)');
+  if (!pc.isOnline) return t('Оффлайн');
+  if (pc.isPaused) return t('Пауза');
   if (pc.sessionType === 'VIP') return 'VIP';
-  if (pc.isSession) return 'Лимит';
-  return 'Свободен';
+  if (pc.isSession) return t('Лимит');
+  return t('Свободен');
 }
 
 function getDisplayTime(pc) {
@@ -1696,21 +1696,21 @@ function opGetAnalyticsDateStr() {
 
 async function opLoadAnalytics() {
   const dateStr = opGetAnalyticsDateStr();
-  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+  if (!dateStr) { toast(t('Выберите дату'), 'warn'); return; }
 
   const emptyEl = document.getElementById('opAnlEmpty');
   emptyEl.style.display = '';
-  emptyEl.textContent = 'Загрузка…';
+  emptyEl.textContent = t('Загрузка…');
   document.getElementById('opAnlSummary').style.display = 'none';
   document.getElementById('opAnlContent').style.display = 'none';
 
   try {
     const r = await fetch(`/api/op/readers/analytics?period=${_opAnlPeriod}&date=${encodeURIComponent(dateStr)}`);
     const data = await r.json();
-    if (!r.ok) { emptyEl.textContent = data.error || 'Ошибка'; return; }
+    if (!r.ok) { emptyEl.textContent = tServer(data.error || 'Ошибка'); return; }
     opRenderAnalytics(data);
   } catch {
-    emptyEl.textContent = 'Ошибка загрузки';
+    emptyEl.textContent = t('Ошибка загрузки');
   }
 }
 
@@ -1718,17 +1718,17 @@ function opRenderAnalytics(data) {
   const sumEl = document.getElementById('opAnlSummary');
   sumEl.style.display = '';
   sumEl.innerHTML = `<div class="kpi-grid">
-    <div class="kpi"><div class="kpi-lbl">Визитов всего</div><div class="kpi-val">${data.totalVisits}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Анонимных</div><div class="kpi-val amber">${data.anonymousVisits}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Уникальных читателей</div><div class="kpi-val">${data.totalUniqueReaders}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Выручка (сум)</div><div class="kpi-val green">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
-    <div class="kpi" style="flex:2;min-width:160px"><div class="kpi-lbl">Период</div><div class="kpi-val" style="font-size:14px;font-weight:500;color:var(--ink-2)">${opEsc(data.periodLabel)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Визитов всего')}</div><div class="kpi-val">${data.totalVisits}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Анонимных')}</div><div class="kpi-val amber">${data.anonymousVisits}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Уникальных читателей')}</div><div class="kpi-val">${data.totalUniqueReaders}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Выручка (сум)')}</div><div class="kpi-val green">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
+    <div class="kpi" style="flex:2;min-width:160px"><div class="kpi-lbl">${t('Период')}</div><div class="kpi-val" style="font-size:14px;font-weight:500;color:var(--ink-2)">${opEsc(tPeriod(data.periodLabel))}</div></div>
   </div>`;
 
   const emptyEl = document.getElementById('opAnlEmpty');
   if (!data.totalVisits) {
     emptyEl.style.display = '';
-    emptyEl.textContent = 'Нет данных о посещениях за выбранный период';
+    emptyEl.textContent = t('Нет данных о посещениях за выбранный период');
     document.getElementById('opAnlContent').style.display = 'none';
     return;
   }
@@ -1748,7 +1748,7 @@ function opRenderAnalytics(data) {
   const knownGenders = [...new Set(data.ageGroups.flatMap(g => Object.keys(g.byGender || {})))].sort();
   const activeGenders = knownGenders.filter(gn =>
     data.ageGroups.some(ag => (ag.byGender[gn]?.visits ?? 0) > 0 || (ag.byGender[gn]?.uniqueReaders ?? 0) > 0));
-  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...activeGenders.flatMap(g => [`${g} визиты`, `${g} уник.`])];
+  const ageHeaders = ['Группа', 'Визиты', 'Уникальных', ...activeGenders.flatMap(g => [t('{g} визиты', { g: t(g) }), t('{g} уник.', { g: t(g) })])];
   const ageRows = data.ageGroups.map(g => {
     const byG = g.byGender || {};
     return [g.group, g.visits, g.uniqueReaders, ...activeGenders.flatMap(gn => [byG[gn]?.visits ?? 0, byG[gn]?.uniqueReaders ?? 0])];
@@ -1764,10 +1764,10 @@ function opRenderAnalytics(data) {
 
 function opBuildServicesTable(services, pc) {
   pc = pc || {};
-  let html = '<div class="dtable-wrap"><table class="dtable"><thead><tr><th>Услуга</th><th>Кол-во</th><th>Сумма (сум)</th></tr></thead><tbody>';
+  let html = `<div class="dtable-wrap"><table class="dtable"><thead><tr><th>${t('Услуга')}</th><th>${t('Кол-во')}</th><th>${t('Сумма (сум)')}</th></tr></thead><tbody>`;
 
   if ((pc.totalSessions ?? 0) > 0) {
-    html += `<tr><td style="color:#7799cc;font-weight:500">🖥 Компьютер (сессии)</td>
+    html += `<tr><td style="color:#7799cc;font-weight:500">🖥 ${t('Компьютер (сессии)')}</td>
       <td>${(pc.totalSessions||0).toLocaleString('ru-RU')}</td>
       <td>${(pc.totalRevenue||0).toLocaleString('ru-RU')}</td></tr>`;
   }
@@ -1779,12 +1779,12 @@ function opBuildServicesTable(services, pc) {
   const totalQty = (pc.totalSessions||0) + services.reduce((s,r)=>s+r.quantity,0);
   const totalAmt = (pc.totalRevenue||0)  + services.reduce((s,r)=>s+r.totalAmount,0);
   if (totalQty > 0 || totalAmt > 0) {
-    html += `<tr style="border-top:2px solid #2D2D5B"><td style="font-weight:700;color:#D8D8F0">Итого</td>
+    html += `<tr style="border-top:2px solid #2D2D5B"><td style="font-weight:700;color:#D8D8F0">${t('Итого')}</td>
       <td style="font-weight:700;color:#D8D8F0">${totalQty.toLocaleString('ru-RU')}</td>
       <td style="font-weight:700;color:#1D9E75">${totalAmt.toLocaleString('ru-RU')}</td></tr>`;
   }
   if (!services.length && !(pc.totalSessions > 0)) {
-    html += '<tr><td colspan="3" style="text-align:center;color:#444;padding:16px">Услуги не использовались</td></tr>';
+    html += `<tr><td colspan="3" style="text-align:center;color:#444;padding:16px">${t('Услуги не использовались')}</td></tr>`;
   }
   html += '</tbody></table></div>';
   return html;
@@ -1793,31 +1793,31 @@ function opBuildServicesTable(services, pc) {
 function opRenderPcStats(pc) {
   if (!pc) return;
   document.getElementById('opAnlPcSummary').innerHTML = `
-    <div class="kpi"><div class="kpi-lbl">Сессий за ПК</div><div class="kpi-val">${pc.totalSessions}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Анонимных</div><div class="kpi-val amber">${pc.anonSessions}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Уникальных читателей</div><div class="kpi-val">${pc.uniqueReaders}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Выручка ПК (сум)</div><div class="kpi-val green">${pc.totalRevenue.toLocaleString('ru-RU')}</div></div>`;
+    <div class="kpi"><div class="kpi-lbl">${t('Сессий за ПК')}</div><div class="kpi-val">${pc.totalSessions}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Анонимных')}</div><div class="kpi-val amber">${pc.anonSessions}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Уникальных читателей')}</div><div class="kpi-val">${pc.uniqueReaders}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Выручка ПК (сум)')}</div><div class="kpi-val green">${pc.totalRevenue.toLocaleString('ru-RU')}</div></div>`;
 
   document.getElementById('opAnlPcGenderTable').innerHTML = opBuildTable(['Пол','Сессий','Уникальных'], pc.gender.map(g=>[g.name,g.sessions,g.uniqueReaders]));
   document.getElementById('opAnlPcCategoryTable').innerHTML = opBuildTable(['Категория','Сессий','Уникальных'], pc.categories.map(c=>[c.name,c.sessions,c.uniqueReaders]));
 
   const pcG = [...new Set(pc.ageGroups.flatMap(g => Object.keys(g.byGender||{})))].sort();
   const pcAG = pcG.filter(gn => pc.ageGroups.some(ag=>(ag.byGender[gn]?.sessions??0)>0||(ag.byGender[gn]?.uniqueReaders??0)>0));
-  const pcAgeHdr = ['Группа','Сессий','Уникальных',...pcAG.flatMap(g=>[`${g} сессий`,`${g} уник.`])];
+  const pcAgeHdr = ['Группа','Сессий','Уникальных',...pcAG.flatMap(g=>[t('{g} сессий', { g: t(g) }), t('{g} уник.', { g: t(g) })])];
   const pcAgeRows = pc.ageGroups.map(g=>{const b=g.byGender||{};return[g.group,g.sessions,g.uniqueReaders,...pcAG.flatMap(gn=>[b[gn]?.sessions??0,b[gn]?.uniqueReaders??0])];});
   document.getElementById('opAnlPcAgeTable').innerHTML = opBuildTable(pcAgeHdr, pcAgeRows);
 
   const topHdr = ['Читатель','Категория','Визитов','Часов'];
   document.getElementById('opAnlPcTopVisits').innerHTML = pc.topByVisits.length
     ? opBuildTable(topHdr, pc.topByVisits.map(u=>[u.readerName,u.category,u.visits,+(u.totalMinutes/60).toFixed(1)]))
-    : '<div class="op-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+    : `<div class="op-empty" style="text-align:left;padding:8px 0">${t('Нет данных')}</div>`;
   document.getElementById('opAnlPcTopHours').innerHTML = pc.topByHours.length
     ? opBuildTable(topHdr, pc.topByHours.map(u=>[u.readerName,u.category,u.visits,+(u.totalMinutes/60).toFixed(1)]))
-    : '<div class="op-empty" style="text-align:left;padding:8px 0">Нет данных</div>';
+    : `<div class="op-empty" style="text-align:left;padding:8px 0">${t('Нет данных')}</div>`;
 }
 
 function opBuildTable(headers, rows) {
-  if (!rows.length) return '<div class="op-empty" style="text-align:left;padding:10px 0">Нет данных</div>';
+  if (!rows.length) return `<div class="op-empty" style="text-align:left;padding:10px 0">${t('Нет данных')}</div>`;
   // Hide columns where every numeric value is 0
   const keep = headers.map((_, ci) =>
     ci === 0 || rows.some(r => { const v = r[ci]; return typeof v === 'number' ? v !== 0 : v !== '0'; })
@@ -1825,12 +1825,12 @@ function opBuildTable(headers, rows) {
   const hdr2  = headers.filter((_, ci) => keep[ci]);
   const rows2 = rows.map(r => r.filter((_, ci) => keep[ci]));
   let html = '<div class="dtable-wrap"><table class="dtable"><thead><tr>';
-  hdr2.forEach(h => { html += `<th>${opEsc(String(h))}</th>`; });
+  hdr2.forEach(h => { html += `<th>${opEsc(t(String(h)))}</th>`; });
   html += '</tr></thead><tbody>';
   rows2.forEach(row => {
     html += '<tr>';
     row.forEach((v, i) => {
-      const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : opEsc(String(v));
+      const val = typeof v === 'number' ? v.toLocaleString('ru-RU') : opEsc(tServer(String(v)));
       const cls = (typeof v === 'number' && v === 0 && i > 0) ? ' class="anl-zero"' : '';
       html += `<td${cls}>${val}</td>`;
     });
@@ -1846,7 +1846,7 @@ function opEsc(s) {
 
 function opExportAnalytics() {
   const dateStr = opGetAnalyticsDateStr();
-  if (!dateStr) { toast('Выберите дату', 'warn'); return; }
+  if (!dateStr) { toast(t('Выберите дату'), 'warn'); return; }
   window.open(`/api/op/readers/analytics/export?period=${_opAnlPeriod}&date=${encodeURIComponent(dateStr)}`, '_blank');
 }
 
@@ -1854,18 +1854,18 @@ function opExportAnalytics() {
 async function searchReaders() {
   const q = document.getElementById('readersSearchInput').value.trim();
   const res = document.getElementById('readersResult');
-  res.innerHTML = '<div class="op-empty">Поиск…</div>';
+  res.innerHTML = `<div class="op-empty">${t('Поиск…')}</div>`;
   try {
     const r = await fetch('/api/op/readers?search=' + encodeURIComponent(q));
-    if (!r.ok) { res.innerHTML = '<div class="op-empty" style="color:#E24B4A">Ошибка: ' + r.status + '</div>'; return; }
+    if (!r.ok) { res.innerHTML = '<div class="op-empty" style="color:#E24B4A">' + t('Ошибка: ') + r.status + '</div>'; return; }
     const list = await r.json();
-    if (!list.length) { res.innerHTML = '<div class="op-empty">Ничего не найдено</div>'; return; }
+    if (!list.length) { res.innerHTML = `<div class="op-empty">${t('Ничего не найдено')}</div>`; return; }
     res.innerHTML = `
       <div class="dtable-wrap">
         <table class="dtable">
           <thead><tr>
-            <th>№ билета</th><th>ФИО</th><th>Категория</th>
-            <th>Дата рождения</th><th>Пол</th><th>Зарегистрирован</th>
+            <th>${t('№ билета')}</th><th>${t('ФИО')}</th><th>${t('Категория')}</th>
+            <th>${t('Дата рождения')}</th><th>${t('Пол')}</th><th>${t('Зарегистрирован')}</th>
           </tr></thead>
           <tbody>
             ${list.map(rd => `<tr>
@@ -1873,15 +1873,15 @@ async function searchReaders() {
               <td>${esc(rd.fullName)}</td>
               <td>${esc(rd.category)}</td>
               <td>${esc(rd.birthDate)}</td>
-              <td>${esc(rd.gender)}</td>
+              <td>${esc(t(rd.gender))}</td>
               <td>${esc(rd.registeredAt)}</td>
             </tr>`).join('')}
           </tbody>
         </table>
       </div>
-      <div style="font-size:11px;color:#555;margin-top:6px">Найдено: ${list.length}</div>`;
+      <div style="font-size:11px;color:#555;margin-top:6px">${t('Найдено')}: ${list.length}</div>`;
   } catch(e) {
-    res.innerHTML = '<div class="op-empty" style="color:#E24B4A">Ошибка соединения</div>';
+    res.innerHTML = `<div class="op-empty" style="color:#E24B4A">${t('Ошибка соединения')}</div>`;
   }
 }
 
@@ -1916,18 +1916,18 @@ function fmtDur(secs) {
 
 function renderFinanceSessions() {
   const el = document.getElementById('financeSessionsResult');
-  if (!_finSessions.length) { el.innerHTML = '<div class="op-empty">Нет данных</div>'; return; }
+  if (!_finSessions.length) { el.innerHTML = `<div class="op-empty">${t('Нет данных')}</div>`; return; }
   el.innerHTML = `
     <table class="dtable">
       <thead><tr>
-        <th>ПК</th><th>Тип</th><th>Читатель</th><th>Пользователь</th>
-        <th>Длительность</th><th>Сумма</th><th>Оплачено</th><th>Возврат</th>
-        <th>Оператор</th><th>Начало</th><th>Конец</th>
+        <th>${t('ПК')}</th><th>${t('Тип')}</th><th>${t('Читатель')}</th><th>${t('Пользователь')}</th>
+        <th>${t('Длительность')}</th><th>${t('Сумма')}</th><th>${t('Оплачено')}</th><th>${t('Возврат')}</th>
+        <th>${t('Оператор')}</th><th>${t('Начало')}</th><th>${t('Конец')}</th>
       </tr></thead>
       <tbody>
         ${_finSessions.map(s => `<tr>
           <td>${esc(s.pcNumber)}</td>
-          <td>${esc(s.sessionType)}</td>
+          <td>${esc(t(s.sessionType))}</td>
           <td><code style="font-size:11px">${esc(s.readerId||'—')}</code></td>
           <td>${esc(s.userName||'—')}</td>
           <td>${fmtDur(s.durationSeconds||0)}</td>
@@ -1944,12 +1944,12 @@ function renderFinanceSessions() {
 
 function renderFinanceServices() {
   const el = document.getElementById('financeServicesResult');
-  if (!_finServices.length) { el.innerHTML = '<div class="op-empty">Нет данных</div>'; return; }
+  if (!_finServices.length) { el.innerHTML = `<div class="op-empty">${t('Нет данных')}</div>`; return; }
   el.innerHTML = `
     <table class="dtable">
       <thead><tr>
-        <th>Услуга</th><th>Единица</th><th>Кол-во</th><th>Цена/ед</th>
-        <th>Итого</th><th>Оплачено</th><th>Читатель</th><th>ПК</th><th>Дата</th>
+        <th>${t('Услуга')}</th><th>${t('Единица')}</th><th>${t('Кол-во')}</th><th>${t('Цена/ед')}</th>
+        <th>${t('Итого')}</th><th>${t('Оплачено')}</th><th>${t('Читатель')}</th><th>${t('ПК')}</th><th>${t('Дата')}</th>
       </tr></thead>
       <tbody>
         ${_finServices.map(t => `<tr>
@@ -2084,7 +2084,7 @@ function applyStypeFields(val) {
   if (lf) lf.style.display = isVip ? 'none' : '';
   if (vf) vf.style.display = isVip ? '' : 'none';
   const rh = document.getElementById('vipRateHint');
-  if (rh) rh.textContent = fmt(tariff) + ' сум/час';
+  if (rh) rh.textContent = fmt(tariff) + ' ' + t('сум/час');
 }
 
 function onSegSvcPayClick(el, val) {
@@ -2207,23 +2207,23 @@ function _renderThemeMenu() {
   const menu = document.getElementById('themeMenu');
   if (!menu) return;
   const saved = localStorage.getItem('bibTheme') || 'light';
-  const opts = THEME_LIST.map(t => `
-    <button class="theme-opt${saved === t.id ? ' on' : ''}" data-theme="${t.id}" onclick="setTheme('${t.id}')">
+  const opts = THEME_LIST.map(th => `
+    <button class="theme-opt${saved === th.id ? ' on' : ''}" data-theme="${th.id}" onclick="setTheme('${th.id}')">
       <div class="theme-prev">
-        <div class="pv-top" style="background:${t.top}"></div>
-        <div class="pv-body" style="background:${t.bg}">
+        <div class="pv-top" style="background:${th.top}"></div>
+        <div class="pv-body" style="background:${th.bg}">
           <div class="pv-card" style="background:#ffffff22"></div>
-          <div class="pv-dot" style="background:${t.acc}"></div>
+          <div class="pv-dot" style="background:${th.acc}"></div>
         </div>
       </div>
       <div class="theme-opt-text">
-        <span class="theme-opt-name">${t.name}</span>
-        <span class="theme-opt-sub">${t.sub}</span>
+        <span class="theme-opt-name">${t(th.name)}</span>
+        <span class="theme-opt-sub">${t(th.sub)}</span>
       </div>
       <svg class="theme-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
     </button>`).join('');
   menu.innerHTML = `
-    <div class="theme-menu-cap">Тема</div>
+    <div class="theme-menu-cap">${t('Тема')}</div>
     ${opts}
     <div class="theme-divider"></div>
     <button class="theme-opt${saved === 'custom' ? ' on' : ''}" data-theme="custom" onclick="openThemeEditor()">
@@ -2231,8 +2231,8 @@ function _renderThemeMenu() {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
       </div>
       <div class="theme-opt-text">
-        <span class="theme-opt-name">Свои цвета</span>
-        <span class="theme-opt-sub">Конструктор</span>
+        <span class="theme-opt-name">${t('Свои цвета')}</span>
+        <span class="theme-opt-sub">${t('Конструктор')}</span>
       </div>
       <svg class="theme-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
     </button>`;
@@ -2312,7 +2312,7 @@ function _renderThemeEditor() {
     return `<button class="ce-base" onclick="seedTheme('${id}')">
       <span class="d" style="background:${BASE_PALETTES[id].bg}"></span>
       <span class="d" style="background:${BASE_PALETTES[id].accent}"></span>
-      ${labels[id] || id}
+      ${t(labels[id] || id)}
     </button>`;
   }).join('');
 
@@ -2322,15 +2322,15 @@ function _renderThemeEditor() {
         <input type="color" class="ce-sw" value="${p[key] || '#000000'}"
           oninput="onThemeColorChange('${key}', this.value)" onchange="onThemeColorChange('${key}', this.value)">
         <div class="ce-rtext">
-          <span class="ce-rname">${label}</span>
+          <span class="ce-rname">${t(label)}</span>
           <span class="ce-rhex mono" id="ce-hex-${key}">${p[key] || '#000000'}</span>
         </div>
       </div>`).join('');
-    return `<div class="ce-sec">${g.title}</div>${rows}`;
+    return `<div class="ce-sec">${t(g.title)}</div>${rows}`;
   }).join('');
 
   body.innerHTML = `
-    <div class="ce-sec">Начать с базы</div>
+    <div class="ce-sec">${t('Начать с базы')}</div>
     <div class="ce-bases">${basesHtml}</div>
     ${groupsHtml}`;
 }
