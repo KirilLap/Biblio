@@ -18,11 +18,28 @@ namespace BibAdminWeb
     /// </summary>
     public static class VisitCalc
     {
+        /// <summary>Одно посещение для списка на вкладке оператора «Посещения».</summary>
+        public sealed class VisitRow
+        {
+            public DateTime At { get; set; }               // когда пришёл (местное время)
+            public string ReaderId { get; set; } = "";
+            public string ReaderName { get; set; } = "";
+            public bool HasMark { get; set; }              // оператор отметил вручную
+            public bool HasSession { get; set; }           // сидел за ПК
+            public bool HasService { get; set; }           // брал услугу
+            public bool Active { get; set; }               // сессия ещё идёт
+            public string PcNumber { get; set; } = "";
+            public string OperatorName { get; set; } = "";
+            public string Purpose { get; set; } = "";
+            public string Comment { get; set; } = "";
+        }
+
         public sealed class Result
         {
             public List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)> Visits = new();
-            public int ManualMarks;        // всего ручных отметок за период
-            public int ManualOnlyVisits;   // из них посчитаны как отдельное посещение
+            public List<VisitRow> Rows = new();    // те же посещения, по одному на строку, новые сверху
+            public int ManualMarks;                // всего ручных отметок за период
+            public int ManualOnlyVisits;           // из них посчитаны как отдельное посещение
             public Dictionary<string, int> Purposes = new();
         }
 
@@ -34,6 +51,7 @@ namespace BibAdminWeb
             public DateTime Start, End;
             public int Earned;
             public List<ServiceTransaction> Svcs = new();
+            public VisitRow Row = new();
         }
 
         private static DateTime Local(DateTime d) => d.Kind == DateTimeKind.Utc ? d.ToLocalTime() : d;
@@ -41,29 +59,67 @@ namespace BibAdminWeb
         private static bool SameId(string? a, string? b)
             => !string.IsNullOrEmpty(a) && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+        // Билет без единой цифры (пусто или один префикс «FAA») — посетитель без билета
+        private static string NormId(string? readerId)
+        {
+            var id = readerId?.Trim() ?? "";
+            return id.Any(char.IsDigit) ? id : "";
+        }
+
         // false — билет удалённого читателя (не цифровой и его нет в базе): такое событие пропускаем.
         // Чисто цифровой номер — временный билет, считается как анонимный.
-        private static bool Resolve(string? readerId, Dictionary<string, Reader> readerMap, out Reader? rd, out bool isReg)
+        private static bool Resolve(string readerId, Dictionary<string, Reader> readerMap, out Reader? rd, out bool isReg)
         {
             rd = null; isReg = false;
-            if (string.IsNullOrEmpty(readerId)) return true;
+            if (readerId.Length == 0) return true;
             if (readerMap.TryGetValue(readerId, out var found)) { rd = found; isReg = true; return true; }
             return readerId.All(char.IsDigit);
         }
 
-        /// <summary>Число посещений за период по тем же правилам, что и в статистике.</summary>
-        public static int CountVisits(DateTime from, DateTime to)
+        private static string Name(Reader? rd, string? fallback)
+        {
+            if (rd != null && !string.IsNullOrWhiteSpace(rd.FullName)) return rd.FullName;
+            return string.IsNullOrWhiteSpace(fallback) || fallback == "—" ? "" : fallback.Trim();
+        }
+
+        private static Dictionary<string, Reader> LoadReaderMap()
         {
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
             foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
+            return readerMap;
+        }
+
+        /// <summary>
+        /// Посещения для вкладки оператора: завершённые сессии, услуги, ручные отметки
+        /// и сессии, которые идут прямо сейчас (в статистику они попадают после завершения).
+        /// </summary>
+        public static Result BuildLive(DateTime from, DateTime to)
+        {
             var sessions = FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList();
             var allSvc = ServiceTransaction.All
                 .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
-            return Build(from, to, readerMap, sessions, allSvc).Visits.Count;
+
+            var now = DateTime.Now;
+            var active = new List<SessionRecord>();
+            if (now >= from && now < to)
+            {
+                foreach (var c in AdminHub.KnownClients.Values.Where(c => c.IsSession))
+                    active.Add(new SessionRecord
+                    {
+                        PcNumber = c.PcNumber,
+                        ReaderId = c.ReaderId ?? "",
+                        UserName = c.UserName ?? "",
+                        OperatorName = c.StartedByOperatorName ?? "",
+                        StartTime = Local(c.SessionStart ?? DateTime.UtcNow),
+                        EndTime = now
+                    });
+            }
+            sessions.AddRange(active);
+            return Build(from, to, LoadReaderMap(), sessions, allSvc, new HashSet<SessionRecord>(active));
         }
 
         public static Result Build(DateTime from, DateTime to, Dictionary<string, Reader> readerMap,
-            List<SessionRecord> sessions, List<ServiceTransaction> allSvc)
+            List<SessionRecord> sessions, List<ServiceTransaction> allSvc, HashSet<SessionRecord>? activeSessions = null)
         {
             var res = new Result();
             int gapMinutes = Math.Max(0, GlobalSettings.Load().VisitGapMinutes);
@@ -82,8 +138,18 @@ namespace BibAdminWeb
                     && t.CreatedAt.ToLocalTime() >= start && t.CreatedAt.ToLocalTime() <= end).ToList();
                 foreach (var t in linked) usedSvcIds.Add(t.Id);
 
-                if (!Resolve(s.ReaderId, readerMap, out var rd, out var isReg)) continue;
-                var u = new Unit { Id = s.ReaderId ?? "", Rd = rd, IsReg = isReg, Start = start, End = end, Earned = s.EarnedAmount, Svcs = linked };
+                var id = NormId(s.ReaderId);
+                if (!Resolve(id, readerMap, out var rd, out var isReg)) continue;
+                var u = new Unit
+                {
+                    Id = id, Rd = rd, IsReg = isReg, Start = start, End = end, Earned = s.EarnedAmount, Svcs = linked,
+                    Row = new VisitRow
+                    {
+                        At = start, ReaderId = id, ReaderName = Name(rd, s.UserName), HasSession = true,
+                        HasService = linked.Count > 0, PcNumber = s.PcNumber, OperatorName = s.OperatorName ?? "",
+                        Active = activeSessions != null && activeSessions.Contains(s)
+                    }
+                };
                 units.Add(u);
                 sessionUnits.Add(u);
             }
@@ -97,12 +163,21 @@ namespace BibAdminWeb
                 var items = grp.ToList();
                 var first = items[0];
                 var at = first.CreatedAt.ToLocalTime();
+                var id = NormId(first.ReaderId);
 
-                var host = sessionUnits.FirstOrDefault(u => SameId(u.Id, first.ReaderId) && at >= u.Start && at <= u.End);
-                if (host != null) { host.Svcs.AddRange(items); continue; }
+                var host = sessionUnits.FirstOrDefault(u => SameId(u.Id, id) && at >= u.Start && at <= u.End);
+                if (host != null) { host.Svcs.AddRange(items); host.Row.HasService = true; continue; }
 
-                if (!Resolve(first.ReaderId, readerMap, out var rd, out var isReg)) continue;
-                units.Add(new Unit { Id = first.ReaderId ?? "", Rd = rd, IsReg = isReg, Start = at, End = at, Svcs = items });
+                if (!Resolve(id, readerMap, out var rd, out var isReg)) continue;
+                units.Add(new Unit
+                {
+                    Id = id, Rd = rd, IsReg = isReg, Start = at, End = at, Svcs = items,
+                    Row = new VisitRow
+                    {
+                        At = at, ReaderId = id, ReaderName = Name(rd, first.ReaderName),
+                        HasService = true, PcNumber = first.PcNumber ?? ""
+                    }
+                });
             }
 
             // 3. Читатели с билетом: события с перерывом меньше порога — одно посещение
@@ -118,12 +193,21 @@ namespace BibAdminWeb
                         cur.Earned += u.Earned;
                         cur.Svcs.AddRange(u.Svcs);
                         if (u.End > cur.End) cur.End = u.End;
+                        cur.Row.HasSession |= u.Row.HasSession;
+                        cur.Row.HasService |= u.Row.HasService;
+                        cur.Row.Active |= u.Row.Active;
+                        if (u.Row.HasSession) cur.Row.PcNumber = u.Row.PcNumber;
+                        if (cur.Row.OperatorName.Length == 0) cur.Row.OperatorName = u.Row.OperatorName;
                     }
                     else { cur = u; merged.Add(u); }
                 }
             }
 
-            foreach (var u in merged) res.Visits.Add((u.Id, u.Rd, u.IsReg, u.Earned, u.Svcs));
+            foreach (var u in merged)
+            {
+                res.Visits.Add((u.Id, u.Rd, u.IsReg, u.Earned, u.Svcs));
+                res.Rows.Add(u.Row);
+            }
 
             // 4. Ручные отметки
             var marks = VisitStore.Snapshot()
@@ -138,7 +222,7 @@ namespace BibAdminWeb
                 if (!string.IsNullOrWhiteSpace(v.Purpose))
                     res.Purposes[v.Purpose] = res.Purposes.GetValueOrDefault(v.Purpose) + 1;
 
-                var id = v.ReaderId ?? "";
+                var id = NormId(v.ReaderId);
                 if (!Resolve(id, readerMap, out var rd, out var isReg)) continue;
 
                 if (id.Length > 0)
@@ -146,17 +230,33 @@ namespace BibAdminWeb
                     // Отметка «действует» до следующей отметки этого же читателя в тот же день
                     var until = at.Date.AddDays(1);
                     for (int j = i + 1; j < marks.Count; j++)
-                        if (SameId(marks[j].V.ReaderId, id) && marks[j].At.Date == at.Date) { until = marks[j].At; break; }
+                        if (SameId(NormId(marks[j].V.ReaderId), id) && marks[j].At.Date == at.Date) { until = marks[j].At; break; }
 
-                    bool absorbed = merged.Any(u => SameId(u.Id, id)
-                        && ((u.Start >= at && u.Start < until) || (u.Start <= at && u.End >= at)));
-                    if (absorbed) continue;
+                    var host = merged.Where(u => SameId(u.Id, id)
+                            && ((u.Start >= at && u.Start < until) || (u.Start <= at && u.End >= at)))
+                        .OrderBy(u => u.Start).FirstOrDefault();
+                    if (host != null)
+                    {
+                        // Посещение уже посчитано по сессии/услуге — отметка только дополняет строку
+                        host.Row.HasMark = true;
+                        if (at < host.Row.At) host.Row.At = at;
+                        if (host.Row.Purpose.Length == 0) host.Row.Purpose = v.Purpose ?? "";
+                        if (host.Row.Comment.Length == 0) host.Row.Comment = v.Comment ?? "";
+                        if (host.Row.OperatorName.Length == 0) host.Row.OperatorName = v.OperatorName ?? "";
+                        continue;
+                    }
                 }
 
                 res.Visits.Add((id, rd, isReg, 0, new List<ServiceTransaction>()));
+                res.Rows.Add(new VisitRow
+                {
+                    At = at, ReaderId = id, ReaderName = Name(rd, v.ReaderName), HasMark = true,
+                    OperatorName = v.OperatorName ?? "", Purpose = v.Purpose ?? "", Comment = v.Comment ?? ""
+                });
                 res.ManualOnlyVisits++;
             }
 
+            res.Rows = res.Rows.OrderByDescending(r => r.At).ToList();
             return res;
         }
     }

@@ -2617,53 +2617,51 @@ function confirmVisitRepeat() {
   addVisit(false, true);
 }
 
-// Счётчики над списком: ручные отметки и все посещения (вместе с ПК и услугами)
-async function loadVisitSummary() {
-  const box = document.getElementById('visitKpis');
-  try {
-    const r = await fetch('/api/op/visits/summary', { cache: 'no-store' });
-    if (!r.ok) throw new Error(r.status);
-    const s = await r.json();
-    const hint = esc(t('Вместе с сессиями за ПК и услугами. Идущие сейчас сессии попадут в счёт после завершения.'));
-    box.innerHTML = `
-      <div class="kpi"><div class="kpi-lbl">${t('Отмечено сегодня')}</div><div class="kpi-val">${s.marksToday}</div></div>
-      <div class="kpi"><div class="kpi-lbl">${t('Отмечено за месяц')}</div><div class="kpi-val">${s.marksMonth}</div></div>
-      <div class="kpi" title="${hint}"><div class="kpi-lbl">${t('Всего посещений сегодня')}</div><div class="kpi-val green">${s.visitsToday}</div></div>
-      <div class="kpi" title="${hint}"><div class="kpi-lbl">${t('Всего посещений за месяц')}</div><div class="kpi-val green">${s.visitsMonth}</div></div>`;
-  } catch {
-    box.innerHTML = '';
-  }
-}
-
+// Список и счётчики: все посещения за сегодня — ручные отметки, сессии за ПК и услуги
 async function loadVisits() {
-  loadVisitSummary();
   const el = document.getElementById('visitsResult');
   try {
     const r = await fetch('/api/op/visits', { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
-    renderVisits(await r.json());
+    const data = await r.json();
+    document.getElementById('visitKpis').innerHTML = `
+      <div class="kpi"><div class="kpi-lbl">${t('Посещений сегодня')}</div><div class="kpi-val green">${data.visitsToday}</div></div>
+      <div class="kpi"><div class="kpi-lbl">${t('Посещений за месяц')}</div><div class="kpi-val green">${data.visitsMonth}</div></div>`;
+    renderVisits(data.rows || []);
   } catch {
+    document.getElementById('visitKpis').innerHTML = '';
     el.innerHTML = `<div class="op-empty">${t('Ошибка загрузки')}</div>`;
   }
 }
 
+// Как читатель попал в список: отметка оператора, сессия за ПК, услуга
+function visitKindHtml(v) {
+  const parts = [];
+  if (v.hasMark)    parts.push(esc(t('Посещение')));
+  if (v.hasSession) parts.push(esc(v.pcNumber || t('ПК')));
+  if (v.hasService) parts.push(esc(t('Услуга')));
+  let html = parts.join(' + ');
+  if (v.active) html += ` <span class="visit-now">${esc(t('сейчас за ПК'))}</span>`;
+  return html;
+}
+
 function renderVisits(list) {
   const el = document.getElementById('visitsResult');
-  document.getElementById('visitCount').textContent = t('Сегодня отмечено: {n}', { n: list.length });
-  if (!list.length) { el.innerHTML = `<div class="op-empty">${t('Нет отметок за сегодня')}</div>`; return; }
+  if (!list.length) { el.innerHTML = `<div class="op-empty">${t('Нет посещений за сегодня')}</div>`; return; }
   const showPurpose = !!sessionFields.showVisitPurpose;
   el.innerHTML = `
     <table class="dtable">
       <thead><tr>
-        <th>${t('Время')}</th><th>${t('№ билета')}</th><th>${t('ФИО')}</th>
+        <th>${t('Время')}</th><th>${t('№ билета')}</th><th>${t('ФИО')}</th><th>${t('Тип')}</th>
         ${showPurpose ? `<th>${t('Цель визита')}</th><th>${t('Комментарий')}</th>` : ''}
         <th>${t('Оператор')}</th>
       </tr></thead>
       <tbody>
         ${list.map(v => `<tr>
-          <td class="mono">${fmtClock(new Date(v.createdAt))}</td>
+          <td class="mono">${fmtClock(new Date(v.at))}</td>
           <td><code style="font-size:11px">${esc(v.readerId || '—')}</code></td>
-          <td>${esc(v.readerId ? (v.readerName || '—') : t('Без билета'))}</td>
+          <td>${esc(v.readerName || (v.readerId ? '—' : t('Без билета')))}</td>
+          <td>${visitKindHtml(v)}</td>
           ${showPurpose ? `<td>${esc(v.purpose ? visitPurposeName(v.purpose) : '—')}</td><td>${esc(v.comment || '—')}</td>` : ''}
           <td>${esc(v.operatorName || '—')}</td>
         </tr>`).join('')}

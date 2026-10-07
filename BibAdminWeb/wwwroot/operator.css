@@ -805,6 +805,11 @@ a { text-decoration: none; color: inherit; }
 /* Форма слева, счётчики справа; на узком экране счётчики уходят под форму */
 .visit-top { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
 .visit-kpis { flex: 1 1 360px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.visit-kpis .kpi-val { font-size: 30px; }
+.visit-now {
+  margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  background: var(--limit-bg); color: var(--limit); border: 1px solid var(--limit-ring);
+}
 .visit-kpis .kpi { min-width: 0; }
 .visit-card {
   flex: 0 1 520px; max-width: 520px; padding: 18px 18px 16px;

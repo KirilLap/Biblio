@@ -754,26 +754,18 @@ namespace BibAdminWeb
             }
 
             // ─── Operator: посещения читального зала (ручная отметка) ────────
+            // Все посещения за сегодня (отметки, сессии, услуги, идущие сейчас сессии) и счётчики
             if (path == "/api/op/visits" && method == "GET")
-            {
-                var today = VisitStore.ForLocalDay(DateTime.Today);
-                today.Reverse();
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(today, _json));
-                return;
-            }
-            // Счётчики для вкладки «Посещения»: ручные отметки и все посещения (с ПК и услугами)
-            if (path == "/api/op/visits/summary" && method == "GET")
             {
                 var day = DateTime.Today;
                 var monthStart = new DateTime(day.Year, day.Month, 1);
-                var marks = VisitStore.Snapshot().Select(v => v.CreatedAt.ToLocalTime()).ToList();
+                var todayRes = VisitCalc.BuildLive(day, day.AddDays(1));
                 await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
                 {
-                    marksToday = marks.Count(d => d.Date == day),
-                    marksMonth = marks.Count(d => d >= monthStart),
-                    visitsToday = VisitCalc.CountVisits(day, day.AddDays(1)),
-                    visitsMonth = VisitCalc.CountVisits(monthStart, monthStart.AddMonths(1))
-                }));
+                    visitsToday = todayRes.Visits.Count,
+                    visitsMonth = VisitCalc.BuildLive(monthStart, monthStart.AddMonths(1)).Visits.Count,
+                    rows = todayRes.Rows
+                }, _json));
                 return;
             }
             if (path == "/api/op/visits" && method == "POST")
