@@ -1710,6 +1710,27 @@ function switchOpTab(tab) {
   if (tab === 'visits') { applyVisitSettings(); loadVisits(); }
 }
 
+// Язык переключён без перезагрузки страницы: перерисовываем всё, что собрано скриптом.
+// Текст из разметки переводит i18n.js; открытая вкладка и введённые данные остаются на месте.
+function onLangChanged() {
+  renderGrid();
+  if (selectedPc && _currentOpTab === 'pcs') renderActionBar();
+  _renderThemeMenu();
+  if (document.getElementById('themeEditor').style.display !== 'none') _renderThemeEditor();
+  opUpdateNotifBtn();
+  const dot = document.getElementById('connDot');
+  if (dot) setDot(!dot.classList.contains('offline'));
+
+  applyVisitSettings();
+  document.getElementById('visitReaderInfo').style.display = 'none';
+  _visitLookup = null;
+  if (_currentOpTab === 'visits') loadVisits();
+
+  if (_financeLoaded) { renderFinanceSessions(); renderFinanceServices(); _updateFinanceCount(); }
+  if (_opAnlLastData) opRenderAnalytics(_opAnlLastData);
+  if (document.querySelector('#readersResult table')) searchReaders();
+}
+
 // ── Статистика (аналитика посещений) ─────────────────────────────────────────
 let _opAnlPeriod  = 'day';
 let _opAnlQuarter = 1;
@@ -1761,7 +1782,10 @@ async function opLoadAnalytics() {
   }
 }
 
+let _opAnlLastData = null;   // последние показанные данные статистики — для перерисовки при смене языка
+
 function opRenderAnalytics(data) {
+  _opAnlLastData = data;
   const sumEl = document.getElementById('opAnlSummary');
   sumEl.style.display = '';
   sumEl.innerHTML = `<div class="kpi-grid">

@@ -121,9 +121,18 @@ function tPeriod(s) {
     .replace(/(\d{4}) г\./g, '$1-yil');
 }
 
-// Переводит текст, уже написанный в разметке страницы (один раз при загрузке)
-function i18nApplyStatic(root) {
-  if (!root || (_lang === 'ru' && !Object.keys(I18N_RU).length)) return;
+// Текст, написанный прямо в разметке страницы. При загрузке запоминаем исходные (русские)
+// строки и места, где они стоят, — поэтому язык переключается без перезагрузки страницы.
+const _i18nStatic = [];
+const _i18nTitle = document.title;
+
+function _i18nTranslatable(key) {
+  const has = (d, k) => Object.prototype.hasOwnProperty.call(d, k);
+  return has(I18N_UZ, key) || has(I18N_RU, key);
+}
+
+function i18nCollectStatic(root) {
+  if (!root) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -133,26 +142,39 @@ function i18nApplyStatic(root) {
     const raw = node.nodeValue;
     const key = raw.trim();
     if (!key) return;
-    let tr = t(key);
-    if (tr === key) {
-      // «⚠ Потеря связи с ПК», «▶ Продолжить» — значок в начале оставляем как есть
-      const m = key.match(/^([^\p{L}\p{N}]+\s)(.+)$/u);
-      if (m && t(m[2]) !== m[2]) tr = m[1] + t(m[2]);
-    }
-    if (tr !== key) node.nodeValue = raw.replace(key, tr);
+    if (_i18nTranslatable(key)) { _i18nStatic.push({ node, raw, key, prefix: '', inner: key }); return; }
+    // «⚠ Потеря связи с ПК», «▶ Продолжить» — значок в начале оставляем как есть
+    const m = key.match(/^([^\p{L}\p{N}]+\s)(.+)$/u);
+    if (m && _i18nTranslatable(m[2])) _i18nStatic.push({ node, raw, key, prefix: m[1], inner: m[2] });
   });
   root.querySelectorAll('[title],[placeholder],[alt]').forEach(el => {
     ['title', 'placeholder', 'alt'].forEach(attr => {
       const v = el.getAttribute(attr);
-      if (v) { const tr = t(v); if (tr !== v) el.setAttribute(attr, tr); }
+      if (v && _i18nTranslatable(v)) _i18nStatic.push({ el, attr, key: v });
     });
   });
 }
 
+// Выставляет запомненным местам текст на текущем языке
+function i18nApplyStatic() {
+  for (const it of _i18nStatic) {
+    if (it.node) it.node.nodeValue = it.raw.replace(it.key, it.prefix + _i18nLookup(it.inner));
+    else it.el.setAttribute(it.attr, _i18nLookup(it.key));
+  }
+  document.documentElement.lang = _lang;
+  document.title = _i18nLookup(_i18nTitle);
+}
+
 function setLang(lang) {
   if (!I18N_LANGS.includes(lang) || lang === _lang) return;
+  _lang = lang;
   try { localStorage.setItem('bibLang', lang); } catch (e) { /* ignore */ }
-  window.location.reload();
+  i18nApplyStatic();
+  i18nRenderSwitch();
+  // Страница сама перерисовывает то, что собрано скриптом (карточки, таблицы, списки)
+  if (typeof onLangChanged === 'function') {
+    try { onLangChanged(); } catch (e) { console.error('onLangChanged', e); }
+  }
 }
 
 // Переключатель RU / UZ — рисуется в элементе с id="langSwitch"
@@ -182,7 +204,6 @@ function i18nRenderSwitch() {
 }
 
 // Скрипт подключается в конце <body>, разметка к этому моменту уже разобрана
-document.documentElement.lang = _lang;
-document.title = t(document.title);
-i18nApplyStatic(document.body);
+i18nCollectStatic(document.body);
+i18nApplyStatic();
 i18nRenderSwitch();
