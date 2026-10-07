@@ -802,8 +802,12 @@ a { text-decoration: none; color: inherit; }
 .op-empty { color: var(--ink-3); padding: 24px; text-align: center; font-size: 13px; }
 
 /* ── Вкладка «Посещения» ── */
+/* Форма слева, счётчики справа; на узком экране счётчики уходят под форму */
+.visit-top { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.visit-kpis { flex: 1 1 360px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.visit-kpis .kpi { min-width: 0; }
 .visit-card {
-  max-width: 520px; padding: 18px 18px 16px; margin-bottom: 22px;
+  flex: 0 1 520px; max-width: 520px; padding: 18px 18px 16px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-card);
 }
 .visit-actions { display: flex; gap: 10px; flex-wrap: wrap; }
