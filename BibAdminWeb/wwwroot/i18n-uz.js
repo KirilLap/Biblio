@@ -272,6 +272,7 @@ const I18N_UZ_SECTIONS = [
     'Посещений за месяц': 'Shu oydagi tashriflar',
     'Нет посещений за выбранный период': 'Tanlangan davrda tashriflar yo‘q',
     'Посещений: {n}': 'Tashriflar: {n}',
+    'Неделя': 'Hafta',
     'Записей: {n}': 'Yozuvlar: {n}',
     'Посещение': 'Tashrif',
     'сейчас за ПК': 'hozir kompyuterda',

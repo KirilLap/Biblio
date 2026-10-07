@@ -2685,11 +2685,35 @@ function _dateRange(fromId, toId) {
   return { from: f.value, to: tEl.value, isToday: f.value === today && tEl.value === today };
 }
 
-function resetVisitRange() {
-  const today = _ymd(new Date());
-  document.getElementById('visitFrom').value = today;
-  document.getElementById('visitTo').value = today;
+// Готовые периоды: сегодня, с понедельника, с 1-го числа, с 1 января — всегда по сегодняшний день.
+// Для отчёта за полгода или 9 месяцев даты «с — по» меняются вручную.
+function _visitPresetRange(preset) {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (preset === 'week')  from.setDate(from.getDate() - ((from.getDay() + 6) % 7));
+  if (preset === 'month') from.setDate(1);
+  if (preset === 'year')  { from.setMonth(0); from.setDate(1); }
+  return { from: _ymd(from), to: _ymd(now) };
+}
+
+function setVisitPreset(preset) {
+  const r = _visitPresetRange(preset);
+  document.getElementById('visitFrom').value = r.from;
+  document.getElementById('visitTo').value = r.to;
   loadVisits();
+}
+
+function resetVisitRange() { setVisitPreset('today'); }
+
+// Подсвечивает кнопку периода, если выбранные даты с ним совпадают
+function _syncVisitPresets(range) {
+  let matched = false;
+  document.querySelectorAll('#visitPresets .tab-filter').forEach(btn => {
+    const r = _visitPresetRange(btn.dataset.preset);
+    const on = !matched && r.from === range.from && r.to === range.to;
+    if (on) matched = true;
+    btn.classList.toggle('active', on);
+  });
 }
 
 function exportVisitsXlsx() {
@@ -2712,6 +2736,7 @@ async function loadVisits() {
     document.getElementById('visitListTitle').textContent = range.isToday ? t('Сегодня')
       : (range.from === range.to ? _dmy(range.from) : `${_dmy(range.from)} — ${_dmy(range.to)}`);
     document.getElementById('visitRangeCount').textContent = t('Посещений: {n}', { n: rows.length });
+    _syncVisitPresets(range);
     renderVisits(rows, range.from !== range.to);
   } catch {
     document.getElementById('visitKpis').innerHTML = '';

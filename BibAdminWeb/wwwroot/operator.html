@@ -190,10 +190,15 @@
     <span class="visit-list-title" id="visitListTitle">Сегодня</span>
     <span id="visitRangeCount" class="visit-count"></span>
     <div class="date-range">
+      <div class="tab-filters" id="visitPresets">
+        <button class="tab-filter" data-preset="today" onclick="setVisitPreset('today')">Сегодня</button>
+        <button class="tab-filter" data-preset="week"  onclick="setVisitPreset('week')">Неделя</button>
+        <button class="tab-filter" data-preset="month" onclick="setVisitPreset('month')">Месяц</button>
+        <button class="tab-filter" data-preset="year"  onclick="setVisitPreset('year')">Год</button>
+      </div>
       <input type="date" id="visitFrom" class="tinput" onchange="loadVisits()">
       <span>—</span>
       <input type="date" id="visitTo" class="tinput" onchange="loadVisits()">
-      <button class="gbtn" onclick="resetVisitRange()">Сегодня</button>
       <button class="gbtn" onclick="exportVisitsXlsx()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Скачать Excel

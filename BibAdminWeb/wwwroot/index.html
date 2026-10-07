@@ -213,6 +213,11 @@
           <option value="paid">Оплачено</option>
           <option value="unpaid">Не оплачено</option>
         </select>
+        <span id="finVisitRange" style="display:none;align-items:center;gap:6px">
+          <input type="date" id="finVisitFrom" onchange="onAdminVisitDates()">
+          <span>—</span>
+          <input type="date" id="finVisitTo" onchange="onAdminVisitDates()">
+        </span>
       </div>
     </div>
 

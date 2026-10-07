@@ -1948,6 +1948,12 @@ function setFinTab(tab) {
   });
   document.getElementById('finTypeFilter').style.display = tab === 'sessions' ? '' : 'none';
   document.getElementById('finStatusFilter').style.display = tab === 'services' ? '' : 'none';
+  document.getElementById('finVisitRange').style.display = tab === 'visits' ? 'inline-flex' : 'none';
+  // После ручных дат на «Посещениях» переключатель периода снят — для остальных вкладок возвращаем «Сегодня»
+  if (tab !== 'visits' && !document.querySelector('input[name=finPeriod]:checked')) {
+    const todayRadio = document.querySelector('input[name=finPeriod][value=today]');
+    if (todayRadio) todayRadio.checked = true;
+  }
   const finTable = document.getElementById('finTable');
   if (tab === 'debts') {
     if (finTable) finTable.innerHTML = '';
@@ -2660,10 +2666,27 @@ function removeVisitPurpose(i) {
 // ─── Посещения (Финансы → Посещения): все посещения, как на вкладке оператора ─
 function _visYmd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
+// Период: переключатель «Сегодня / Неделя / Месяц / Год» заполняет даты «с — по»;
+// даты можно поправить вручную (например, отчёт за полгода) — тогда переключатель снимается.
+let _adminVisitPeriod = null;
+
 function _adminVisitRange() {
-  const period = document.querySelector('input[name=finPeriod]:checked')?.value || 'today';
+  const fromEl = document.getElementById('finVisitFrom'), toEl = document.getElementById('finVisitTo');
+  const period = document.querySelector('input[name=finPeriod]:checked')?.value || null;
   const today = new Date();
-  return { from: _visYmd(periodFrom(period) || today), to: _visYmd(today) };
+  if (period && period !== _adminVisitPeriod || !fromEl.value || !toEl.value) {
+    fromEl.value = _visYmd(periodFrom(period || 'today') || today);
+    toEl.value = _visYmd(today);
+  }
+  _adminVisitPeriod = period;
+  if (toEl.value < fromEl.value) [fromEl.value, toEl.value] = [toEl.value, fromEl.value];
+  return { from: fromEl.value, to: toEl.value };
+}
+
+function onAdminVisitDates() {
+  document.querySelectorAll('input[name=finPeriod]').forEach(r => { r.checked = false; });
+  _adminVisitPeriod = null;
+  loadAdminVisits();
 }
 
 async function loadAdminVisits() {
