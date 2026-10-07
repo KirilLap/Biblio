@@ -510,10 +510,11 @@ namespace BibAdminWeb
             var json = JsonSerializer.Serialize(new { Type = "SHUTDOWN", Value = "true" });
             foreach (var c in AdminHub.KnownClients.Values)
             {
+                // SHUTDOWN — разовое действие "здесь и сейчас", а не состояние.
+                // Офлайн-ПК и так выключен, ставить команду в очередь не нужно —
+                // иначе она "выстрелит" и выключит ПК сразу после следующего включения.
                 if (c.IsOnline)
                     await _adminCtx.Clients.Client(c.ConnectionId).SendAsync("ReceiveCommand", json);
-                else
-                    AdminHub.AddPendingCommand(c.PcNumber, "SHUTDOWN", "true");
             }
         }
 
@@ -523,10 +524,9 @@ namespace BibAdminWeb
             var json = JsonSerializer.Serialize(new { Type = "RESTART", Value = "true" });
             foreach (var c in AdminHub.KnownClients.Values)
             {
+                // RESTART — так же, как SHUTDOWN, разовое действие, в очередь не ставим
                 if (c.IsOnline)
                     await _adminCtx.Clients.Client(c.ConnectionId).SendAsync("ReceiveCommand", json);
-                else
-                    AdminHub.AddPendingCommand(c.PcNumber, "RESTART", "true");
             }
         }
 
@@ -536,10 +536,9 @@ namespace BibAdminWeb
             if (!IsAuthorized()) return;
             if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
             var json = JsonSerializer.Serialize(new { Type = "RESTART", Value = "true" });
+            // RESTART — разовое действие, применимо только к онлайн-ПК; в pending-очередь не ставим
             if (client.IsOnline)
                 await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
-            else
-                AdminHub.AddPendingCommand(pcNumber, "RESTART", "true");
         }
 
         private bool IsAuthorized()
