@@ -30,6 +30,10 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
       <span>ПК</span>
     </button>
+    <button class="tab" id="tabBtnVisits" onclick="switchOpTab('visits')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+      <span>Посещения</span>
+    </button>
     <button class="tab" id="tabBtnReaders" onclick="switchOpTab('readers')" style="display:none">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Читатели</span>
@@ -146,6 +150,46 @@
   <div id="readersResult"><div class="op-empty">Введите запрос и нажмите «Найти»</div></div>
 </div>
 
+<!-- ═══ PAGE: Посещения ═══ -->
+<div class="page-body" id="panelVisits">
+  <div class="page-head">
+    <div class="page-title">Посещения</div>
+    <div class="page-sub">Отметка читателей, которые пришли в зал без ПК и услуг</div>
+  </div>
+  <div class="visit-card">
+    <div class="field">
+      <label>Читательский билет</label>
+      <div class="card-type-toggle">
+        <button type="button" class="card-type-btn on" id="visitCardBtnRegular" onclick="onVisitCardType('regular')">Постоянный (3 года)</button>
+        <button type="button" class="card-type-btn" id="visitCardBtnTemp" onclick="onVisitCardType('temp')">Временный (1 день)</button>
+      </div>
+      <div class="reader-field">
+        <span id="visitReaderPrefix" class="reader-prefix">FAA</span>
+        <input id="visitReaderId" type="text" inputmode="numeric" placeholder="260500456" maxlength="9"
+               oninput="onVisitReaderInput()" onkeydown="if(event.key==='Enter'){addVisit();}">
+      </div>
+      <div id="visitReaderInfo" class="reader-info"></div>
+    </div>
+    <div class="field" id="visitPurposeRow" style="display:none">
+      <label>Цель визита</label>
+      <select id="visitPurpose" class="tinput"></select>
+    </div>
+    <div class="field" id="visitCommentRow" style="display:none">
+      <label>Комментарий</label>
+      <input id="visitComment" class="tinput" type="text" maxlength="200">
+    </div>
+    <div class="visit-actions">
+      <button class="mbtn primary" onclick="addVisit()">Отметить посещение</button>
+      <button class="mbtn ghost" id="visitAnonBtn" style="display:none" onclick="addVisit(true)">Без билета</button>
+    </div>
+  </div>
+  <div class="visit-list-head">
+    <span class="visit-list-title">Сегодня</span>
+    <span id="visitCount" class="visit-count"></span>
+  </div>
+  <div id="visitsResult" class="dtable-wrap"><div class="op-empty">Загрузка…</div></div>
+</div>
+
 <!-- ═══ PAGE: История ═══ -->
 <div class="page-body" id="panelFinance">
   <div class="page-head">
@@ -207,6 +251,7 @@
       <div id="opAnlAgeTable"></div>
     </div>
     <div><div class="anl-sec">По услугам</div><div id="opAnlServicesTable"></div></div>
+    <div id="opAnlPurposeWrap" style="display:none;margin-top:16px"><div class="anl-sec">По целям визита</div><div id="opAnlPurposeTable"></div></div>
     <div id="opAnlPcSection" style="margin-top:28px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--line)">
         <span style="font-size:15px;font-weight:700">Компьютеры</span>
@@ -656,6 +701,24 @@
     <div class="modal-foot">
       <button class="mbtn ghost" onclick="closeDlg('dlgSendMessage')">Отмена</button>
       <button class="mbtn primary" onclick="confirmSendMessage()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Повторная отметка посещения -->
+<div id="dlgVisitDup" class="modal-scrim" onclick="closeDlgIfOverlay(event,'dlgVisitDup')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <div><div class="modal-title">Повторное посещение</div></div>
+      <button class="modal-x" onclick="closeDlg('dlgVisitDup')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div id="dlgVisitDupText" style="font-weight:700;margin-bottom:8px"></div>
+      <div style="font-size:13px;color:var(--ink-2)">Если читатель уходил и вернулся — отметьте повторное посещение. Если не уходил — нажмите «Отмена».</div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn ghost" onclick="closeDlg('dlgVisitDup')">Отмена</button>
+      <button class="mbtn primary" onclick="confirmVisitRepeat()">Это повторное посещение</button>
     </div>
   </div>
 </div>

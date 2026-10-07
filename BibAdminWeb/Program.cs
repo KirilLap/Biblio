@@ -32,6 +32,7 @@ namespace BibAdminWeb
             ReaderStore.Init();
             FinanceStore.LoadHistory();
             ServiceTransaction.LoadHistory();
+            VisitStore.Load();
 
             var server = new ServerHost();
             try

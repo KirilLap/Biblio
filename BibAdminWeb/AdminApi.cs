@@ -77,6 +77,33 @@ namespace BibAdminWeb
                 }
             }
 
+            // ─── Посещения, отмеченные оператором вручную ─────────────────────
+            if (path == "/api/admin/visits" && method == "GET")
+            {
+                var fromStr = ctx.Request.Query["from"].ToString();
+                var all = VisitStore.Snapshot();
+                if (DateTime.TryParse(fromStr, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out var fromDt))
+                {
+                    var fromUtc = fromDt.ToUniversalTime();
+                    all = all.Where(v => v.CreatedAt >= fromUtc).ToList();
+                }
+                all.Reverse();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(all, _json));
+                return;
+            }
+            if (path.StartsWith("/api/admin/visits/") && method == "DELETE")
+            {
+                if (!long.TryParse(path.Substring("/api/admin/visits/".Length), out var visitId) || !VisitStore.Delete(visitId))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Отметка не найдена\"}");
+                    return;
+                }
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Finance: sessions ────────────────────────────────────────────
             if (path == "/api/admin/finance/sessions" && method == "GET")
             {
@@ -722,6 +749,73 @@ namespace BibAdminWeb
             {
                 ctx.Response.StatusCode = 401;
                 await ctx.Response.WriteAsync("{\"error\":\"Оператор не найден\"}");
+                return;
+            }
+
+            // ─── Operator: посещения читального зала (ручная отметка) ────────
+            if (path == "/api/op/visits" && method == "GET")
+            {
+                var today = VisitStore.ForLocalDay(DateTime.Today);
+                today.Reverse();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(today, _json));
+                return;
+            }
+            if (path == "/api/op/visits" && method == "POST")
+            {
+                string vReader = "", vName = "", vPurpose = "", vComment = "";
+                bool vForce = false;
+                try
+                {
+                    using var doc = JsonDocument.Parse(await ReadBody(ctx));
+                    var root = doc.RootElement;
+                    string Str(string n) => root.TryGetProperty(n, out var p) && p.ValueKind == JsonValueKind.String
+                        ? (p.GetString() ?? "").Trim() : "";
+                    vReader = Str("readerId"); vName = Str("readerName");
+                    vPurpose = Str("purpose"); vComment = Str("comment");
+                    vForce = root.TryGetProperty("force", out var f) && f.ValueKind == JsonValueKind.True;
+                }
+                catch { }
+
+                if (vReader.Length == 0 && settings.RequireVisitReaderId)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Введите номер читательского билета\"}");
+                    return;
+                }
+
+                if (vReader.Length > 0)
+                {
+                    // Читатель сейчас за ПК — его посещение уже учитывается сессией
+                    var atPc = OperatorBroadcaster.FindSessionByReader(vReader, "");
+                    if (atPc != null)
+                    {
+                        ctx.Response.StatusCode = 409;
+                        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { code = "atPc", pcNumber = atPc.PcNumber }));
+                        return;
+                    }
+                    // Уже отмечен сегодня — оператор должен подтвердить, что это повторное посещение
+                    var prev = VisitStore.ForLocalDay(DateTime.Today)
+                        .LastOrDefault(v => string.Equals(v.ReaderId, vReader, StringComparison.OrdinalIgnoreCase));
+                    if (prev != null && !vForce)
+                    {
+                        ctx.Response.StatusCode = 409;
+                        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
+                        { code = "already", time = prev.CreatedAt.ToLocalTime().ToString("HH:mm") }));
+                        return;
+                    }
+                    var known = ReaderStore.GetByCardId(vReader);
+                    if (known != null && !string.IsNullOrWhiteSpace(known.FullName)) vName = known.FullName;
+                }
+
+                if (!settings.ShowVisitPurpose) { vPurpose = ""; vComment = ""; }
+                if (vComment.Length > 200) vComment = vComment[..200];
+
+                var visit = VisitStore.Add(new ManualVisit
+                {
+                    ReaderId = vReader, ReaderName = vName, Purpose = vPurpose,
+                    Comment = vComment, OperatorName = op.DisplayName
+                });
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true, visit }, _json));
                 return;
             }
 

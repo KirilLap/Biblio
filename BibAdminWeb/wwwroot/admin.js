@@ -908,8 +908,17 @@ async function confirmStartSession() {
       limitSeconds = Math.round((money / t) * 3600);
     }
   }
+  // Один читательский билет — один ПК
+  const busyPc = /\d/.test(nums) && Object.values(pcs).find(p => p.isSession && p.pcNumber !== activePc
+    && (p.readerId || '').toLowerCase() === reader.toLowerCase());
+  if (busyPc) { toast(`Этот билет уже используется за ${busyPc.pcNumber}`, 'warn'); return; }
+
   closeDlg('dlgStartSession');
-  await conn.invoke('StartSession', activePc, _ssType, limitSeconds, paidAmount, name, reader);
+  try {
+    await conn.invoke('StartSession', activePc, _ssType, limitSeconds, paidAmount, name, reader);
+  } catch (e) {
+    toast(String(e).includes('READER_BUSY') ? 'Этот билет уже используется за другим ПК' : 'Ошибка: ' + e, 'warn');
+  }
 }
 
 function GlobalSettings_Tariff() { return settings.tariff || 3000; }
@@ -1887,7 +1896,7 @@ async function loadFinance() {
 
 function setFinTab(tab) {
   finTab = tab;
-  ['sessions', 'services', 'all', 'debts'].forEach(t => {
+  ['sessions', 'services', 'all', 'debts', 'visits'].forEach(t => {
     const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -1897,12 +1906,15 @@ function setFinTab(tab) {
   if (tab === 'debts') {
     if (finTable) finTable.innerHTML = '';
     openDebtsDlgAdmin(true);
+  } else if (tab === 'visits') {
+    loadAdminVisits();
   } else {
     renderFinance();
   }
 }
 
 function renderFinance() {
+  if (finTab === 'visits') { loadAdminVisits(); return; }
   const period = document.querySelector('input[name=finPeriod]:checked')?.value || 'all';
   const from = periodFrom(period);
   const typeF = document.getElementById('finTypeFilter').value;
@@ -2133,6 +2145,12 @@ function fillSettingsForm() {
   document.getElementById('sRequireUserName').checked = !!settings.requireUserName;
   document.getElementById('sWorkdayEnd').value = settings.workdayEnd || '';
 
+  // Посещения
+  document.getElementById('sRequireVisitReaderId').checked = settings.requireVisitReaderId !== false;
+  document.getElementById('sShowVisitPurpose').checked = !!settings.showVisitPurpose;
+  document.getElementById('sVisitGapMinutes').value = settings.visitGapMinutes ?? 30;
+  renderVisitPurposesList();
+
   // Sort mode selector
   const sortSel = document.getElementById('sortMode');
   if (sortSel) sortSel.value = settings.clientSortMode || 'ByNumber';
@@ -2322,6 +2340,10 @@ function readSettingsForm() {
     requireReaderId: document.getElementById('sRequireReaderId').checked,
     requireUserName: document.getElementById('sRequireUserName').checked,
     workdayEnd: document.getElementById('sWorkdayEnd').value.trim(),
+    requireVisitReaderId: document.getElementById('sRequireVisitReaderId').checked,
+    showVisitPurpose: document.getElementById('sShowVisitPurpose').checked,
+    visitGapMinutes: Math.max(0, parseInt(document.getElementById('sVisitGapMinutes').value) || 0),
+    visitPurposes: readVisitPurposesForm(),
   };
 }
 
@@ -2541,6 +2563,96 @@ async function saveTranslations() {
     setTimeout(() => badge.style.display = 'none', 2000);
   } catch (e) {
     toast('Ошибка сохранения переводов: ' + e.message, 'warn');
+  }
+}
+
+// ─── Посещения: цели визита (в настройках) ────────────────────────────────────
+function renderVisitPurposesList() {
+  const list = document.getElementById('visitPurposesList');
+  list.innerHTML = '';
+  (settings.visitPurposes || []).forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'service-row purpose-row';
+    row.innerHTML = `
+      <input type="text" value="${esc(p.name)}" placeholder="Название" data-pi="${i}" data-field="name">
+      <input type="text" value="${esc(p.nameUz || '')}" placeholder="Название (UZ)" data-pi="${i}" data-field="nameUz">
+      <div class="service-chk"><input type="checkbox" ${p.isActive !== false ? 'checked' : ''} data-pi="${i}" data-field="isActive" title="Показывать оператору"></div>
+      <button class="del-btn" onclick="removeVisitPurpose(${i})">✕</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function readVisitPurposesForm() {
+  const map = {};
+  document.querySelectorAll('#visitPurposesList [data-pi]').forEach(inp => {
+    const i = inp.dataset.pi;
+    if (!map[i]) map[i] = { ...((settings.visitPurposes || [])[i] || {}) };
+    if (!map[i].id) map[i].id = crypto.randomUUID().slice(0, 8);
+    const field = inp.dataset.field;
+    map[i][field] = field === 'isActive' ? inp.checked : inp.value.trim();
+  });
+  return Object.values(map).filter(p => p.name);
+}
+
+function addVisitPurpose() {
+  settings.visitPurposes = readVisitPurposesForm();
+  settings.visitPurposes.push({ id: crypto.randomUUID().slice(0, 8), name: 'Новая цель', nameUz: '', isActive: true });
+  renderVisitPurposesList();
+}
+
+function removeVisitPurpose(i) {
+  settings.visitPurposes = readVisitPurposesForm();
+  settings.visitPurposes.splice(i, 1);
+  renderVisitPurposesList();
+}
+
+// ─── Посещения: список ручных отметок (Финансы → Посещения) ───────────────────
+async function loadAdminVisits() {
+  const el = document.getElementById('finTable');
+  const period = document.querySelector('input[name=finPeriod]:checked')?.value || 'today';
+  const from = periodFrom(period);
+  el.innerHTML = '<div class="fin-empty">Загрузка…</div>';
+  try {
+    const url = '/api/admin/visits' + (from ? '?from=' + encodeURIComponent(from.toISOString()) : '');
+    const list = await fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.json() : []);
+    if (finTab !== 'visits') return;
+    el.innerHTML = renderAdminVisitsTable(list);
+  } catch {
+    el.innerHTML = '<div class="fin-empty">Ошибка загрузки</div>';
+  }
+}
+
+function renderAdminVisitsTable(list) {
+  if (!list.length) return '<div class="fin-empty">Нет ручных отметок посещений за выбранный период</div>';
+  const cols = '120px 130px 1fr 150px 1fr 140px 40px';
+  let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
+    <span>Дата</span><span>№ билета</span><span>ФИО</span><span>Цель</span><span>Комментарий</span><span>Оператор</span><span></span>
+  </div>`;
+  list.forEach(v => {
+    html += `<div class="fin-row" style="grid-template-columns:${cols}">
+      <span style="color:#555">${fmtDate(v.createdAt)}</span>
+      <span>${esc(v.readerId || '—')}</span>
+      <b>${esc(v.readerId ? (v.readerName || '—') : 'Без билета')}</b>
+      <span>${esc(v.purpose || '—')}</span>
+      <span>${esc(v.comment || '—')}</span>
+      <span>${esc(v.operatorName || '—')}</span>
+      <button class="del-btn" title="Удалить отметку" onclick="deleteAdminVisit(${Number(v.id)})">✕</button>
+    </div>`;
+  });
+  html += `<div style="padding:10px 14px;font-size:12px;color:var(--ink-3)">Отметок: ${list.length}</div>`;
+  return html;
+}
+
+async function deleteAdminVisit(id) {
+  if (!confirm('Удалить эту отметку посещения? Она перестанет учитываться в статистике.')) return;
+  try {
+    const r = await fetch('/api/admin/visits/' + id, { method: 'DELETE' });
+    if (!r.ok) throw new Error(r.status);
+    toast('Отметка удалена', 'success');
+    loadAdminVisits();
+  } catch (e) {
+    toast('Ошибка удаления: ' + e.message, 'warn');
   }
 }
 
@@ -3250,6 +3362,7 @@ function renderAnalytics(data) {
   sumEl.innerHTML = `
     <div class="stat-card" style="flex:1"><div class="stat-label">Визитов всего</div><div class="stat-val">${data.totalVisits}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Анонимных визитов</div><div class="stat-val orange">${data.anonymousVisits}</div></div>
+    <div class="stat-card" style="flex:1" title="Ручные отметки оператора, не поглощённые сессией или услугой. Всего отметок: ${data.manualMarks ?? 0}"><div class="stat-label">Только посещение</div><div class="stat-val">${data.manualOnlyVisits ?? 0}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Уникальных читателей</div><div class="stat-val">${data.totalUniqueReaders}</div></div>
     <div class="stat-card" style="flex:1"><div class="stat-label">Выручка (сум)</div><div class="stat-val blue">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
     <div class="stat-card" style="flex:2;min-width:160px"><div class="stat-label">Период</div><div style="font-size:13px;color:#ccc;margin-top:4px">${esc(data.periodLabel)}</div></div>`;
@@ -3284,7 +3397,11 @@ function renderAnalytics(data) {
   document.getElementById('anlAgeTable').innerHTML = buildAnalyticsTable(ageHeaders, ageRows, true);
 
   // Services table with «Компьютер» row and «Итого» footer
-  document.getElementById('anlServicesTable').innerHTML = buildServicesTable(data.services, data.pcStats);
+  document.getElementById('anlServicesTable').innerHTML = buildServicesTable(data.services, data.pcStats)
+    + ((data.purposes || []).length
+        ? '<div class="anl-head" style="margin-top:16px">По целям визита</div>'
+          + buildAnalyticsTable(['Цель визита', 'Отметок'], data.purposes.map(p => [p.name, p.marks]))
+        : '');
 
   // PC stats block
   renderPcStats(data.pcStats);

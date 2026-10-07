@@ -669,6 +669,7 @@ body {
 .service-row .del-btn { background: none; border: none; color: var(--ink-3); cursor: pointer; font-size: 16px; }
 .service-row .del-btn:hover { color: var(--locked); }
 .service-chk { display: flex; align-items: center; justify-content: center; }
+.service-row.purpose-row { grid-template-columns: 1fr 1fr 70px 30px; }
 
 /* ── Переводы (Настройки → Переводы) ────────────────────────────────────────── */
 .tr-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 14px; }

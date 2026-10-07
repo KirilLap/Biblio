@@ -46,6 +46,9 @@ namespace BibAdminWeb
             if (!IsAuthorized()) return;
             if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
             if (!client.IsOnline || client.IsSession) return;
+            // Один читательский билет — один ПК: вторую сессию по тому же билету не начинаем
+            if (OperatorBroadcaster.FindSessionByReader(readerId, pcNumber) != null)
+                throw new HubException("READER_BUSY");
 
             var serverStart = DateTime.UtcNow;
             client.SessionType = sessionType;

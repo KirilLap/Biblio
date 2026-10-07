@@ -832,49 +832,9 @@ namespace BibAdminWeb
             var allSvc = ServiceTransaction.All
                 .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
 
-            // IsReg=true → registered reader; IsReg=false → anonymous/temp
-            // Deleted registered readers (non-numeric ID not in DB) are skipped
-            var usedSvcIds = new HashSet<string>();
-            var visits = new List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)>();
-
-            foreach (var s in sessions)
-            {
-                Reader? rd = null; bool isReg = false;
-                if (!string.IsNullOrEmpty(s.ReaderId))
-                {
-                    if (readerMap.TryGetValue(s.ReaderId, out var found)) { rd = found; isReg = true; }
-                    else if (!s.ReaderId.All(char.IsDigit))
-                    {
-                        // Deleted registered reader — mark linked services used but skip the visit
-                        var sl2 = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
-                        allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
-                            && t.CreatedAt.ToLocalTime() >= sl2 && t.CreatedAt.ToLocalTime() <= s.EndTime)
-                            .ToList().ForEach(t => usedSvcIds.Add(t.Id));
-                        continue;
-                    }
-                    // else: purely numeric = temp card → treat as anonymous
-                }
-                var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
-                var linked = allSvc.Where(t =>
-                    !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
-                    && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= s.EndTime).ToList();
-                foreach (var t in linked) usedSvcIds.Add(t.Id);
-                visits.Add((s.ReaderId ?? "", rd, isReg, s.EarnedAmount, linked));
-            }
-
-            foreach (var grp in allSvc
-                .Where(t => !usedSvcIds.Contains(t.Id))
-                .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : "b:" + t.BatchId))
-            {
-                var items = grp.ToList(); var first = items[0];
-                Reader? rd = null; bool isReg = false;
-                if (!string.IsNullOrEmpty(first.ReaderId))
-                {
-                    if (readerMap.TryGetValue(first.ReaderId, out var found)) { rd = found; isReg = true; }
-                    else if (!first.ReaderId.All(char.IsDigit)) continue; // deleted registered reader
-                }
-                visits.Add((first.ReaderId ?? "", rd, isReg, 0, items));
-            }
+            // Правила подсчёта посещений — в VisitCalc
+            var calc = VisitCalc.Build(from, to, readerMap, sessions, allSvc);
+            var visits = calc.Visits;
 
             int totalVisits        = visits.Count;
             int anonymousVisits    = visits.Count(v => !v.IsReg);
@@ -1032,6 +992,11 @@ namespace BibAdminWeb
                 }).ToList(),
                 services = svcQty.Keys.OrderByDescending(k => svcAmt[k]).Select(k => new {
                     name = svcNm[k], quantity = svcQty[k], totalAmount = svcAmt[k] }).ToList(),
+                // Ручные отметки посещений: всего / из них отдельным посещением (без ПК и услуг)
+                manualMarks = calc.ManualMarks,
+                manualOnlyVisits = calc.ManualOnlyVisits,
+                purposes = calc.Purposes.OrderByDescending(kv => kv.Value)
+                    .Select(kv => new { name = kv.Key, marks = kv.Value }).ToList(),
                 pcStats
             };
         }
@@ -1050,42 +1015,7 @@ namespace BibAdminWeb
             var sessions = FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList();
             var allSvc   = ServiceTransaction.All.Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
 
-            var usedSvcIds = new HashSet<string>();
-            var visits     = new List<(string Id, Reader? Rd, bool IsReg, int Earned, List<ServiceTransaction> Svcs)>();
-
-            foreach (var s in sessions)
-            {
-                Reader? rd = null; bool isReg = false;
-                if (!string.IsNullOrEmpty(s.ReaderId))
-                {
-                    if (readerMap.TryGetValue(s.ReaderId, out var found)) { rd = found; isReg = true; }
-                    else if (!s.ReaderId.All(char.IsDigit))
-                    {
-                        var sl2 = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
-                        allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
-                            && t.CreatedAt.ToLocalTime() >= sl2 && t.CreatedAt.ToLocalTime() <= s.EndTime)
-                            .ToList().ForEach(t => usedSvcIds.Add(t.Id));
-                        continue;
-                    }
-                }
-                var sl = s.StartTime.Kind == DateTimeKind.Utc ? s.StartTime.ToLocalTime() : s.StartTime;
-                var linked = allSvc.Where(t => !string.IsNullOrEmpty(t.PcNumber) && t.PcNumber == s.PcNumber
-                    && t.CreatedAt.ToLocalTime() >= sl && t.CreatedAt.ToLocalTime() <= s.EndTime).ToList();
-                foreach (var t in linked) usedSvcIds.Add(t.Id);
-                visits.Add((s.ReaderId ?? "", rd, isReg, s.EarnedAmount, linked));
-            }
-            foreach (var grp in allSvc.Where(t => !usedSvcIds.Contains(t.Id))
-                .GroupBy(t => string.IsNullOrEmpty(t.BatchId) ? t.Id : "b:" + t.BatchId))
-            {
-                var items = grp.ToList(); var first = items[0];
-                Reader? rd = null; bool isReg = false;
-                if (!string.IsNullOrEmpty(first.ReaderId))
-                {
-                    if (readerMap.TryGetValue(first.ReaderId, out var found)) { rd = found; isReg = true; }
-                    else if (!first.ReaderId.All(char.IsDigit)) continue;
-                }
-                visits.Add((first.ReaderId ?? "", rd, isReg, 0, items));
-            }
+            var visits = VisitCalc.Build(from, to, readerMap, sessions, allSvc).Visits;
 
             var genderVisits = new Dictionary<string, int>(); var genderUniq = new Dictionary<string, HashSet<string>>();
             var catVisits    = new Dictionary<string, int>(); var catUniq    = new Dictionary<string, HashSet<string>>();

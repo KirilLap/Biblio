@@ -81,6 +81,21 @@ namespace BibAdminWeb
         // Конец рабочего дня ("HH:MM", пусто = без ограничения)
         public string WorkdayEnd { get; set; } = "";
 
+        // =====================
+        // Посещения читального зала (ручная отметка оператором)
+        // =====================
+        // Требовать читательский билет при отметке посещения (false = можно «Без билета»)
+        public bool RequireVisitReaderId { get; set; } = true;
+        // Показывать оператору цель визита и комментарий
+        public bool ShowVisitPurpose { get; set; } = false;
+        // Перерыв (мин), после которого новое событие того же читателя считается новым посещением
+        public int VisitGapMinutes { get; set; } = 30;
+        public List<VisitPurpose> VisitPurposes { get; set; } = new()
+        {
+            new VisitPurpose { Name = "Читальный зал", NameUz = "O‘quv zali" },
+            new VisitPurpose { Name = "Свой ноутбук", NameUz = "O‘z noutbuki" },
+        };
+
         // ╔══════════════════════════════════════════════════════════════════════╗
         // ║  ВАЖНО: путь к файлу настроек — НЕ МЕНЯТЬ без крайней необходимости ║
         // ║                                                                      ║
@@ -205,6 +220,15 @@ namespace BibAdminWeb
                 cmds.Add(new("SET_BACKGROUND", BackgroundFileName));
             return cmds;
         }
+    }
+
+    // Цель визита (для ручной отметки посещения)
+    public class VisitPurpose
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Name { get; set; } = "";
+        public string NameUz { get; set; } = "";
+        public bool IsActive { get; set; } = true;
     }
 
     public class ServiceType

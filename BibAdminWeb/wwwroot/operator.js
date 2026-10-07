@@ -95,7 +95,7 @@ async function opRequestNotifications() {
   // Загружаем настройки полей сессии
   fetch('/api/session-fields')
     .then(r => r.ok ? r.json() : null)
-    .then(sf => { if (sf) sessionFields = sf; })
+    .then(sf => { if (sf) { sessionFields = sf; applyVisitSettings(); } })
     .catch(() => {});
 
   // Загружаем последнюю доступную версию BibClient
@@ -158,9 +158,10 @@ function startSignalR() {
 
   connection.on('tariff', t => { tariff = t; });
   connection.on('serviceTypes', list => { serviceTypes = list; });
-  connection.on('readerCardPrefix', p => { readerCardPrefix = p || 'FAA'; });
+  connection.on('readerCardPrefix', p => { readerCardPrefix = p || 'FAA'; applyVisitSettings(); });
   connection.on('sessionFields', sf => {
     sessionFields = sf;
+    applyVisitSettings();
     // Применить к открытому диалогу сессии если он открыт
     const rowReader = document.getElementById('rowReaderId');
     if (rowReader) rowReader.style.display = sf.requireReaderId ? '' : 'none';
@@ -723,13 +724,21 @@ async function confirmStartSession() {
   const userName = document.getElementById('dlgUserName').value.trim();
   if (!!sessionFields.requireUserName && !userName) { toast(t('Введите имя пользователя'), 'warn'); return; }
 
+  // Один читательский билет — один ПК
+  const busyPc = /\d/.test(readerNums) && Object.values(pcs).find(p => p.isSession && p.pcNumber !== selectedPc
+    && (p.readerId || '').toLowerCase() === readerId.toLowerCase());
+  if (busyPc) { toast(t('Этот билет уже используется за {pc}', { pc: busyPc.pcNumber }), 'warn'); return; }
+
   closeDlg('dlgSession');
   try {
     await connection.invoke('StartSession', selectedPc, sessionType,
       sessionType === 'Лимит' ? limitMin * 60 : 0,
       sessionType === 'Лимит' ? paidAmount : 0,
       userName, readerId);
-  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
+  } catch (e) {
+    if (String(e).includes('READER_BUSY')) toast(t('Этот билет уже используется за {pc}', { pc: '…' }), 'warn');
+    else toast(t('Ошибка: ') + e, 'warn');
+  }
 }
 
 // Deduplication wrapper — prevents two concurrent lookups (blur + button click)
@@ -1644,7 +1653,7 @@ let _financeLoaded = false;
 
 function switchOpTab(tab) {
   _currentOpTab = tab;
-  const panelIds = { pcs: 'boardPcs', readers: 'panelReaders', finance: 'panelFinance', stats: 'panelStats' };
+  const panelIds = { pcs: 'boardPcs', visits: 'panelVisits', readers: 'panelReaders', finance: 'panelFinance', stats: 'panelStats' };
   Object.entries(panelIds).forEach(([t, pid]) => {
     const panel = document.getElementById(pid);
     const btn   = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -1661,6 +1670,7 @@ function switchOpTab(tab) {
     else bar.style.display = 'none';
   }
   if (tab === 'finance' && !_financeLoaded) { _financeLoaded = true; loadFinanceHistory(); }
+  if (tab === 'visits') { applyVisitSettings(); loadVisits(); }
 }
 
 // ── Статистика (аналитика посещений) ─────────────────────────────────────────
@@ -1720,6 +1730,7 @@ function opRenderAnalytics(data) {
   sumEl.innerHTML = `<div class="kpi-grid">
     <div class="kpi"><div class="kpi-lbl">${t('Визитов всего')}</div><div class="kpi-val">${data.totalVisits}</div></div>
     <div class="kpi"><div class="kpi-lbl">${t('Анонимных')}</div><div class="kpi-val amber">${data.anonymousVisits}</div></div>
+    <div class="kpi"><div class="kpi-lbl">${t('Только посещение')}</div><div class="kpi-val">${data.manualOnlyVisits ?? 0}</div></div>
     <div class="kpi"><div class="kpi-lbl">${t('Уникальных читателей')}</div><div class="kpi-val">${data.totalUniqueReaders}</div></div>
     <div class="kpi"><div class="kpi-lbl">${t('Выручка (сум)')}</div><div class="kpi-val green">${data.totalRevenue.toLocaleString('ru-RU')}</div></div>
     <div class="kpi" style="flex:2;min-width:160px"><div class="kpi-lbl">${t('Период')}</div><div class="kpi-val" style="font-size:14px;font-weight:500;color:var(--ink-2)">${opEsc(tPeriod(data.periodLabel))}</div></div>
@@ -1757,6 +1768,12 @@ function opRenderAnalytics(data) {
 
   // Services table with «Компьютер» row and «Итого» footer
   document.getElementById('opAnlServicesTable').innerHTML = opBuildServicesTable(data.services, data.pcStats);
+
+  // Цели визита (ручные отметки посещений)
+  const purposes = data.purposes || [];
+  document.getElementById('opAnlPurposeWrap').style.display = purposes.length ? '' : 'none';
+  document.getElementById('opAnlPurposeTable').innerHTML = purposes.length
+    ? opBuildTable(['Цель визита', 'Отметок'], purposes.map(p => [visitPurposeName(p.name), p.marks])) : '';
 
   // PC stats block
   opRenderPcStats(data.pcStats);
@@ -2415,4 +2432,222 @@ function _svcIconName(svc) {
   if (id.includes('usb')   || name.includes('usb'))            return 'usb';
   if (id.includes('lamin') || name.includes('ламин'))          return 'layers';
   return 'receipt';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Посещения: ручная отметка читателей, которые пришли в зал без ПК и услуг
+// ══════════════════════════════════════════════════════════════════════════════
+let _visitCardType = 'regular';
+let _visitLookup = null;      // { id, state: 'valid' | 'not_found' | 'expired', name }
+let _visitLookupTimer = null;
+
+// Название цели визита на выбранном языке (узбекское задаётся в настройках админки)
+function visitPurposeName(name) {
+  if (getLang() !== 'uz') return name;
+  const p = (sessionFields.visitPurposes || []).find(x => x.name === name);
+  return (p && p.nameUz) || name;
+}
+
+// Применяет настройки из админки: нужен ли билет, показывать ли цель и комментарий
+function applyVisitSettings() {
+  const showPurpose = !!sessionFields.showVisitPurpose;
+  const purposes = sessionFields.visitPurposes || [];
+  const anonBtn = document.getElementById('visitAnonBtn');
+  if (!anonBtn) return;
+  anonBtn.style.display = sessionFields.requireVisitReaderId === false ? '' : 'none';
+  document.getElementById('visitPurposeRow').style.display = showPurpose && purposes.length ? '' : 'none';
+  document.getElementById('visitCommentRow').style.display = showPurpose ? '' : 'none';
+  const sel = document.getElementById('visitPurpose');
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">${esc(t('— не выбрано —'))}</option>` +
+    purposes.map(p => `<option value="${esc(p.name)}">${esc(visitPurposeName(p.name))}</option>`).join('');
+  sel.value = purposes.some(p => p.name === prev) ? prev : '';
+  if (_visitCardType === 'regular') document.getElementById('visitReaderPrefix').textContent = readerCardPrefix;
+}
+
+function onVisitCardType(type) {
+  _visitCardType = type === 'temp' ? 'temp' : 'regular';
+  const isTemp = _visitCardType === 'temp';
+  document.getElementById('visitCardBtnRegular').classList.toggle('on', !isTemp);
+  document.getElementById('visitCardBtnTemp').classList.toggle('on', isTemp);
+  document.getElementById('visitReaderPrefix').textContent = isTemp ? '№' : readerCardPrefix;
+  const inp = document.getElementById('visitReaderId');
+  inp.value = '';
+  inp.placeholder = isTemp ? '842' : '260500456';
+  _visitLookup = null;
+  document.getElementById('visitReaderInfo').style.display = 'none';
+}
+
+function onVisitReaderInput() {
+  const el = document.getElementById('visitReaderId');
+  el.value = el.value.replace(/\D/g, '').slice(0, 9);
+  _visitLookup = null;
+  clearTimeout(_visitLookupTimer);
+  if (el.value.length >= 6 || (_visitCardType === 'temp' && el.value.length >= 1)) {
+    _visitLookupTimer = setTimeout(lookupVisitReader, 500);
+  } else {
+    document.getElementById('visitReaderInfo').style.display = 'none';
+  }
+}
+
+function _visitInfo(cls, text) {
+  const info = document.getElementById('visitReaderInfo');
+  info.className = 'reader-info ' + cls;
+  info.style.display = 'block';
+  info.textContent = text;
+  return info;
+}
+
+async function lookupVisitReader() {
+  clearTimeout(_visitLookupTimer);
+  const nums = document.getElementById('visitReaderId').value.trim();
+  const info = document.getElementById('visitReaderInfo');
+  if (!nums) { info.style.display = 'none'; _visitLookup = null; return null; }
+
+  if (_visitCardType === 'temp') {
+    _visitLookup = { id: nums, state: 'valid', name: '' };
+    _visitInfo('valid', '✓ ' + t('Временный билет №{num} — посещение будет зафиксировано', { num: nums }));
+    return _visitLookup;
+  }
+
+  const cardId = readerCardPrefix + nums;
+  if (_visitLookup && _visitLookup.id === cardId) return _visitLookup;
+
+  try {
+    const r = await fetch(`/api/readers/lookup/${encodeURIComponent(cardId)}`);
+    if (!r.ok) {
+      _visitLookup = { id: cardId, state: 'not_found', name: '' };
+      info.className = 'reader-info invalid';
+      info.style.display = 'flex';
+      info.style.alignItems = 'center';
+      info.style.gap = '10px';
+      info.innerHTML = `<span style="flex:1">✗ ${t('Читатель {id} не найден в базе', { id: esc(cardId) })}</span>
+        <button type="button" class="visit-quick-add">+ ${t('Добавить')}</button>`;
+      info.querySelector('.visit-quick-add').addEventListener('click', () => visitQuickAddReader(cardId));
+      return _visitLookup;
+    }
+    const data = await r.json();
+
+    // Постоянный билет действует 3 года от регистрации или последнего обновления
+    const regDate = parseRegDate(data.registeredAt);
+    const updDate = parseRegDate(data.updatedAt);
+    const baseDate = (updDate && regDate && updDate > regDate) ? updDate : regDate;
+    if (baseDate && (Date.now() - baseDate) / 86400000 > 3 * 365 + 1) {
+      const expDate = new Date(baseDate);
+      expDate.setFullYear(expDate.getFullYear() + 3);
+      _visitLookup = { id: cardId, state: 'expired', name: data.fullName || '' };
+      _visitInfo('expired', `⚠ ${data.fullName} · ` + t('Билет просрочен с {date}', { date: expDate.toLocaleDateString('ru-RU') }));
+      return _visitLookup;
+    }
+
+    _visitLookup = { id: cardId, state: 'valid', name: data.fullName || '' };
+    const parts = [data.fullName, data.category, t(data.gender), data.age ? t('{n} лет', { n: data.age }) : null].filter(Boolean);
+    _visitInfo('valid', '✓ ' + parts.join(' · '));
+  } catch {
+    info.style.display = 'none';
+    _visitLookup = null;
+  }
+  return _visitLookup;
+}
+
+async function visitQuickAddReader(cardId) {
+  try {
+    const r = await fetch('/api/op/readers/quick-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId })
+    });
+    if (!r.ok) { toast(t('Ошибка добавления'), 'warn'); return; }
+    _visitLookup = { id: cardId, state: 'valid', name: '' };
+    _visitInfo('valid', '✓ ' + t('{id} — добавлен как новый читатель', { id: cardId }));
+    toast(t('Читатель добавлен'), 'success');
+  } catch { toast(t('Ошибка добавления'), 'warn'); }
+}
+
+// anonymous — кнопка «Без билета»; force — оператор подтвердил повторное посещение
+async function addVisit(anonymous, force) {
+  let readerId = '', readerName = '';
+  if (!anonymous) {
+    if (!document.getElementById('visitReaderId').value.trim()) { toast(t('Введите номер читательского билета'), 'warn'); return; }
+    const lk = await lookupVisitReader();
+    if (!lk)                      { toast(t('Проверьте номер читательского билета'), 'warn'); return; }
+    if (lk.state === 'not_found') { toast(t('Читатель не найден в базе'), 'warn'); return; }
+    if (lk.state === 'expired')   { toast(t('Читательский билет просрочен'), 'warn'); return; }
+    readerId = lk.id;
+    readerName = lk.name || '';
+  }
+
+  const showPurpose = !!sessionFields.showVisitPurpose;
+  const body = {
+    readerId, readerName,
+    purpose: showPurpose ? document.getElementById('visitPurpose').value : '',
+    comment: showPurpose ? document.getElementById('visitComment').value.trim() : '',
+    force: !!force
+  };
+
+  let r, data = {};
+  try {
+    r = await fetch('/api/op/visits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    data = await r.json().catch(() => ({}));
+  } catch { toast(t('Ошибка соединения'), 'warn'); return; }
+
+  if (r.status === 409 && data.code === 'atPc') {
+    toast(t('Этот читатель сейчас за {pc} — отмечать не нужно', { pc: data.pcNumber }), 'warn');
+    return;
+  }
+  if (r.status === 409 && data.code === 'already') {
+    document.getElementById('dlgVisitDupText').textContent =
+      t('{name} уже отмечен сегодня в {time}.', { name: readerName || readerId, time: data.time });
+    openDlg('dlgVisitDup');
+    return;
+  }
+  if (!r.ok) { toast(tServer(data.error) || t('Ошибка'), 'warn'); return; }
+
+  toast(t('Посещение отмечено'), 'good');
+  document.getElementById('visitReaderId').value = '';
+  document.getElementById('visitComment').value = '';
+  document.getElementById('visitReaderInfo').style.display = 'none';
+  _visitLookup = null;
+  loadVisits();
+  document.getElementById('visitReaderId').focus();
+}
+
+function confirmVisitRepeat() {
+  closeDlg('dlgVisitDup');
+  addVisit(false, true);
+}
+
+async function loadVisits() {
+  const el = document.getElementById('visitsResult');
+  try {
+    const r = await fetch('/api/op/visits', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    renderVisits(await r.json());
+  } catch {
+    el.innerHTML = `<div class="op-empty">${t('Ошибка загрузки')}</div>`;
+  }
+}
+
+function renderVisits(list) {
+  const el = document.getElementById('visitsResult');
+  document.getElementById('visitCount').textContent = t('Сегодня отмечено: {n}', { n: list.length });
+  if (!list.length) { el.innerHTML = `<div class="op-empty">${t('Нет отметок за сегодня')}</div>`; return; }
+  const showPurpose = !!sessionFields.showVisitPurpose;
+  el.innerHTML = `
+    <table class="dtable">
+      <thead><tr>
+        <th>${t('Время')}</th><th>${t('№ билета')}</th><th>${t('ФИО')}</th>
+        ${showPurpose ? `<th>${t('Цель визита')}</th><th>${t('Комментарий')}</th>` : ''}
+        <th>${t('Оператор')}</th>
+      </tr></thead>
+      <tbody>
+        ${list.map(v => `<tr>
+          <td class="mono">${fmtClock(new Date(v.createdAt))}</td>
+          <td><code style="font-size:11px">${esc(v.readerId || '—')}</code></td>
+          <td>${esc(v.readerId ? (v.readerName || '—') : t('Без билета'))}</td>
+          ${showPurpose ? `<td>${esc(v.purpose ? visitPurposeName(v.purpose) : '—')}</td><td>${esc(v.comment || '—')}</td>` : ''}
+          <td>${esc(v.operatorName || '—')}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
 }
