@@ -72,7 +72,13 @@ namespace BibAdminWeb
             catch (Exception ex) { Logger.Error($"Ошибка сохранения истории услуг: {ex.Message}"); }
         }
 
-        public static void Add(ServiceTransaction t) { All.Insert(0, t); SaveHistory(); }
+        public static void Add(ServiceTransaction t)
+        {
+            // Анонимный посетитель и временный билет не могут брать услугу в долг
+            if (!t.IsPaid && !CanDefer(t.ReaderId)) { t.PaidAmount = t.TotalAmount; t.PaidAt = DateTime.UtcNow; }
+            All.Insert(0, t);
+            SaveHistory();
+        }
 
         public static void MarkAsPaid(string id)
         {
@@ -105,18 +111,52 @@ namespace BibAdminWeb
         public static List<ServiceTransaction> GetAllUnpaid() =>
             All.Where(t => !t.IsPaid).ToList();
 
-        public static List<ServiceTransaction> GetUnpaidForSession(string pcNumber, string readerId)
+        // Личный билет читателя — буквы префикса и цифры («FAA260500456»). Пустой номер, один
+        // префикс или чисто цифровой временный билет личным не считаются: по ним долг не ведётся.
+        public static bool IsPersonalId(string? readerId)
         {
-            var set = new HashSet<string>();
-            var result = new List<ServiceTransaction>();
+            var id = readerId?.Trim() ?? "";
+            return id.Any(char.IsDigit) && id.Any(char.IsLetter);
+        }
+
+        // В долг («Позже») может брать только читатель из базы; анонимные и временные — только сразу
+        public static bool CanDefer(string? readerId)
+            => IsPersonalId(readerId) && ReaderStore.GetByCardId(readerId!.Trim()) != null;
+
+        // Сумма неоплаченных услуг читателя (0 для анонимных и временных билетов)
+        public static int ReaderDebt(string? readerId)
+        {
+            if (!IsPersonalId(readerId)) return 0;
+            var id = readerId!.Trim();
+            return All.Where(t => !t.IsPaid && string.Equals(t.ReaderId, id, StringComparison.OrdinalIgnoreCase))
+                      .Sum(t => t.DebtAmount);
+        }
+
+        /// <summary>
+        /// Долги читателя на момент завершения сессии: услуги, взятые в долг во время этой
+        /// сессии, и отдельно — его прошлые долги. Чужие долги, когда-то оформленные на этот
+        /// же ПК, сюда не попадают.
+        /// </summary>
+        public static (List<ServiceTransaction> Session, List<ServiceTransaction> Previous) GetDebtsForSessionEnd(
+            string? readerId, DateTime sessionStart, int durationSeconds)
+        {
+            var session = new List<ServiceTransaction>();
+            var previous = new List<ServiceTransaction>();
+            if (!IsPersonalId(readerId)) return (session, previous);
+            var id = readerId!.Trim();
+
+            // Начало сессии: берём самое раннее из двух оценок (после паузы SessionStart сдвигается)
+            var beginUtc = DateTime.UtcNow.AddSeconds(-Math.Max(0, durationSeconds));
+            var startUtc = sessionStart.ToUniversalTime();
+            if (startUtc < beginUtc) beginUtc = startUtc;
+            beginUtc = beginUtc.AddMinutes(-1);
+
             foreach (var t in All)
             {
-                if (t.IsPaid) continue;
-                bool match = (!string.IsNullOrEmpty(pcNumber) && t.PcNumber == pcNumber)
-                          || (!string.IsNullOrEmpty(readerId) && t.ReaderId == readerId);
-                if (match && set.Add(t.Id)) result.Add(t);
+                if (t.IsPaid || !string.Equals(t.ReaderId, id, StringComparison.OrdinalIgnoreCase)) continue;
+                if (t.CreatedAt.ToUniversalTime() >= beginUtc) session.Add(t); else previous.Add(t);
             }
-            return result;
+            return (session, previous);
         }
 
         public static void MarkAllPaidForPc(string pcNumber)

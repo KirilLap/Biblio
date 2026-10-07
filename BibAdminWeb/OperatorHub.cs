@@ -49,6 +49,9 @@ namespace BibAdminWeb
             // Один читательский билет — один ПК: вторую сессию по тому же билету не начинаем
             if (OperatorBroadcaster.FindSessionByReader(readerId, pcNumber) != null)
                 throw new HubException("READER_BUSY");
+            // Читатель с неоплаченным долгом по услугам не может начать сессию
+            if (ServiceTransaction.ReaderDebt(readerId) > 0)
+                throw new HubException("READER_DEBT");
 
             var serverStart = DateTime.UtcNow;
             client.SessionType = sessionType;
@@ -96,7 +99,7 @@ namespace BibAdminWeb
                 {
                     // Завершили раньше оплаченного лимита — начисляем по VIP-тарифу, возврат разницы
                     earned = Math.Min((int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount, paidAmount);
-                    refund = Math.Max(0, paidAmount - earned);
+                    refund = Math.Min(paidAmount, FinanceStore.RoundRefund(paidAmount - earned)); earned = paidAmount - refund;
                 }
             }
             else if (client.IsPostPay) // VIP → Лимит: постоплата как VIP
@@ -106,7 +109,7 @@ namespace BibAdminWeb
             else if (sessionType == "Лимит")
             {
                 earned = Math.Min((int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount, paidAmount);
-                refund = Math.Max(0, paidAmount - earned);
+                refund = Math.Min(paidAmount, FinanceStore.RoundRefund(paidAmount - earned)); earned = paidAmount - refund;
             }
             else
             {
@@ -125,7 +128,8 @@ namespace BibAdminWeb
                 ReaderId = client.ReaderId ?? "",
                 DurationSeconds = duration,
                 EarnedAmount = earned,
-                PaidAmount = paidAmount,
+                // Сессия закрыта — значит оплачена: при оплате по факту (VIP) «оплачено» = начислено
+                PaidAmount = Math.Max(paidAmount, earned),
                 RefundAmount = refund,
                 StartTime = startTime,
                 EndTime = DateTime.Now,
@@ -158,20 +162,20 @@ namespace BibAdminWeb
             AdminHub.RaiseClientUpdated(client);
 
             string readerId = client.ReaderId ?? "";
-            var debts = ServiceTransaction.GetUnpaidForSession(pcNumber, readerId);
-            int totalDebt = debts.Sum(d => d.DebtAmount);
-            var debtItems = debts.Select(d => new {
-                id = d.Id,
-                name = d.ServiceName,
-                qty = d.Quantity,
-                unit = d.Unit,
-                debt = d.DebtAmount
-            }).ToList();
+            // Долги по услугам: взятые во время этой сессии и отдельно — прошлые долги читателя
+            var (sessDebts, prevDebts) = ServiceTransaction.GetDebtsForSessionEnd(readerId, startTime, duration);
+            object DebtDto(ServiceTransaction d) => new
+            {
+                id = d.Id, name = d.ServiceName, qty = d.Quantity, unit = d.Unit,
+                debt = d.DebtAmount, date = d.CreatedAt.ToString("o")
+            };
 
             int additionalCharge = Math.Max(0, earned - paidAmount);
             await Clients.Caller.SendAsync("sessionSummary", new {
                 pcNumber, sessionType, duration, earned, paidAmount, refund, additionalCharge,
-                readerId, serviceDebts = debtItems, totalServiceDebt = totalDebt
+                readerId = readerId,
+                serviceDebts = sessDebts.Select(DebtDto).ToList(), totalServiceDebt = sessDebts.Sum(d => d.DebtAmount),
+                previousDebts = prevDebts.Select(DebtDto).ToList(), totalPreviousDebt = prevDebts.Sum(d => d.DebtAmount)
             });
 
             // Уведомить всех остальных о завершении сессии
@@ -252,6 +256,9 @@ namespace BibAdminWeb
                 if (string.IsNullOrEmpty(resolvedReaderName)) resolvedReaderName = pcClient.UserName ?? "";
             }
 
+            // Анонимный посетитель и временный билет не могут брать услугу в долг
+            if (!ServiceTransaction.CanDefer(resolvedReaderId)) payNow = true;
+
             var tx = new ServiceTransaction
             {
                 ServiceTypeId = svc.Id, ServiceName = svc.Name, Unit = svc.Unit,
@@ -283,6 +290,9 @@ namespace BibAdminWeb
                 if (string.IsNullOrEmpty(resolvedId))   resolvedId   = pc.ReaderId ?? "";
                 if (string.IsNullOrEmpty(resolvedName)) resolvedName = pc.UserName ?? "";
             }
+
+            // Анонимный посетитель и временный билет не могут брать услугу в долг
+            if (!ServiceTransaction.CanDefer(resolvedId)) payNow = true;
 
             var batchId  = Guid.NewGuid().ToString("N")[..8];
             int totalAll = 0;
@@ -485,11 +495,19 @@ namespace BibAdminWeb
             return Task.CompletedTask;
         }
 
-        public Task PaySessionDebts(string pcNumber, string readerId)
+        // Оплата конкретных долгов по услугам (из окна итога сессии)
+        public Task PayDebts(string[] ids)
         {
             if (!IsAuthorized()) return Task.CompletedTask;
-            if (!string.IsNullOrEmpty(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId);
-            if (!string.IsNullOrEmpty(pcNumber)) ServiceTransaction.MarkAllPaidForPc(pcNumber);
+            foreach (var id in ids ?? Array.Empty<string>()) ServiceTransaction.MarkAsPaid(id);
+            return Task.CompletedTask;
+        }
+
+        // Оплата всех долгов читателя (перед началом сессии)
+        public Task PayReaderDebts(string readerId)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            if (ServiceTransaction.IsPersonalId(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId.Trim());
             return Task.CompletedTask;
         }
 

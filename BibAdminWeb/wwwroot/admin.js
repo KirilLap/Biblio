@@ -672,6 +672,16 @@ async function _ssLookupReaderImpl() {
       return;
     }
     const data = await r.json();
+    // Долг по услугам: пока не оплачен, сессию начать нельзя
+    if ((data.debt || 0) > 0) {
+      _ssLookupState = 'debt';
+      document.getElementById('dlgSsName').value = data.fullName || '';
+      infoEl.className = 'reader-info expired';
+      infoEl.innerHTML = `<span style="flex:1">⚠ ${esc(data.fullName || cardId)} · Долг по услугам: ${data.debt.toLocaleString('ru-RU')} сум</span>
+        <button type="button" style="padding:3px 10px;font-size:11px;border-radius:5px;cursor:pointer;border:1px solid var(--free-ring);background:var(--free-bg);color:var(--free);white-space:nowrap">Оплатить долг</button>`;
+      infoEl.querySelector('button').addEventListener('click', () => ssPayReaderDebt(cardId, data.debt));
+      return;
+    }
     const baseDate = _ssCardBaseDate(data);
     if (baseDate) {
       const expDate = new Date(baseDate);
@@ -884,6 +894,7 @@ async function confirmStartSession() {
     if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
     if (!isTemp) {
       if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
+      if (_ssLookupState === 'debt')      { toast('У читателя неоплаченный долг — сначала оплатите его', 'warn'); return; }
       if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
       if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
       if (_ssLookupState !== 'valid')     { toast('Проверьте номер читательского билета', 'warn'); return; }
@@ -917,7 +928,8 @@ async function confirmStartSession() {
   try {
     await conn.invoke('StartSession', activePc, _ssType, limitSeconds, paidAmount, name, reader);
   } catch (e) {
-    toast(String(e).includes('READER_BUSY') ? 'Этот билет уже используется за другим ПК' : 'Ошибка: ' + e, 'warn');
+    toast(String(e).includes('READER_DEBT') ? 'У читателя неоплаченный долг — сначала оплатите его'
+      : String(e).includes('READER_BUSY') ? 'Этот билет уже используется за другим ПК' : 'Ошибка: ' + e, 'warn');
   }
 }
 
@@ -1448,41 +1460,75 @@ function showSummary(d, isManual = false) {
     <b>Возврат:</b> ${d.refund.toLocaleString()} сум
   `;
   if ((d.additionalCharge || 0) > 0)
-    html += `<div class="charge-highlight">⚠️ Доплатить: ${d.additionalCharge.toLocaleString()} сум</div>`;
+    html += (d.paidAmount || 0) > 0
+      ? `<div class="charge-highlight">⚠️ Доплатить: ${d.additionalCharge.toLocaleString()} сум</div>`
+      : `<div class="charge-highlight">💵 К оплате: ${d.additionalCharge.toLocaleString()} сум</div>`;
 
-  const debts = d.serviceDebts || [];
-  const payBtn = document.getElementById('btnSummaryPayDebts');
-  if (debts.length > 0) {
-    html += `<hr style="border-color:#333;margin:12px 0">
-      <div style="color:#E09000;font-weight:600;margin-bottom:8px">Неоплаченные услуги:</div>`;
-    debts.forEach(dbt => {
-      html += `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-        <span>${esc(dbt.name)} × ${dbt.qty} ${esc(dbt.unit)}</span>
+  // Долги по услугам: взятые во время этой сессии и отдельно — прошлые долги читателя
+  _adminSummaryDebtIds = { session: (d.serviceDebts || []).map(x => x.id), previous: (d.previousDebts || []).map(x => x.id) };
+  const debtBlock = (kind, title, list, total, btnText) => {
+    if (!list.length) return '';
+    let b = `<div class="sum-debts"><hr style="border-color:#333;margin:12px 0">
+      <div style="color:#E09000;font-weight:600;margin-bottom:8px">${title}:</div>`;
+    list.forEach(dbt => {
+      const date = kind === 'previous' && dbt.date ? ' · ' + new Date(dbt.date).toLocaleDateString('ru-RU') : '';
+      b += `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${esc(dbt.name)} × ${dbt.qty} ${esc(dbt.unit)}${date}</span>
         <b style="color:#E09000">${dbt.debt.toLocaleString()} сум</b>
       </div>`;
     });
-    const total = d.totalServiceDebt || debts.reduce((a, b) => a + b.debt, 0);
-    html += `<div style="display:flex;justify-content:space-between;font-weight:700;color:#E09000;margin-top:8px;padding-top:8px;border-top:1px solid #444">
+    b += `<div style="display:flex;justify-content:space-between;font-weight:700;color:#E09000;margin-top:8px;padding-top:8px;border-top:1px solid #444">
       <span>Итого долгов</span><span>${total.toLocaleString()} сум</span>
-    </div>`;
-    if (payBtn) payBtn.style.display = '';
-  } else {
-    if (payBtn) payBtn.style.display = 'none';
-  }
+    </div>
+    <button class="btn btn-primary" style="background:var(--vip);border-color:var(--vip);margin-top:10px;width:100%"
+      onclick="paySummaryDebtsAdmin('${kind}', this)">${btnText}</button></div>`;
+    return b;
+  };
+  const sessDebts = d.serviceDebts || [], prevDebts = d.previousDebts || [];
+  html += debtBlock('session', 'Неоплаченные услуги этой сессии', sessDebts,
+    d.totalServiceDebt || sessDebts.reduce((a, b) => a + b.debt, 0), 'Оплатить долги по услугам');
+  html += debtBlock('previous', 'Прошлые долги читателя', prevDebts,
+    d.totalPreviousDebt || prevDebts.reduce((a, b) => a + b.debt, 0), 'Оплатить прошлые долги');
+  const payBtn = document.getElementById('btnSummaryPayDebts');
+  if (payBtn) payBtn.style.display = 'none';
 
   document.getElementById('dlgSummaryContent').innerHTML = html;
   document.getElementById('dlgSummary').style.display = 'flex';
   loadFinance();
 }
 
-async function paySessionDebtsAdmin() {
+let _adminSummaryDebtIds = { session: [], previous: [] };
+
+async function paySummaryDebtsAdmin(kind, btn) {
+  const ids = _adminSummaryDebtIds[kind] || [];
+  if (!ids.length) return;
+  btn.disabled = true;
   try {
-    await conn.invoke('PaySessionDebts', _adminSummaryPcNumber, _adminSummaryReaderId);
-    const payBtn = document.getElementById('btnSummaryPayDebts');
-    if (payBtn) payBtn.style.display = 'none';
+    await conn.invoke('PayDebts', ids);
+    _adminSummaryDebtIds[kind] = [];
+    btn.closest('.sum-debts').innerHTML = '<div style="margin-top:12px;color:var(--free);font-weight:600">✓ Долги оплачены</div>';
     toast('Долги оплачены');
     loadFinance();
-  } catch (e) { toast('Ошибка: ' + e); }
+  } catch (e) { btn.disabled = false; toast('Ошибка: ' + e); }
+}
+
+// Кнопка под окном итога больше не используется (оплата — кнопками в самих блоках долгов)
+function paySessionDebtsAdmin() { }
+
+// Читатель с долгом не может начать сессию: принять оплату и отметить долг оплаченным
+async function ssPayReaderDebt(cardId, sum) {
+  if (!confirm(`Отметить долг ${sum.toLocaleString('ru-RU')} сум как оплаченный?`)) return;
+  try {
+    const r = await fetch('/api/admin/finance/debts/pay-reader', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ readerId: cardId })
+    });
+    if (!r.ok) throw new Error(r.status);
+    toast('Долг оплачен', 'success');
+    _ssLookupState = null;
+    _ssLookedUpId = '';
+    await ssLookupReader();
+    loadFinance();
+  } catch (e) { toast('Ошибка оплаты: ' + e.message, 'warn'); }
 }
 
 async function openDebtsDlgAdmin(inline) {
@@ -1915,6 +1961,8 @@ function setFinTab(tab) {
 
 function renderFinance() {
   if (finTab === 'visits') { loadAdminVisits(); return; }
+  // На вкладке «Долги» показываем только долги, а не общий список операций
+  if (finTab === 'debts') { openDebtsDlgAdmin(true); return; }
   const period = document.querySelector('input[name=finPeriod]:checked')?.value || 'all';
   const from = periodFrom(period);
   const typeF = document.getElementById('finTypeFilter').value;
@@ -2046,6 +2094,7 @@ async function loadSettings() {
 function fillSettingsForm() {
   if (!settings) return;
   document.getElementById('sTariff').value = settings.tariff ?? 3000;
+  document.getElementById('sRefundStep').value = settings.refundStep ?? 500;
   document.getElementById('sAdminPassword').value = settings.adminPassword ?? '';
   document.getElementById('sReaderCardPrefix').value = (settings.readerCardPrefix ?? 'FAA').toUpperCase();
   document.getElementById('sUsbBlocked').checked = !!settings.usbBlocked;
@@ -2301,6 +2350,7 @@ function readSettingsForm() {
   const opacityPct = isNaN(rawOpacity) ? 30 : rawOpacity;
   return {
     tariff: parseInt(document.getElementById('sTariff').value) || 3000,
+    refundStep: Math.max(0, parseInt(document.getElementById('sRefundStep').value) || 0),
     adminPassword: document.getElementById('sAdminPassword').value,
     readerCardPrefix: (document.getElementById('sReaderCardPrefix').value.trim().toUpperCase()) || 'FAA',
     usbBlocked: document.getElementById('sUsbBlocked').checked,
@@ -3840,7 +3890,15 @@ function onAdminSvcPcChanged() {
 
 function onAdminSvcPayChanged() {
   const pcVal = document.getElementById('dlgAdminSvcPc').value;
-  const wantLater = document.getElementById('rbAdminSvcLater')?.checked;
+  let wantLater = document.getElementById('rbAdminSvcLater')?.checked;
+  // «Позже» (в долг) — только читателю с личным билетом; анонимным и временным нельзя
+  const svcReader = (pcVal && pcs[pcVal]?.isSession) ? (pcs[pcVal].readerId || '') : '';
+  if (wantLater && pcVal && !(/\d/.test(svcReader) && /\D/.test(svcReader))) {
+    const nowRadio = document.querySelector('[name="svcAdminPay"][value="now"]');
+    if (nowRadio) nowRadio.checked = true;
+    wantLater = false;
+    toast('В долг может брать только читатель с личным билетом', 'warn');
+  }
   document.getElementById('dlgAdminSvcDeferNote').style.display =
     (wantLater && !pcVal) ? 'block' : 'none';
 }

@@ -38,6 +38,9 @@ namespace BibAdminWeb
         public string BackgroundFileName { get; set; } = "";
 
         public int Tariff { get; set; } = 3000;
+        // Шаг возврата при досрочном завершении сессии: остаток меньше шага не возвращается,
+        // больший округляется до ближайшего шага. 0 — возвращать точную сумму.
+        public int RefundStep { get; set; } = 500;
         public string AdminPasswordHash { get; set; } = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 от "1234"
         public bool IsFirstRun { get; set; } = true;
         public int ServerPort { get; set; } = 8080;

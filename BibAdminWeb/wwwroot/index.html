@@ -268,6 +268,11 @@
               <input type="number" id="sTariff" min="0">
             </div>
             <div class="form-row">
+              <label>Шаг возврата (сум)</label>
+              <input type="number" id="sRefundStep" min="0" step="100">
+            </div>
+            <p class="settings-hint">При досрочном завершении оплаченной сессии остаток меньше шага не возвращается, больший округляется до ближайшего шага (при 500: 493 → 0, 3 918 → 4 000). 0 — возвращать точную сумму.</p>
+            <div class="form-row">
               <label>Пароль администратора</label>
               <input type="text" id="sAdminPassword" autocomplete="off">
             </div>

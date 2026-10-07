@@ -33,6 +33,20 @@ namespace BibAdminWeb
 
         private static string ConnStr => $"Data Source={DbPath}";
 
+        /// <summary>
+        /// Сумма возврата при досрочном завершении оплаченной сессии. Мелочь не возвращаем:
+        /// остаток меньше шага (Настройки → «Шаг возврата», по умолчанию 500 сум) — возврата нет,
+        /// иначе сумма округляется до ближайшего шага (3 918 → 4 000). Шаг 0 или 1 — точная сумма.
+        /// </summary>
+        public static int RoundRefund(int rawRefund)
+        {
+            if (rawRefund <= 0) return 0;
+            int step = GlobalSettings.Load().RefundStep;
+            if (step <= 1) return rawRefund;
+            if (rawRefund < step) return 0;
+            return (int)Math.Round(rawRefund / (double)step, MidpointRounding.AwayFromZero) * step;
+        }
+
         private static SqliteConnection Open()
         {
             var conn = new SqliteConnection(ConnStr);

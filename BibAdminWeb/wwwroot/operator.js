@@ -715,6 +715,7 @@ async function confirmStartSession() {
     if (!readerNums) { toast(t('Введите номер читательского билета'), 'warn'); return; }
     if (!isTemp) {
       if (_readerLookupState === null || _readerLookedUpId !== readerId) await lookupReader();
+      if (_readerLookupState === 'debt')      { toast(t('У читателя неоплаченный долг — сначала оплатите его'), 'warn'); return; }
       if (_readerLookupState === 'not_found') { toast(t('Читатель не найден в базе'), 'warn'); return; }
       if (_readerLookupState === 'expired')   { toast(t('Читательский билет просрочен'), 'warn'); return; }
       if (_readerLookupState !== 'valid')     { toast(t('Проверьте номер читательского билета'), 'warn'); return; }
@@ -736,7 +737,8 @@ async function confirmStartSession() {
       sessionType === 'Лимит' ? paidAmount : 0,
       userName, readerId);
   } catch (e) {
-    if (String(e).includes('READER_BUSY')) toast(t('Этот билет уже используется за {pc}', { pc: '…' }), 'warn');
+    if (String(e).includes('READER_DEBT')) toast(t('У читателя неоплаченный долг — сначала оплатите его'), 'warn');
+    else if (String(e).includes('READER_BUSY')) toast(t('Этот билет уже используется за {pc}', { pc: '…' }), 'warn');
     else toast(t('Ошибка: ') + e, 'warn');
   }
 }
@@ -815,6 +817,19 @@ async function _lookupReaderImpl() {
       return;
     }
     const data = await r.json();
+
+    // Долг по услугам: пока не оплачен, сессию начать нельзя
+    if ((data.debt || 0) > 0) {
+      _readerLookupState = 'debt';
+      document.getElementById('dlgUserName').value = data.fullName || '';
+      infoEl.className = 'reader-info expired';
+      infoEl.style.cssText = '';
+      Object.assign(infoEl.style, { display: 'flex', alignItems: 'center', gap: '10px' });
+      infoEl.innerHTML = `<span style="flex:1">⚠ ${esc(data.fullName || cardId)} · ${t('Долг по услугам: {sum} сум', { sum: fmt(data.debt) })}</span>
+        <button type="button" class="visit-quick-add">${t('Оплатить долг')}</button>`;
+      infoEl.querySelector('button').addEventListener('click', () => payReaderDebt(cardId, data.debt));
+      return;
+    }
 
     // Check expiry
     const regDate = parseRegDate(data.registeredAt);
@@ -1330,6 +1345,9 @@ function onSvcPcChanged() {
   const segNow = document.getElementById('segSvcNow');
 
   const hasSession = !!(pcVal && pcs[pcVal] && pcs[pcVal].isSession);
+  // «Позже» (в долг) — только читателю с личным билетом; анонимным и временным нельзя
+  const sessReader = hasSession ? (pcs[pcVal].readerId || '') : '';
+  const canDefer = hasSession && /\d/.test(sessReader) && /\D/.test(sessReader);
 
   if (pcVal && pcs[pcVal]) {
     const pc = pcs[pcVal];
@@ -1345,9 +1363,9 @@ function onSvcPcChanged() {
   }
 
   // Блок оплаты — показываем только при привязке к сессии
-  if (payRow) payRow.style.display = hasSession ? '' : 'none';
+  if (payRow) payRow.style.display = canDefer ? '' : 'none';
   // При смене привязки сбрасываем выбор на «Сейчас»
-  if (!hasSession) {
+  if (!canDefer) {
     if (segNow)   { segNow.classList.add('on');    document.querySelector('[name="svcPay"][value="now"]').checked = true; }
     if (segLater) segLater.classList.remove('on');
   }
@@ -1385,66 +1403,85 @@ async function confirmService() {
   } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
-let _summaryReaderId = '';
-let _summaryPcNumber = '';
-let _summaryTotalDebt = 0;
+let _summaryDebtIds = { session: [], previous: [] };
+
+// Блок долгов в окне итога: kind = 'session' (услуги этой сессии) | 'previous' (прошлые долги читателя)
+function _summaryDebtBlock(kind, title, list, total, btnText) {
+  if (!list.length) return '';
+  let inner = `<div style="font-weight:600;color:var(--warn);margin-bottom:8px">${t(title)}</div>`;
+  list.forEach(d => {
+    const date = kind === 'previous' && d.date ? ` · ${new Date(d.date).toLocaleDateString('ru-RU')}` : '';
+    inner += `<div class="summary-row" style="font-size:13px">
+      <span>${esc(svcName(d.name))} × ${d.qty} ${esc(tUnit(d.unit))}${date}</span>
+      <span class="val" style="color:var(--warn)">${fmt(d.debt)} ${t('сум')}</span>
+    </div>`;
+  });
+  inner += `<div class="summary-row" style="font-weight:700;color:var(--warn);margin-top:6px">
+    <span>${t('Итого долгов')}</span>
+    <span class="val">${fmt(total)} ${t('сум')}</span>
+  </div>
+  <div style="margin-top:10px">
+    <button class="mbtn" style="background:var(--warn);color:#fff;border-color:var(--warn);width:100%"
+      onclick="paySummaryDebts('${kind}', this)">${t(btnText)}</button>
+  </div>`;
+  return `<div class="summary-debts" data-total="${total}" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${inner}</div>`;
+}
 
 function showSessionSummary(s) {
-  _summaryReaderId  = s.readerId || '';
-  _summaryPcNumber  = s.pcNumber || '';
-  const debtsForTotal = s.serviceDebts || [];
-  _summaryTotalDebt = s.totalServiceDebt || debtsForTotal.reduce((a, d) => a + d.debt, 0);
+  const sessionDebts = s.serviceDebts || [];
+  const prevDebts = s.previousDebts || [];
+  _summaryDebtIds = { session: sessionDebts.map(d => d.id), previous: prevDebts.map(d => d.id) };
 
   let html = `
     <div class="summary-row"><span>${t('ПК')}</span><span class="val">${esc(s.pcNumber)}</span></div>
     <div class="summary-row"><span>${t('Тип')}</span><span class="val">${esc(t(s.sessionType))}</span></div>
-    <div class="summary-row"><span>${t('Время')}</span><span class="val">${fmtTime(s.duration)}</span></div>
-    <div class="summary-row"><span>${t('Оплачено')}</span><span class="val">${fmt(s.paidAmount)} ${t('сум')}</span></div>
-    <div class="summary-row"><span>${t('Начислено')}</span><span class="val">${fmt(s.earned)} ${t('сум')}</span></div>`;
+    <div class="summary-row"><span>${t('Время')}</span><span class="val">${fmtTime(s.duration)}</span></div>`;
+  // У сессии с оплатой по факту (VIP) предоплаты нет — строку «Оплачено: 0» не показываем
+  if ((s.paidAmount || 0) > 0)
+    html += `<div class="summary-row"><span>${t('Оплачено')}</span><span class="val">${fmt(s.paidAmount)} ${t('сум')}</span></div>`;
+  html += `<div class="summary-row"><span>${t('Начислено')}</span><span class="val">${fmt(s.earned)} ${t('сум')}</span></div>`;
   if (s.refund > 0)
     html += `<div class="refund-highlight">💵 ${t('Возврат')}: ${fmt(s.refund)} ${t('сум')}</div>`;
-  if ((s.additionalCharge || 0) > 0)
-    html += `<div class="charge-highlight">⚠️ ${t('Доплатить')}: ${fmt(s.additionalCharge)} ${t('сум')}</div>`;
-
-  const debts = s.serviceDebts || [];
-  if (debts.length > 0) {
-    const totalDebt = s.totalServiceDebt || debts.reduce((a, d) => a + d.debt, 0);
-    let debtInner = `<div style="font-weight:600;color:var(--warn);margin-bottom:8px">${t('Неоплаченные услуги')}</div>`;
-    debts.forEach(d => {
-      debtInner += `<div class="summary-row" style="font-size:13px">
-        <span>${esc(svcName(d.name))} × ${d.qty} ${esc(tUnit(d.unit))}</span>
-        <span class="val" style="color:var(--warn)">${fmt(d.debt)} ${t('сум')}</span>
-      </div>`;
-    });
-    debtInner += `<div class="summary-row" style="font-weight:700;color:var(--warn);margin-top:6px">
-      <span>${t('Итого долгов')}</span>
-      <span class="val">${fmt(totalDebt)} ${t('сум')}</span>
-    </div>
-    <div style="margin-top:10px">
-      <button class="mbtn" style="background:var(--warn);color:#fff;border-color:var(--warn);width:100%"
-        onclick="paySessionDebts()">${t('Оплатить долги по услугам')}</button>
-    </div>`;
-    html += `<div id="dlgSummaryDebtSection" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${debtInner}</div>`;
+  if ((s.additionalCharge || 0) > 0) {
+    // «Доплатить» — только когда часть уже была оплачена заранее; иначе это просто сумма к оплате
+    html += (s.paidAmount || 0) > 0
+      ? `<div class="charge-highlight">⚠️ ${t('Доплатить')}: ${fmt(s.additionalCharge)} ${t('сум')}</div>`
+      : `<div class="refund-highlight">💵 ${t('К оплате')}: ${fmt(s.additionalCharge)} ${t('сум')}</div>`;
   }
+
+  html += _summaryDebtBlock('session', 'Неоплаченные услуги этой сессии', sessionDebts,
+    s.totalServiceDebt || sessionDebts.reduce((a, d) => a + d.debt, 0), 'Оплатить долги по услугам');
+  html += _summaryDebtBlock('previous', 'Прошлые долги читателя', prevDebts,
+    s.totalPreviousDebt || prevDebts.reduce((a, d) => a + d.debt, 0), 'Оплатить прошлые долги');
 
   document.getElementById('dlgSummaryBody').innerHTML = html;
   openDlg('dlgSummary');
 }
 
-async function paySessionDebts() {
+async function paySummaryDebts(kind, btn) {
+  const ids = _summaryDebtIds[kind] || [];
+  if (!ids.length) return;
+  btn.disabled = true;
   try {
-    const result = await connection.invoke('PaySessionDebts', _summaryPcNumber, _summaryReaderId);
-    // Заменяем секцию долгов на сообщение об успешной оплате
-    const debtSection = document.getElementById('dlgSummaryDebtSection');
-    if (debtSection) {
-      const paid = result?.totalPaid || (typeof result === 'number' ? result : 0) || _summaryTotalDebt;
-      debtSection.innerHTML = `
-        <div style="margin-top:14px;padding:14px 16px;background:var(--free-bg);border:1px solid var(--free-ring);border-radius:10px;color:var(--free);font-weight:600;font-size:14px">
-          ✓ ${t('Долги оплачены')}: ${fmt(paid)} ${t('сум')}
-        </div>`;
-    } else {
-      toast(t('Долги оплачены'), 'good');
-    }
+    await connection.invoke('PayDebts', ids);
+    _summaryDebtIds[kind] = [];
+    const section = btn.closest('.summary-debts');
+    section.innerHTML = `
+      <div style="padding:14px 16px;background:var(--free-bg);border:1px solid var(--free-ring);border-radius:10px;color:var(--free);font-weight:600;font-size:14px">
+        ✓ ${t('Долги оплачены')}: ${fmt(Number(section.dataset.total) || 0)} ${t('сум')}
+      </div>`;
+  } catch (e) { btn.disabled = false; toast(t('Ошибка оплаты: ') + e, 'warn'); }
+}
+
+// Читатель с долгом не может начать сессию: оператор принимает оплату и отмечает долг оплаченным
+async function payReaderDebt(cardId, sum) {
+  if (!confirm(t('Отметить долг {sum} сум как оплаченный?', { sum: fmt(sum) }))) return;
+  try {
+    await connection.invoke('PayReaderDebts', cardId);
+    toast(t('Долг оплачен'), 'good');
+    _readerLookupState = null;
+    _readerLookedUpId = '';
+    await lookupReader();
   } catch (e) { toast(t('Ошибка оплаты: ') + e, 'warn'); }
 }
 
@@ -1949,7 +1986,7 @@ function renderFinanceSessions() {
           <td>${esc(s.userName||'—')}</td>
           <td>${fmtDur(s.durationSeconds||0)}</td>
           <td>${fmt(s.earnedAmount)}</td>
-          <td>${fmt(s.paidAmount)}</td>
+          <td>${fmt(Math.max(s.paidAmount || 0, s.earnedAmount || 0))}</td>
           <td>${s.refundAmount ? fmt(s.refundAmount) : '—'}</td>
           <td>${esc(s.operatorName||'—')}</td>
           <td>${fmtLocal(s.startTime)}</td>

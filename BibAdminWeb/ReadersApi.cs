@@ -34,6 +34,7 @@ namespace BibAdminWeb
                 await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
                 {
                     cardId       = reader.CardId,
+                    debt         = ServiceTransaction.ReaderDebt(reader.CardId),
                     fullName     = reader.FullName,
                     category     = reader.Category,
                     gender       = reader.Gender,

@@ -978,7 +978,7 @@ namespace BibAdminWeb
                 wsS.Cell(row, 4).Value = s.UserName;
                 wsS.Cell(row, 5).Value = $"{h:D2}:{m:D2}:{sec:D2}";
                 wsS.Cell(row, 6).Value = s.EarnedAmount;
-                wsS.Cell(row, 7).Value = s.PaidAmount;
+                wsS.Cell(row, 7).Value = Math.Max(s.PaidAmount, s.EarnedAmount);
                 wsS.Cell(row, 8).Value = s.RefundAmount;
                 wsS.Cell(row, 9).Value = s.OperatorName;
                 wsS.Cell(row, 10).Value = s.StartTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
