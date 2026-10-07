@@ -727,7 +727,8 @@ namespace BibAdminWeb
             var path   = ctx.Request.Path.Value ?? "";
             var method = ctx.Request.Method;
 
-            if (!path.StartsWith("/api/op/readers") && !path.StartsWith("/api/op/finance"))
+            if (!path.StartsWith("/api/op/readers") && !path.StartsWith("/api/op/finance")
+                && !path.StartsWith("/api/op/visits"))
             {
                 await next(ctx);
                 return;
@@ -758,6 +759,21 @@ namespace BibAdminWeb
                 var today = VisitStore.ForLocalDay(DateTime.Today);
                 today.Reverse();
                 await ctx.Response.WriteAsync(JsonSerializer.Serialize(today, _json));
+                return;
+            }
+            // Счётчики для вкладки «Посещения»: ручные отметки и все посещения (с ПК и услугами)
+            if (path == "/api/op/visits/summary" && method == "GET")
+            {
+                var day = DateTime.Today;
+                var monthStart = new DateTime(day.Year, day.Month, 1);
+                var marks = VisitStore.Snapshot().Select(v => v.CreatedAt.ToLocalTime()).ToList();
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
+                {
+                    marksToday = marks.Count(d => d.Date == day),
+                    marksMonth = marks.Count(d => d >= monthStart),
+                    visitsToday = VisitCalc.CountVisits(day, day.AddDays(1)),
+                    visitsMonth = VisitCalc.CountVisits(monthStart, monthStart.AddMonths(1))
+                }));
                 return;
             }
             if (path == "/api/op/visits" && method == "POST")

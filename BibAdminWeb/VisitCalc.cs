@@ -51,6 +51,17 @@ namespace BibAdminWeb
             return readerId.All(char.IsDigit);
         }
 
+        /// <summary>Число посещений за период по тем же правилам, что и в статистике.</summary>
+        public static int CountVisits(DateTime from, DateTime to)
+        {
+            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
+            var sessions = FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList();
+            var allSvc = ServiceTransaction.All
+                .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+            return Build(from, to, readerMap, sessions, allSvc).Visits.Count;
+        }
+
         public static Result Build(DateTime from, DateTime to, Dictionary<string, Reader> readerMap,
             List<SessionRecord> sessions, List<ServiceTransaction> allSvc)
         {

@@ -2617,7 +2617,26 @@ function confirmVisitRepeat() {
   addVisit(false, true);
 }
 
+// Счётчики над списком: ручные отметки и все посещения (вместе с ПК и услугами)
+async function loadVisitSummary() {
+  const box = document.getElementById('visitKpis');
+  try {
+    const r = await fetch('/api/op/visits/summary', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const s = await r.json();
+    const hint = esc(t('Вместе с сессиями за ПК и услугами. Идущие сейчас сессии попадут в счёт после завершения.'));
+    box.innerHTML = `
+      <div class="kpi"><div class="kpi-lbl">${t('Отмечено сегодня')}</div><div class="kpi-val">${s.marksToday}</div></div>
+      <div class="kpi"><div class="kpi-lbl">${t('Отмечено за месяц')}</div><div class="kpi-val">${s.marksMonth}</div></div>
+      <div class="kpi" title="${hint}"><div class="kpi-lbl">${t('Всего посещений сегодня')}</div><div class="kpi-val green">${s.visitsToday}</div></div>
+      <div class="kpi" title="${hint}"><div class="kpi-lbl">${t('Всего посещений за месяц')}</div><div class="kpi-val green">${s.visitsMonth}</div></div>`;
+  } catch {
+    box.innerHTML = '';
+  }
+}
+
 async function loadVisits() {
+  loadVisitSummary();
   const el = document.getElementById('visitsResult');
   try {
     const r = await fetch('/api/op/visits', { cache: 'no-store' });
