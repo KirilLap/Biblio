@@ -1944,15 +1944,31 @@ let _finSessions = [];
 let _finServices = [];
 let _finTab = 'sessions';
 
+// История за выбранный диапазон дат (по умолчанию сегодня)
 async function loadFinanceHistory() {
+  const range = _dateRange('finFrom', 'finTo');
+  const q = `?from=${range.from}&to=${range.to}`;
   const [rS, rSvc] = await Promise.all([
-    fetch('/api/op/finance/sessions').then(r => r.ok ? r.json() : []),
-    fetch('/api/op/finance/services').then(r => r.ok ? r.json() : [])
+    fetch('/api/op/finance/sessions' + q, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+    fetch('/api/op/finance/services' + q, { cache: 'no-store' }).then(r => r.ok ? r.json() : [])
   ]);
   _finSessions = Array.isArray(rS) ? rS : [];
   _finServices = Array.isArray(rSvc) ? rSvc : [];
   renderFinanceSessions();
   renderFinanceServices();
+  _updateFinanceCount();
+}
+
+function _updateFinanceCount() {
+  document.getElementById('finRangeCount').textContent =
+    t('Записей: {n}', { n: _finTab === 'services' ? _finServices.length : _finSessions.length });
+}
+
+function resetFinanceRange() {
+  const today = _ymd(new Date());
+  document.getElementById('finFrom').value = today;
+  document.getElementById('finTo').value = today;
+  loadFinanceHistory();
 }
 
 function switchFinanceTab(tab) {
@@ -1961,6 +1977,7 @@ function switchFinanceTab(tab) {
   document.getElementById('finTabServices').classList.toggle('active', tab === 'services');
   document.getElementById('financeSessionsPanel').style.display  = tab === 'sessions' ? '' : 'none';
   document.getElementById('financeServicesPanel').style.display  = tab === 'services' ? '' : 'none';
+  _updateFinanceCount();
 }
 
 function fmtDur(secs) {
@@ -2029,7 +2046,8 @@ function fmtLocal(iso) {
 }
 
 function exportFinanceXlsx() {
-  window.location.href = '/api/op/finance/export';
+  const range = _dateRange('finFrom', 'finTo');
+  window.location.href = `/api/op/finance/export?from=${range.from}&to=${range.to}`;
 }
 
 // ── Статусные цвета ──────────────────────────────────────────────────────────
@@ -2645,7 +2663,7 @@ async function addVisit(anonymous, force) {
   document.getElementById('visitComment').value = '';
   document.getElementById('visitReaderInfo').style.display = 'none';
   _visitLookup = null;
-  loadVisits();
+  resetVisitRange();
   document.getElementById('visitReaderId').focus();
 }
 
@@ -2654,17 +2672,47 @@ function confirmVisitRepeat() {
   addVisit(false, true);
 }
 
-// Список и счётчики: все посещения за сегодня — ручные отметки, сессии за ПК и услуги
+// Диапазон дат списка посещений (по умолчанию сегодня)
+function _ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function _dmy(s) { const p = s.split('-'); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s; }
+
+function _dateRange(fromId, toId) {
+  const today = _ymd(new Date());
+  const f = document.getElementById(fromId), tEl = document.getElementById(toId);
+  if (!f.value) f.value = today;
+  if (!tEl.value) tEl.value = f.value;
+  if (tEl.value < f.value) [f.value, tEl.value] = [tEl.value, f.value];
+  return { from: f.value, to: tEl.value, isToday: f.value === today && tEl.value === today };
+}
+
+function resetVisitRange() {
+  const today = _ymd(new Date());
+  document.getElementById('visitFrom').value = today;
+  document.getElementById('visitTo').value = today;
+  loadVisits();
+}
+
+function exportVisitsXlsx() {
+  const r = _dateRange('visitFrom', 'visitTo');
+  window.location.href = `/api/op/visits/export?from=${r.from}&to=${r.to}`;
+}
+
+// Список и счётчики: все посещения — ручные отметки, сессии за ПК и услуги
 async function loadVisits() {
   const el = document.getElementById('visitsResult');
+  const range = _dateRange('visitFrom', 'visitTo');
   try {
-    const r = await fetch('/api/op/visits', { cache: 'no-store' });
+    const r = await fetch(`/api/op/visits?from=${range.from}&to=${range.to}`, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     const data = await r.json();
     document.getElementById('visitKpis').innerHTML = `
       <div class="kpi"><div class="kpi-lbl">${t('Посещений сегодня')}</div><div class="kpi-val green">${data.visitsToday}</div></div>
       <div class="kpi"><div class="kpi-lbl">${t('Посещений за месяц')}</div><div class="kpi-val green">${data.visitsMonth}</div></div>`;
-    renderVisits(data.rows || []);
+    const rows = data.rows || [];
+    document.getElementById('visitListTitle').textContent = range.isToday ? t('Сегодня')
+      : (range.from === range.to ? _dmy(range.from) : `${_dmy(range.from)} — ${_dmy(range.to)}`);
+    document.getElementById('visitRangeCount').textContent = t('Посещений: {n}', { n: rows.length });
+    renderVisits(rows, range.from !== range.to);
   } catch {
     document.getElementById('visitKpis').innerHTML = '';
     el.innerHTML = `<div class="op-empty">${t('Ошибка загрузки')}</div>`;
@@ -2682,20 +2730,20 @@ function visitKindHtml(v) {
   return html;
 }
 
-function renderVisits(list) {
+function renderVisits(list, withDate) {
   const el = document.getElementById('visitsResult');
-  if (!list.length) { el.innerHTML = `<div class="op-empty">${t('Нет посещений за сегодня')}</div>`; return; }
+  if (!list.length) { el.innerHTML = `<div class="op-empty">${t('Нет посещений за выбранный период')}</div>`; return; }
   const showPurpose = !!sessionFields.showVisitPurpose;
   el.innerHTML = `
     <table class="dtable">
       <thead><tr>
-        <th>${t('Время')}</th><th>${t('№ билета')}</th><th>${t('ФИО')}</th><th>${t('Тип')}</th>
+        <th>${t(withDate ? 'Дата' : 'Время')}</th><th>${t('№ билета')}</th><th>${t('ФИО')}</th><th>${t('Тип')}</th>
         ${showPurpose ? `<th>${t('Цель визита')}</th><th>${t('Комментарий')}</th>` : ''}
         <th>${t('Оператор')}</th>
       </tr></thead>
       <tbody>
         ${list.map(v => `<tr>
-          <td class="mono">${fmtClock(new Date(v.at))}</td>
+          <td class="mono">${withDate ? fmtLocal(v.at) : fmtClock(new Date(v.at))}</td>
           <td><code style="font-size:11px">${esc(v.readerId || '—')}</code></td>
           <td>${esc(v.readerName || (v.readerId ? '—' : t('Без билета')))}</td>
           <td>${visitKindHtml(v)}</td>

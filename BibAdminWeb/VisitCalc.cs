@@ -22,6 +22,7 @@ namespace BibAdminWeb
         public sealed class VisitRow
         {
             public DateTime At { get; set; }               // когда пришёл (местное время)
+            public long? MarkId { get; set; }              // id ручной отметки оператора (для удаления в админке)
             public string ReaderId { get; set; } = "";
             public string ReaderName { get; set; } = "";
             public bool HasMark { get; set; }              // оператор отметил вручную
@@ -239,6 +240,7 @@ namespace BibAdminWeb
                     {
                         // Посещение уже посчитано по сессии/услуге — отметка только дополняет строку
                         host.Row.HasMark = true;
+                        host.Row.MarkId ??= v.Id;
                         if (at < host.Row.At) host.Row.At = at;
                         if (host.Row.Purpose.Length == 0) host.Row.Purpose = v.Purpose ?? "";
                         if (host.Row.Comment.Length == 0) host.Row.Comment = v.Comment ?? "";
@@ -250,7 +252,7 @@ namespace BibAdminWeb
                 res.Visits.Add((id, rd, isReg, 0, new List<ServiceTransaction>()));
                 res.Rows.Add(new VisitRow
                 {
-                    At = at, ReaderId = id, ReaderName = Name(rd, v.ReaderName), HasMark = true,
+                    At = at, ReaderId = id, ReaderName = Name(rd, v.ReaderName), HasMark = true, MarkId = v.Id,
                     OperatorName = v.OperatorName ?? "", Purpose = v.Purpose ?? "", Comment = v.Comment ?? ""
                 });
                 res.ManualOnlyVisits++;

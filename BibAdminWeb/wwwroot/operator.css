@@ -816,7 +816,10 @@ a { text-decoration: none; color: inherit; }
   background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-card);
 }
 .visit-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.visit-list-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.visit-list-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+/* Выбор диапазона дат (Посещения, История) */
+.date-range { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; color: var(--ink-3); }
+.date-range .tinput { width: auto; flex: 0 0 auto; padding: 6px 10px; font-size: 13px; }
 .visit-list-title { font-size: 15px; font-weight: 700; }
 .visit-count { font-size: 12px; color: var(--ink-3); font-weight: 600; }
 .visit-quick-add {

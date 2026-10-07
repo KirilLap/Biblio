@@ -80,16 +80,14 @@ namespace BibAdminWeb
             // ─── Посещения, отмеченные оператором вручную ─────────────────────
             if (path == "/api/admin/visits" && method == "GET")
             {
-                var fromStr = ctx.Request.Query["from"].ToString();
-                var all = VisitStore.Snapshot();
-                if (DateTime.TryParse(fromStr, System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.RoundtripKind, out var fromDt))
-                {
-                    var fromUtc = fromDt.ToUniversalTime();
-                    all = all.Where(v => v.CreatedAt >= fromUtc).ToList();
-                }
-                all.Reverse();
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(all, _json));
+                if (!TryDateRange(ctx, out var vFrom, out var vTo)) { vFrom = DateTime.Today; vTo = vFrom.AddDays(1); }
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(VisitCalc.BuildLive(vFrom, vTo).Rows, _json));
+                return;
+            }
+            if (path == "/api/admin/visits/export" && method == "GET")
+            {
+                if (!TryDateRange(ctx, out var eFrom, out var eTo)) { eFrom = DateTime.Today; eTo = eFrom.AddDays(1); }
+                await WriteVisitsExcel(ctx, eFrom, eTo);
                 return;
             }
             if (path.StartsWith("/api/admin/visits/") && method == "DELETE")
@@ -754,18 +752,26 @@ namespace BibAdminWeb
             }
 
             // ─── Operator: посещения читального зала (ручная отметка) ────────
-            // Все посещения за сегодня (отметки, сессии, услуги, идущие сейчас сессии) и счётчики
+            // Посещения: счётчики за сегодня и месяц + список за выбранный диапазон дат (по умолчанию сегодня)
             if (path == "/api/op/visits" && method == "GET")
             {
                 var day = DateTime.Today;
                 var monthStart = new DateTime(day.Year, day.Month, 1);
-                var todayRes = VisitCalc.BuildLive(day, day.AddDays(1));
+                if (!TryDateRange(ctx, out var vFrom, out var vTo)) { vFrom = day; vTo = day.AddDays(1); }
+                var rangeRes = VisitCalc.BuildLive(vFrom, vTo);
+                bool isToday = vFrom == day && vTo == day.AddDays(1);
                 await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
                 {
-                    visitsToday = todayRes.Visits.Count,
+                    visitsToday = isToday ? rangeRes.Visits.Count : VisitCalc.BuildLive(day, day.AddDays(1)).Visits.Count,
                     visitsMonth = VisitCalc.BuildLive(monthStart, monthStart.AddMonths(1)).Visits.Count,
-                    rows = todayRes.Rows
+                    rows = rangeRes.Rows
                 }, _json));
+                return;
+            }
+            if (path == "/api/op/visits/export" && method == "GET")
+            {
+                if (!TryDateRange(ctx, out var eFrom, out var eTo)) { eFrom = DateTime.Today; eTo = eFrom.AddDays(1); }
+                await WriteVisitsExcel(ctx, eFrom, eTo);
                 return;
             }
             if (path == "/api/op/visits" && method == "POST")
@@ -863,7 +869,7 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
                     return;
                 }
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(FinanceStore.Sessions, _json));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(SessionsInRange(ctx), _json));
                 return;
             }
 
@@ -876,7 +882,7 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
                     return;
                 }
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ServiceTransaction.All, _json));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ServicesInRange(ctx), _json));
                 return;
             }
 
@@ -889,7 +895,7 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
                     return;
                 }
-                var bytes = BuildFinanceExcel(FinanceStore.Sessions, ServiceTransaction.All);
+                var bytes = BuildFinanceExcel(SessionsInRange(ctx), ServicesInRange(ctx));
                 ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
                 ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 await ctx.Response.Body.WriteAsync(bytes);
@@ -1024,6 +1030,96 @@ namespace BibAdminWeb
             if (!string.IsNullOrWhiteSpace(s.UpdatesPath))
                 return s.UpdatesPath.TrimEnd('\\', '/');
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+        }
+
+        // Диапазон дат из запроса: ?from=yyyy-MM-dd&to=yyyy-MM-dd, обе даты включительно.
+        // false — если from не задан. На выходе to — исключающая граница (начало следующего дня).
+        private static bool TryDateRange(HttpContext ctx, out DateTime from, out DateTime to)
+        {
+            from = to = default;
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var none = System.Globalization.DateTimeStyles.None;
+            if (!DateTime.TryParseExact(ctx.Request.Query["from"].ToString(), "yyyy-MM-dd", inv, none, out var f)) return false;
+            if (!DateTime.TryParseExact(ctx.Request.Query["to"].ToString(), "yyyy-MM-dd", inv, none, out var t)) t = f;
+            if (t < f) (f, t) = (t, f);
+            from = f.Date; to = t.Date.AddDays(1);
+            return true;
+        }
+
+        // История сессий и услуг за диапазон из запроса (без диапазона — вся история)
+        private static List<SessionRecord> SessionsInRange(HttpContext ctx)
+            => TryDateRange(ctx, out var from, out var to)
+                ? FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList()
+                : FinanceStore.Sessions.ToList();
+
+        private static List<ServiceTransaction> ServicesInRange(HttpContext ctx)
+            => TryDateRange(ctx, out var from, out var to)
+                ? ServiceTransaction.All.Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList()
+                : ServiceTransaction.All.ToList();
+
+        // ── XLSX-отчёт по посещениям за период ────────────────────────────────
+        private static async Task WriteVisitsExcel(HttpContext ctx, DateTime from, DateTime toExclusive)
+        {
+            var rows = VisitCalc.BuildLive(from, toExclusive).Rows.OrderBy(r => r.At).ToList();
+            var lastDay = toExclusive.AddDays(-1);
+            string period = from.Date == lastDay.Date ? $"{from:dd.MM.yyyy}" : $"{from:dd.MM.yyyy} — {lastDay:dd.MM.yyyy}";
+
+            using var wb = new XLWorkbook();
+            var ws = wb.AddWorksheet("Посещения");
+            ws.Cell(1, 1).Value = $"Посещения за {period}";
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 14;
+            ws.Cell(2, 1).Value = "Всего посещений:";
+            ws.Cell(2, 2).Value = rows.Count;
+            ws.Cell(2, 2).Style.Font.Bold = true;
+
+            string[] hdr = { "Дата", "Время", "№ билета", "ФИО", "Тип", "Цель визита", "Комментарий", "Оператор" };
+            for (int i = 0; i < hdr.Length; i++)
+            {
+                var c = ws.Cell(4, i + 1);
+                c.Value = hdr[i];
+                c.Style.Font.Bold = true;
+                c.Style.Fill.BackgroundColor = XLColor.FromArgb(0x2D, 0x2D, 0x5B);
+                c.Style.Font.FontColor = XLColor.White;
+            }
+            int row = 5;
+            foreach (var r in rows)
+            {
+                var kind = new List<string>();
+                if (r.HasMark) kind.Add("Посещение");
+                if (r.HasSession) kind.Add(string.IsNullOrEmpty(r.PcNumber) ? "ПК" : r.PcNumber);
+                if (r.HasService) kind.Add("Услуга");
+                ws.Cell(row, 1).Value = r.At.ToString("dd.MM.yyyy");
+                ws.Cell(row, 2).Value = r.At.ToString("HH:mm");
+                ws.Cell(row, 3).Value = r.ReaderId;
+                ws.Cell(row, 4).Value = string.IsNullOrEmpty(r.ReaderName) && string.IsNullOrEmpty(r.ReaderId) ? "Без билета" : r.ReaderName;
+                ws.Cell(row, 5).Value = string.Join(" + ", kind) + (r.Active ? " (сейчас за ПК)" : "");
+                ws.Cell(row, 6).Value = r.Purpose;
+                ws.Cell(row, 7).Value = r.Comment;
+                ws.Cell(row, 8).Value = r.OperatorName;
+                row++;
+            }
+            ws.Columns().AdjustToContents();
+
+            var wsD = wb.AddWorksheet("По дням");
+            wsD.Cell(1, 1).Value = "Дата"; wsD.Cell(1, 2).Value = "Посещений";
+            wsD.Row(1).Style.Font.Bold = true;
+            int dr = 2;
+            foreach (var g in rows.GroupBy(r => r.At.Date).OrderBy(g => g.Key))
+            {
+                wsD.Cell(dr, 1).Value = g.Key.ToString("dd.MM.yyyy");
+                wsD.Cell(dr, 2).Value = g.Count();
+                dr++;
+            }
+            wsD.Cell(dr, 1).Value = "Итого"; wsD.Cell(dr, 2).Value = rows.Count;
+            wsD.Row(dr).Style.Font.Bold = true;
+            wsD.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=visits_{from:yyyyMMdd}_{lastDay:yyyyMMdd}.xlsx";
+            await ctx.Response.Body.WriteAsync(ms.ToArray());
         }
 
         private static async Task<string> ReadBody(HttpContext ctx)

@@ -2657,45 +2657,68 @@ function removeVisitPurpose(i) {
   renderVisitPurposesList();
 }
 
-// ─── Посещения: список ручных отметок (Финансы → Посещения) ───────────────────
+// ─── Посещения (Финансы → Посещения): все посещения, как на вкладке оператора ─
+function _visYmd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+function _adminVisitRange() {
+  const period = document.querySelector('input[name=finPeriod]:checked')?.value || 'today';
+  const today = new Date();
+  return { from: _visYmd(periodFrom(period) || today), to: _visYmd(today) };
+}
+
 async function loadAdminVisits() {
   const el = document.getElementById('finTable');
-  const period = document.querySelector('input[name=finPeriod]:checked')?.value || 'today';
-  const from = periodFrom(period);
+  const r = _adminVisitRange();
   el.innerHTML = '<div class="fin-empty">Загрузка…</div>';
   try {
-    const url = '/api/admin/visits' + (from ? '?from=' + encodeURIComponent(from.toISOString()) : '');
-    const list = await fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.json() : []);
+    const list = await fetch(`/api/admin/visits?from=${r.from}&to=${r.to}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : []);
     if (finTab !== 'visits') return;
     el.innerHTML = renderAdminVisitsTable(list);
+    document.getElementById('statCount').textContent = list.length;
   } catch {
     el.innerHTML = '<div class="fin-empty">Ошибка загрузки</div>';
   }
 }
 
+function exportAdminVisits() {
+  const r = _adminVisitRange();
+  window.open(`/api/admin/visits/export?from=${r.from}&to=${r.to}`, '_blank');
+}
+
 function renderAdminVisitsTable(list) {
-  if (!list.length) return '<div class="fin-empty">Нет ручных отметок посещений за выбранный период</div>';
-  const cols = '120px 130px 1fr 150px 1fr 140px 40px';
+  const excelBtn = '<button class="btn-sm" onclick="exportAdminVisits()">Отчёт Excel</button>';
+  if (!list.length) return `<div class="fin-empty">Нет посещений за выбранный период</div>`;
+  const cols = '120px 130px 1fr 1fr 130px 1fr 130px 40px';
   let html = `<div class="fin-table-header" style="grid-template-columns:${cols}">
-    <span>Дата</span><span>№ билета</span><span>ФИО</span><span>Цель</span><span>Комментарий</span><span>Оператор</span><span></span>
+    <span>Дата</span><span>№ билета</span><span>ФИО</span><span>Тип</span><span>Цель</span><span>Комментарий</span><span>Оператор</span><span></span>
   </div>`;
   list.forEach(v => {
+    const kind = [];
+    if (v.hasMark) kind.push('Посещение');
+    if (v.hasSession) kind.push(esc(v.pcNumber || 'ПК'));
+    if (v.hasService) kind.push('Услуга');
+    // Удалить можно только ручную отметку оператора; сессии и услуги удаляются в своих вкладках
+    const del = v.markId
+      ? `<button class="del-btn" title="Удалить ручную отметку оператора" onclick="deleteAdminVisit(${Number(v.markId)})">✕</button>`
+      : '<span></span>';
     html += `<div class="fin-row" style="grid-template-columns:${cols}">
-      <span style="color:#555">${fmtDate(v.createdAt)}</span>
+      <span style="color:#555">${fmtDate(v.at)}</span>
       <span>${esc(v.readerId || '—')}</span>
-      <b>${esc(v.readerId ? (v.readerName || '—') : 'Без билета')}</b>
+      <b>${esc(v.readerName || (v.readerId ? '—' : 'Без билета'))}</b>
+      <span>${kind.join(' + ')}${v.active ? ' <span style="color:var(--limit);font-size:11px">· сейчас за ПК</span>' : ''}</span>
       <span>${esc(v.purpose || '—')}</span>
       <span>${esc(v.comment || '—')}</span>
       <span>${esc(v.operatorName || '—')}</span>
-      <button class="del-btn" title="Удалить отметку" onclick="deleteAdminVisit(${Number(v.id)})">✕</button>
+      ${del}
     </div>`;
   });
-  html += `<div style="padding:10px 14px;font-size:12px;color:var(--ink-3)">Отметок: ${list.length}</div>`;
+  html += `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;font-size:12px;color:var(--ink-3)">
+    <span>Посещений: ${list.length}</span>${excelBtn}</div>`;
   return html;
 }
 
 async function deleteAdminVisit(id) {
-  if (!confirm('Удалить эту отметку посещения? Она перестанет учитываться в статистике.')) return;
+  if (!confirm('Удалить ручную отметку оператора? Если читатель в этот день сидел за ПК или брал услугу, посещение останется в списке.')) return;
   try {
     const r = await fetch('/api/admin/visits/' + id, { method: 'DELETE' });
     if (!r.ok) throw new Error(r.status);
