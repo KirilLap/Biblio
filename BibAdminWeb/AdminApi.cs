@@ -52,6 +52,21 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Переводы интерфейса оператора (UZ) ───────────────────────────
+            if (path == "/api/admin/i18n/uz" && method == "GET")
+            {
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(TranslationStore.Load()));
+                return;
+            }
+            if (path == "/api/admin/i18n/uz" && method == "POST")
+            {
+                var body = await ReadBody(ctx);
+                var map = JsonSerializer.Deserialize<Dictionary<string, string>>(body) ?? new();
+                TranslationStore.Save(map);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Finance: sessions ────────────────────────────────────────────
             if (path == "/api/admin/finance/sessions" && method == "GET")
             {

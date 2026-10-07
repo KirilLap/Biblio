@@ -234,6 +234,7 @@
       <button class="stab active" onclick="showSettingsTab('main')">Основные</button>
       <button class="stab" onclick="showSettingsTab('screen')">Экран ПК</button>
       <button class="stab" onclick="showSettingsTab('services')">Услуги</button>
+      <button class="stab" onclick="showSettingsTab('translations')">Переводы</button>
       <button class="stab" onclick="showSettingsTab('system')">Система</button>
     </div>
 
@@ -484,6 +485,22 @@
       <div class="settings-card">
         <h3>Услуги <button class="btn-sm" onclick="addService()">+ Добавить</button></h3>
         <div id="servicesList"></div>
+      </div>
+    </div>
+
+    <!-- ── Переводы ── -->
+    <div class="stab-panel" id="stab-translations">
+      <div class="settings-card">
+        <h3>Перевод интерфейса оператора — узбекский</h3>
+        <p class="settings-hint">Слева русский текст, справа — то, что видит оператор при выборе языка UZ. Изменённые строки подсвечены. Слова в фигурных скобках (например <b>{pc}</b>, <b>{sum}</b>, <b>{time}</b>) — это подстановки: их нужно оставить как есть, можно только переставить. Названия услуг переводятся на вкладке «Услуги». Оператор увидит правки после обновления страницы (F5).</p>
+        <div class="tr-toolbar">
+          <input type="text" id="trSearch" placeholder="Поиск по русскому или узбекскому тексту…" oninput="filterTranslations(this.value)">
+          <label class="tr-only"><input type="checkbox" id="trOnlyChanged" onchange="filterTranslations()"> только изменённые</label>
+          <span id="trCount" class="tr-count"></span>
+          <span id="trSaved" class="saved-badge" style="display:none">✓ Сохранено</span>
+          <button class="btn btn-primary" onclick="saveTranslations()">Сохранить переводы</button>
+        </div>
+        <div id="trList"><div class="settings-hint">Загрузка…</div></div>
       </div>
     </div>
 
@@ -1298,6 +1315,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+<script src="/i18n-uz.js"></script>
 <script src="/admin.js"></script>
 
 <!-- Folder picker modal -->

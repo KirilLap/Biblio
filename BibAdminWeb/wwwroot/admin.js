@@ -188,6 +188,7 @@ function showSettingsTab(name) {
   document.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
   document.querySelector(`.stab[onclick*="'${name}'"]`).classList.add('active');
   document.getElementById('stab-' + name).classList.add('active');
+  if (name === 'translations' && !_trLoaded) loadTranslations();
 }
 
 function showPage(name) {
@@ -2403,6 +2404,130 @@ function addService() {
 function removeService(i) {
   settings.services.splice(i, 1);
   renderServicesList();
+}
+
+// ─── Переводы интерфейса оператора (UZ) ───────────────────────────────────────
+// Встроенный словарь — I18N_UZ_SECTIONS из i18n-uz.js. На сервере хранятся только
+// строки, которые здесь изменили (data\translations_uz.json).
+let _trLoaded = false;
+let _trKeys = [];        // индекс строки → русский ключ
+let _trSaved = {};       // правки, сохранённые на сервере
+
+async function loadTranslations() {
+  const list = document.getElementById('trList');
+  if (typeof I18N_UZ_SECTIONS === 'undefined') { list.innerHTML = '<div class="settings-hint">Словарь i18n-uz.js не загружен</div>'; return; }
+  try {
+    _trSaved = await fetch('/api/admin/i18n/uz').then(r => r.ok ? r.json() : {});
+  } catch { _trSaved = {}; }
+  _trLoaded = true;
+  renderTranslations();
+}
+
+function renderTranslations() {
+  const list = document.getElementById('trList');
+  _trKeys = [];
+  let html = '';
+  I18N_UZ_SECTIONS.forEach(([title, items]) => {
+    html += `<div class="tr-sec">${esc(title)}</div>`;
+    Object.keys(items).forEach(key => {
+      const i = _trKeys.push(key) - 1;
+      const def = items[key];
+      const cur = Object.prototype.hasOwnProperty.call(_trSaved, key) ? _trSaved[key] : def;
+      html += `<div class="tr-row${cur !== def ? ' tr-mod' : ''}" data-ti="${i}">
+        <div class="tr-ru">${esc(key)}</div>
+        <input type="text" value="${esc(cur)}" data-ti="${i}" oninput="onTranslationInput(${i})">
+        <button class="tr-reset" title="Вернуть встроенный перевод: ${esc(def)}" onclick="resetTranslation(${i})">↺</button>
+      </div>`;
+    });
+  });
+  list.innerHTML = html;
+  filterTranslations();
+}
+
+function _trDefault(key) {
+  for (const [, items] of I18N_UZ_SECTIONS) if (Object.prototype.hasOwnProperty.call(items, key)) return items[key];
+  return '';
+}
+
+function _trPlaceholders(s) { return (s.match(/\{\w+\}/g) || []).sort().join(' '); }
+
+function onTranslationInput(i) {
+  const row = document.querySelector(`.tr-row[data-ti="${i}"]`);
+  const inp = row.querySelector('input');
+  const key = _trKeys[i];
+  row.classList.toggle('tr-mod', inp.value !== _trDefault(key));
+  row.classList.toggle('tr-bad', !!inp.value.trim() && _trPlaceholders(inp.value) !== _trPlaceholders(key));
+  _updateTrCount();
+}
+
+function resetTranslation(i) {
+  const row = document.querySelector(`.tr-row[data-ti="${i}"]`);
+  row.querySelector('input').value = _trDefault(_trKeys[i]);
+  onTranslationInput(i);
+}
+
+function filterTranslations(q) {
+  if (q === undefined) q = document.getElementById('trSearch').value;
+  q = q.toLowerCase().trim();
+  const onlyChanged = document.getElementById('trOnlyChanged').checked;
+  document.querySelectorAll('#trList .tr-row').forEach(row => {
+    const key = _trKeys[row.dataset.ti];
+    const val = row.querySelector('input').value;
+    const hit = !q || key.toLowerCase().includes(q) || val.toLowerCase().includes(q);
+    row.style.display = hit && (!onlyChanged || row.classList.contains('tr-mod')) ? '' : 'none';
+  });
+  // Заголовок раздела прячем, если в нём не осталось видимых строк
+  document.querySelectorAll('#trList .tr-sec').forEach(sec => {
+    let el = sec.nextElementSibling, any = false;
+    while (el && !el.classList.contains('tr-sec')) { if (el.style.display !== 'none') any = true; el = el.nextElementSibling; }
+    sec.style.display = any ? '' : 'none';
+  });
+  _updateTrCount();
+}
+
+function _updateTrCount() {
+  const n = document.querySelectorAll('#trList .tr-row.tr-mod').length;
+  document.getElementById('trCount').textContent = n ? `изменено: ${n}` : '';
+}
+
+async function saveTranslations() {
+  const out = {};
+  let bad = null;
+  document.querySelectorAll('#trList .tr-row').forEach(row => {
+    const key = _trKeys[row.dataset.ti];
+    const inp = row.querySelector('input');
+    let val = inp.value;
+    if (!val.trim()) { val = _trDefault(key); inp.value = val; }
+    // «Ошибка: » — пробел после двоеточия нужен, дальше подставляется текст
+    if (/: $/.test(key) && !/: $/.test(val)) { val = val.replace(/[\s:]*$/, '') + ': '; inp.value = val; }
+    if (_trPlaceholders(val) !== _trPlaceholders(key)) { row.classList.add('tr-bad'); if (!bad) bad = row; return; }
+    row.classList.remove('tr-bad');
+    row.classList.toggle('tr-mod', val !== _trDefault(key));
+    if (val !== _trDefault(key)) out[key] = val;
+  });
+  if (bad) {
+    document.getElementById('trSearch').value = '';
+    document.getElementById('trOnlyChanged').checked = false;
+    filterTranslations('');
+    bad.scrollIntoView({ block: 'center' });
+    toast('Не сохранено: в отмеченных строках потеряны или изменены слова в фигурных скобках', 'warn');
+    return;
+  }
+  try {
+    const r = await fetch('/api/admin/i18n/uz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(out)
+    });
+    if (!r.ok) throw new Error(r.status);
+    _trSaved = out;
+    _updateTrCount();
+    const badge = document.getElementById('trSaved');
+    badge.style.display = 'inline';
+    setTimeout(() => badge.style.display = 'none', 2000);
+  } catch (e) {
+    toast('Ошибка сохранения переводов: ' + e.message, 'warn');
+  }
 }
 
 // ─── Operators ────────────────────────────────────────────────────────────────

@@ -670,6 +670,33 @@ body {
 .service-row .del-btn:hover { color: var(--locked); }
 .service-chk { display: flex; align-items: center; justify-content: center; }
 
+/* ── Переводы (Настройки → Переводы) ────────────────────────────────────────── */
+.tr-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 14px; }
+.tr-toolbar input[type="text"] {
+  flex: 1; min-width: 220px;
+  background: var(--card-muted); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 10px; color: var(--ink); font-size: 13px; outline: none;
+}
+.tr-toolbar input[type="text"]:focus { border-color: var(--accent); }
+.tr-only { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); white-space: nowrap; cursor: pointer; }
+.tr-count { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.tr-sec {
+  margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+  font-size: 12px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em;
+}
+.tr-row { display: grid; grid-template-columns: 1fr 1fr 30px; gap: 10px; align-items: center; margin-bottom: 6px; }
+.tr-ru { font-size: 13px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tr-row input {
+  background: var(--card-muted); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 10px; color: var(--ink); font-size: 13px; width: 100%; outline: none;
+}
+.tr-row input:focus { border-color: var(--accent); }
+.tr-row.tr-mod input { border-color: var(--accent); background: var(--accent-soft); }
+.tr-row.tr-bad input { border-color: var(--locked); background: var(--locked-bg); }
+.tr-reset { visibility: hidden; background: none; border: none; color: var(--ink-3); cursor: pointer; font-size: 16px; }
+.tr-row.tr-mod .tr-reset { visibility: visible; }
+.tr-reset:hover { color: var(--accent); }
+
 /* ── Mode tabs (System settings update buttons) ─────────────────────────────── */
 .mode-tab-wrap {
   display: flex;
