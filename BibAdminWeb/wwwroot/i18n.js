@@ -10,11 +10,21 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 // Словарь I18N_UZ лежит в i18n-uz.js (подключается перед этим файлом).
-// Правки из админки (Настройки → Переводы) приходят отдельным скриптом /api/i18n/uz.js
-if (typeof window !== 'undefined' && window.I18N_UZ_OVERRIDES) {
-  for (const [k, v] of Object.entries(window.I18N_UZ_OVERRIDES)) {
-    if (typeof v === 'string' && v.trim()) I18N_UZ[k] = v;
+// Правки из админки (Настройки → Переводы) приходят отдельным скриптом /api/i18n/overrides.js:
+// узбекские ложатся поверх словаря, русские заменяют текст, написанный в коде.
+const I18N_RU = {};
+if (typeof window !== 'undefined') {
+  for (const [dict, src] of [[I18N_RU, window.I18N_RU_OVERRIDES], [I18N_UZ, window.I18N_UZ_OVERRIDES]]) {
+    for (const [k, v] of Object.entries(src || {})) {
+      if (typeof v === 'string' && v.trim()) dict[k] = v;
+    }
   }
+}
+
+function _i18nLookup(s) {
+  const has = (d, k) => Object.prototype.hasOwnProperty.call(d, k);
+  if (_lang === 'uz' && has(I18N_UZ, s)) return I18N_UZ[s];
+  return has(I18N_RU, s) ? I18N_RU[s] : s;
 }
 
 // Строки с сервера, в которые уже подставлены значения
@@ -47,16 +57,16 @@ function getLang() { return _lang; }
 
 // Перевод строки. vars — подстановки для {имя}.
 function t(s, vars) {
-  let r = s;
-  if (_lang === 'uz' && typeof s === 'string' && Object.prototype.hasOwnProperty.call(I18N_UZ, s)) r = I18N_UZ[s];
+  let r = typeof s === 'string' ? _i18nLookup(s) : s;
   if (vars && typeof r === 'string') r = r.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   return r;
 }
 
 // Перевод строки, пришедшей с сервера (ошибки, подписи в статистике)
 function tServer(s) {
-  if (_lang !== 'uz' || typeof s !== 'string') return s;
-  if (Object.prototype.hasOwnProperty.call(I18N_UZ, s)) return I18N_UZ[s];
+  if (typeof s !== 'string') return s;
+  const r = _i18nLookup(s);
+  if (r !== s || _lang !== 'uz') return r;
   for (const [re, tpl] of I18N_UZ_PATTERNS) {
     const m = s.match(re);
     if (m) return tpl.replace(/\{(\d)\}/g, (x, i) => m[+i]);
@@ -113,7 +123,7 @@ function tPeriod(s) {
 
 // Переводит текст, уже написанный в разметке страницы (один раз при загрузке)
 function i18nApplyStatic(root) {
-  if (_lang === 'ru' || !root) return;
+  if (!root || (_lang === 'ru' && !Object.keys(I18N_RU).length)) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);

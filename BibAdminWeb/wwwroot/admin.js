@@ -2406,63 +2406,73 @@ function removeService(i) {
   renderServicesList();
 }
 
-// ─── Переводы интерфейса оператора (UZ) ───────────────────────────────────────
-// Встроенный словарь — I18N_UZ_SECTIONS из i18n-uz.js. На сервере хранятся только
-// строки, которые здесь изменили (data\translations_uz.json).
+// ─── Тексты интерфейса оператора (RU / UZ) ────────────────────────────────────
+// Список строк — I18N_UZ_SECTIONS из i18n-uz.js. На сервере хранятся только строки,
+// которые здесь изменили (data\translations_ru.json и data\translations_uz.json).
 let _trLoaded = false;
-let _trKeys = [];        // индекс строки → русский ключ
-let _trSaved = {};       // правки, сохранённые на сервере
+let _trKeys = [];                    // индекс строки → исходная русская строка (ключ)
+let _trSaved = { ru: {}, uz: {} };   // правки, сохранённые на сервере
 
 async function loadTranslations() {
   const list = document.getElementById('trList');
   if (typeof I18N_UZ_SECTIONS === 'undefined') { list.innerHTML = '<div class="settings-hint">Словарь i18n-uz.js не загружен</div>'; return; }
-  try {
-    _trSaved = await fetch('/api/admin/i18n/uz').then(r => r.ok ? r.json() : {});
-  } catch { _trSaved = {}; }
+  const get = lang => fetch('/api/admin/i18n/' + lang).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  [_trSaved.ru, _trSaved.uz] = await Promise.all([get('ru'), get('uz')]);
   _trLoaded = true;
   renderTranslations();
 }
 
-function renderTranslations() {
-  const list = document.getElementById('trList');
-  _trKeys = [];
-  let html = '';
-  I18N_UZ_SECTIONS.forEach(([title, items]) => {
-    html += `<div class="tr-sec">${esc(title)}</div>`;
-    Object.keys(items).forEach(key => {
-      const i = _trKeys.push(key) - 1;
-      const def = items[key];
-      const cur = Object.prototype.hasOwnProperty.call(_trSaved, key) ? _trSaved[key] : def;
-      html += `<div class="tr-row${cur !== def ? ' tr-mod' : ''}" data-ti="${i}">
-        <div class="tr-ru">${esc(key)}</div>
-        <input type="text" value="${esc(cur)}" data-ti="${i}" oninput="onTranslationInput(${i})">
-        <button class="tr-reset" title="Вернуть встроенный перевод: ${esc(def)}" onclick="resetTranslation(${i})">↺</button>
-      </div>`;
-    });
-  });
-  list.innerHTML = html;
-  filterTranslations();
-}
-
-function _trDefault(key) {
+// Встроенный текст: для русского — сама исходная строка, для узбекского — из словаря
+function _trDefault(lang, key) {
+  if (lang === 'ru') return key;
   for (const [, items] of I18N_UZ_SECTIONS) if (Object.prototype.hasOwnProperty.call(items, key)) return items[key];
   return '';
 }
 
 function _trPlaceholders(s) { return (s.match(/\{\w+\}/g) || []).sort().join(' '); }
 
-function onTranslationInput(i) {
-  const row = document.querySelector(`.tr-row[data-ti="${i}"]`);
-  const inp = row.querySelector('input');
-  const key = _trKeys[i];
-  row.classList.toggle('tr-mod', inp.value !== _trDefault(key));
-  row.classList.toggle('tr-bad', !!inp.value.trim() && _trPlaceholders(inp.value) !== _trPlaceholders(key));
-  _updateTrCount();
+function renderTranslations() {
+  const list = document.getElementById('trList');
+  _trKeys = [];
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  let html = `<div class="tr-row tr-head"><div>Исходный текст</div><div>Русский</div><div>Узбекский</div><div></div></div>`;
+  I18N_UZ_SECTIONS.forEach(([title, items]) => {
+    html += `<div class="tr-sec">${esc(title)}</div>`;
+    Object.keys(items).forEach(key => {
+      const i = _trKeys.push(key) - 1;
+      const ru = has(_trSaved.ru, key) ? _trSaved.ru[key] : key;
+      const uz = has(_trSaved.uz, key) ? _trSaved.uz[key] : items[key];
+      html += `<div class="tr-row" data-ti="${i}">
+        <div class="tr-ru">${esc(key)}</div>
+        <input type="text" value="${esc(ru)}" data-lang="ru" oninput="onTranslationInput(${i})">
+        <input type="text" value="${esc(uz)}" data-lang="uz" oninput="onTranslationInput(${i})">
+        <button class="tr-reset" title="Вернуть встроенный текст в обеих колонках" onclick="resetTranslation(${i})">↺</button>
+      </div>`;
+    });
+  });
+  list.innerHTML = html;
+  _trKeys.forEach((_, i) => onTranslationInput(i, true));
+  filterTranslations();
+}
+
+function _trRow(i) { return document.querySelector(`#trList .tr-row[data-ti="${i}"]`); }
+
+function onTranslationInput(i, quiet) {
+  const row = _trRow(i), key = _trKeys[i];
+  let mod = false;
+  row.querySelectorAll('input').forEach(inp => {
+    const isMod = inp.value !== _trDefault(inp.dataset.lang, key);
+    inp.classList.toggle('mod', isMod);
+    inp.classList.toggle('bad', !!inp.value.trim() && _trPlaceholders(inp.value) !== _trPlaceholders(key));
+    mod = mod || isMod;
+  });
+  row.classList.toggle('tr-mod', mod);
+  if (!quiet) _updateTrCount();
 }
 
 function resetTranslation(i) {
-  const row = document.querySelector(`.tr-row[data-ti="${i}"]`);
-  row.querySelector('input').value = _trDefault(_trKeys[i]);
+  const key = _trKeys[i];
+  _trRow(i).querySelectorAll('input').forEach(inp => { inp.value = _trDefault(inp.dataset.lang, key); });
   onTranslationInput(i);
 }
 
@@ -2470,10 +2480,10 @@ function filterTranslations(q) {
   if (q === undefined) q = document.getElementById('trSearch').value;
   q = q.toLowerCase().trim();
   const onlyChanged = document.getElementById('trOnlyChanged').checked;
-  document.querySelectorAll('#trList .tr-row').forEach(row => {
+  document.querySelectorAll('#trList .tr-row[data-ti]').forEach(row => {
     const key = _trKeys[row.dataset.ti];
-    const val = row.querySelector('input').value;
-    const hit = !q || key.toLowerCase().includes(q) || val.toLowerCase().includes(q);
+    const vals = [...row.querySelectorAll('input')].map(inp => inp.value.toLowerCase());
+    const hit = !q || key.toLowerCase().includes(q) || vals.some(v => v.includes(q));
     row.style.display = hit && (!onlyChanged || row.classList.contains('tr-mod')) ? '' : 'none';
   });
   // Заголовок раздела прячем, если в нём не осталось видимых строк
@@ -2487,39 +2497,43 @@ function filterTranslations(q) {
 
 function _updateTrCount() {
   const n = document.querySelectorAll('#trList .tr-row.tr-mod').length;
-  document.getElementById('trCount').textContent = n ? `изменено: ${n}` : '';
+  document.getElementById('trCount').textContent = n ? `изменено строк: ${n}` : '';
 }
 
 async function saveTranslations() {
-  const out = {};
+  const out = { ru: {}, uz: {} };
   let bad = null;
-  document.querySelectorAll('#trList .tr-row').forEach(row => {
-    const key = _trKeys[row.dataset.ti];
-    const inp = row.querySelector('input');
-    let val = inp.value;
-    if (!val.trim()) { val = _trDefault(key); inp.value = val; }
-    // «Ошибка: » — пробел после двоеточия нужен, дальше подставляется текст
-    if (/: $/.test(key) && !/: $/.test(val)) { val = val.replace(/[\s:]*$/, '') + ': '; inp.value = val; }
-    if (_trPlaceholders(val) !== _trPlaceholders(key)) { row.classList.add('tr-bad'); if (!bad) bad = row; return; }
-    row.classList.remove('tr-bad');
-    row.classList.toggle('tr-mod', val !== _trDefault(key));
-    if (val !== _trDefault(key)) out[key] = val;
+  document.querySelectorAll('#trList .tr-row[data-ti]').forEach(row => {
+    const i = row.dataset.ti, key = _trKeys[i];
+    row.querySelectorAll('input').forEach(inp => {
+      const lang = inp.dataset.lang, def = _trDefault(lang, key);
+      let val = inp.value;
+      if (!val.trim()) val = def;
+      // «Ошибка: » — пробел после двоеточия нужен, дальше подставляется текст
+      if (/: $/.test(key) && !/: $/.test(val)) val = val.replace(/[\s:]*$/, '') + ': ';
+      inp.value = val;
+      if (_trPlaceholders(val) !== _trPlaceholders(key)) { if (!bad) bad = row; return; }
+      if (val !== def) out[lang][key] = val;
+    });
+    onTranslationInput(i, true);
   });
   if (bad) {
     document.getElementById('trSearch').value = '';
     document.getElementById('trOnlyChanged').checked = false;
     filterTranslations('');
     bad.scrollIntoView({ block: 'center' });
-    toast('Не сохранено: в отмеченных строках потеряны или изменены слова в фигурных скобках', 'warn');
+    toast('Не сохранено: в отмеченных полях потеряны или изменены слова в фигурных скобках', 'warn');
     return;
   }
   try {
-    const r = await fetch('/api/admin/i18n/uz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(out)
-    });
-    if (!r.ok) throw new Error(r.status);
+    for (const lang of ['ru', 'uz']) {
+      const r = await fetch('/api/admin/i18n/' + lang, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(out[lang])
+      });
+      if (!r.ok) throw new Error(r.status);
+    }
     _trSaved = out;
     _updateTrCount();
     const badge = document.getElementById('trSaved');

@@ -491,14 +491,14 @@
     <!-- ── Переводы ── -->
     <div class="stab-panel" id="stab-translations">
       <div class="settings-card">
-        <h3>Перевод интерфейса оператора — узбекский</h3>
-        <p class="settings-hint">Слева русский текст, справа — то, что видит оператор при выборе языка UZ. Изменённые строки подсвечены. Слова в фигурных скобках (например <b>{pc}</b>, <b>{sum}</b>, <b>{time}</b>) — это подстановки: их нужно оставить как есть, можно только переставить. Названия услуг переводятся на вкладке «Услуги». Оператор увидит правки после обновления страницы (F5).</p>
+        <h3>Тексты интерфейса оператора — русский и узбекский</h3>
+        <p class="settings-hint">Слева исходный текст, дальше — то, что видит оператор при выборе языка RU и UZ. Изменённые поля подсвечены. Слова в фигурных скобках (например <b>{pc}</b>, <b>{sum}</b>, <b>{time}</b>) — это подстановки: их нужно оставить как есть, можно только переставить. Названия услуг переводятся на вкладке «Услуги». Оператор увидит правки после обновления страницы (F5).</p>
         <div class="tr-toolbar">
-          <input type="text" id="trSearch" placeholder="Поиск по русскому или узбекскому тексту…" oninput="filterTranslations(this.value)">
+          <input type="text" id="trSearch" placeholder="Поиск по любому из трёх столбцов…" oninput="filterTranslations(this.value)">
           <label class="tr-only"><input type="checkbox" id="trOnlyChanged" onchange="filterTranslations()"> только изменённые</label>
           <span id="trCount" class="tr-count"></span>
           <span id="trSaved" class="saved-badge" style="display:none">✓ Сохранено</span>
-          <button class="btn btn-primary" onclick="saveTranslations()">Сохранить переводы</button>
+          <button class="btn btn-primary" onclick="saveTranslations()">Сохранить тексты</button>
         </div>
         <div id="trList"><div class="settings-hint">Загрузка…</div></div>
       </div>

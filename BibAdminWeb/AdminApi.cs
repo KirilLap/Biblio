@@ -52,19 +52,29 @@ namespace BibAdminWeb
                 return;
             }
 
-            // ─── Переводы интерфейса оператора (UZ) ───────────────────────────
-            if (path == "/api/admin/i18n/uz" && method == "GET")
+            // ─── Тексты интерфейса оператора: /api/admin/i18n/ru и /api/admin/i18n/uz ──
+            if (path.StartsWith("/api/admin/i18n/"))
             {
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(TranslationStore.Load()));
-                return;
-            }
-            if (path == "/api/admin/i18n/uz" && method == "POST")
-            {
-                var body = await ReadBody(ctx);
-                var map = JsonSerializer.Deserialize<Dictionary<string, string>>(body) ?? new();
-                TranslationStore.Save(map);
-                await ctx.Response.WriteAsync("{\"ok\":true}");
-                return;
+                var lang = path.Substring("/api/admin/i18n/".Length);
+                if (!TranslationStore.IsKnownLang(lang))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Неизвестный язык\"}");
+                    return;
+                }
+                if (method == "GET")
+                {
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(TranslationStore.Load(lang)));
+                    return;
+                }
+                if (method == "POST")
+                {
+                    var body = await ReadBody(ctx);
+                    var map = JsonSerializer.Deserialize<Dictionary<string, string>>(body) ?? new();
+                    TranslationStore.Save(lang, map);
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                    return;
+                }
             }
 
             // ─── Finance: sessions ────────────────────────────────────────────
