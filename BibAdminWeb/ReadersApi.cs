@@ -18,6 +18,64 @@ namespace BibAdminWeb
             var path   = ctx.Request.Path.Value ?? "";
             var method = ctx.Request.Method;
 
+            // ─── Автообновление базы читателей: приём выгрузки UZNEL от робота ReaderSync ──
+            // Только с этого же компьютера и с ключом из data\reader_sync_token.txt
+            if (path.StartsWith("/api/sync/readers") && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                if (!ReaderSyncState.IsAuthorized(ctx))
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа\"}");
+                    return;
+                }
+
+                // Робот сообщает итог запуска (успех или причина неудачи)
+                if (path == "/api/sync/readers/status")
+                {
+                    using var sr = new StreamReader(ctx.Request.Body);
+                    var statusBody = await sr.ReadToEndAsync();
+                    try
+                    {
+                        using var _ = JsonDocument.Parse(statusBody);   // принимаем только корректный JSON
+                        ReaderSyncState.SaveStatus(statusBody);
+                        await ctx.Response.WriteAsync("{\"ok\":true}");
+                    }
+                    catch
+                    {
+                        ctx.Response.StatusCode = 400;
+                        await ctx.Response.WriteAsync("{\"error\":\"Неверные данные\"}");
+                    }
+                    return;
+                }
+
+                if (path == "/api/sync/readers")
+                {
+                    try
+                    {
+                        // Файл .xlsx передаётся телом запроса как есть
+                        using var ms = new MemoryStream();
+                        await ctx.Request.Body.CopyToAsync(ms);
+                        ms.Position = 0;
+                        var syncReaders = ParseExcel(ms);
+                        var syncResult = ReaderStore.Import(syncReaders);
+                        Logger.Info($"🔄 Автообновление читателей: строк={syncReaders.Count}, добавлено={syncResult.Added}, обновлено={syncResult.Updated}, пропущено={syncResult.Skipped}");
+                        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
+                        {
+                            rows = syncReaders.Count, added = syncResult.Added,
+                            updated = syncResult.Updated, skipped = syncResult.Skipped
+                        }));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"Ошибка автообновления читателей: {ex.Message}");
+                        ctx.Response.StatusCode = 400;
+                        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+                    }
+                    return;
+                }
+            }
+
             // ─── Operator lookup (no admin auth needed) ─────────────────────
             if (path.StartsWith("/api/readers/lookup/") && method == "GET")
             {
@@ -157,6 +215,42 @@ namespace BibAdminWeb
             }
 
             // ─── Admin: import Excel ────────────────────────────────────────
+            // ─── Admin: автообновление читателей — состояние и запуск вручную ──
+            if (path == "/api/admin/readers/sync-status" && method == "GET")
+            {
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(ReaderSyncState.StatusJson());
+                return;
+            }
+            if (path == "/api/admin/readers/sync-run" && method == "POST")
+            {
+                ctx.Response.ContentType = "application/json";
+                try
+                {
+                    // Запускаем то же задание Планировщика, что работает по расписанию
+                    var psi = new System.Diagnostics.ProcessStartInfo("schtasks.exe", $"/Run /TN \"{ReaderSyncState.TaskName}\"")
+                    {
+                        UseShellExecute = false, CreateNoWindow = true,
+                        RedirectStandardOutput = true, RedirectStandardError = true
+                    };
+                    using var proc = System.Diagnostics.Process.Start(psi)!;
+                    await proc.WaitForExitAsync();
+                    if (proc.ExitCode != 0)
+                    {
+                        ctx.Response.StatusCode = 500;
+                        await ctx.Response.WriteAsync("{\"error\":\"Задание автообновления не найдено. Запустите ReaderSync\\\\setup.cmd на сервере.\"}");
+                        return;
+                    }
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 500;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }));
+                }
+                return;
+            }
+
             if (path == "/api/admin/readers/import" && method == "POST")
             {
                 ctx.Response.ContentType = "application/json";
@@ -642,11 +736,27 @@ namespace BibAdminWeb
                 else if (hdr.Contains("пол"))                                 colGender    = col;
             }
 
+            // Выгрузка UZNEL («Управление пользователями» → «Сохранить в Excel») идёт без строки
+            // заголовков, колонки всегда в одном порядке: B — ID, C — имя, E — дата рождения,
+            // H — категория, K — дата регистрации, L — дата обновления, P — пол.
+            int firstDataRow = 2;
+            if (colCardId < 0 || colName < 0)
+            {
+                var b1 = ws.Cell(1, 2).GetString().Trim();
+                bool looksLikeCardId = b1.Length >= 6 && b1.Any(char.IsDigit) && b1.Any(char.IsLetter) && !b1.Contains(' ');
+                if (looksLikeCardId)
+                {
+                    colCardId = 2; colName = 3; colBirth = 5; colCategory = 8;
+                    colRegDate = 11; colUpdatedAt = 12; colGender = 16;
+                    firstDataRow = 1;
+                }
+            }
+
             if (colCardId < 0 || colName < 0)
                 throw new InvalidOperationException("Не найдены обязательные столбцы «ID пользователя» и «Имя пользователя»");
 
             var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
-            for (int row = 2; row <= lastRow; row++)
+            for (int row = firstDataRow; row <= lastRow; row++)
             {
                 var cardId = ws.Cell(row, colCardId).GetString().Trim();
                 if (string.IsNullOrWhiteSpace(cardId)) continue;

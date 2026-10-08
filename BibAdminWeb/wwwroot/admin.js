@@ -3146,7 +3146,38 @@ function sortArrow(col) {
     : '<span style="color:#1d9e75;margin-left:4px">↓</span>';
 }
 
+// ─── Автообновление базы читателей с UZNEL (робот ReaderSync) ─────────────────
+async function loadReaderSyncStatus() {
+  const el = document.getElementById('readerSyncStatus');
+  if (!el) return;
+  try {
+    const s = await fetch('/api/admin/readers/sync-status', { cache: 'no-store' }).then(r => r.ok ? r.json() : {});
+    if (!s.finishedAt) { el.textContent = 'Автообновление с UZNEL: ещё не запускалось'; el.style.color = ''; return; }
+    const when = new Date(s.finishedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (s.ok) {
+      el.textContent = `Автообновление с UZNEL: ${when} — успешно. Строк в выгрузке: ${s.rows ?? 0}, добавлено: ${s.added ?? 0}, обновлено: ${s.updated ?? 0}`;
+      el.style.color = 'var(--free)';
+    } else {
+      el.textContent = `Автообновление с UZNEL: ${when} — НЕ УДАЛОСЬ. ${s.message || ''}`;
+      el.style.color = 'var(--locked)';
+    }
+  } catch { el.textContent = 'Автообновление с UZNEL: состояние недоступно'; }
+}
+
+async function runReaderSync() {
+  if (!confirm('Запустить обновление базы читателей с UZNEL сейчас? Это занимает несколько минут.')) return;
+  try {
+    const r = await fetch('/api/admin/readers/sync-run', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || r.status);
+    toast('Обновление запущено. Результат появится здесь через несколько минут.', 'success');
+    setTimeout(loadReaderSyncStatus, 60000);
+    setTimeout(() => { loadReaderSyncStatus(); loadReaders(); }, 240000);
+  } catch (e) { toast('Не удалось запустить обновление: ' + e.message, 'warn'); }
+}
+
 async function loadReaders() {
+  loadReaderSyncStatus();
   const search = document.getElementById('readersSearch')?.value.trim() || '';
   const params = new URLSearchParams({
     page:     readersPage,

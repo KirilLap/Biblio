@@ -33,6 +33,7 @@ namespace BibAdminWeb
             FinanceStore.LoadHistory();
             ServiceTransaction.LoadHistory();
             VisitStore.Load();
+            _ = ReaderSyncState.Token;   // создаёт ключ для робота автообновления читателей, если его ещё нет
 
             var server = new ServerHost();
             try
