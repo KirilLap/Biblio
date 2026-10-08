@@ -178,11 +178,37 @@ class Uznel:
         # «Сохранить в Excel» открывает отдельную вкладку (about:blank), и файл скачивается в ней,
         # поэтому скачивания ловим на всех вкладках окна, а не только на основной.
         self._downloads = []
+        self._pending = set()
+        self._last_net = time.time()
         self._watch(page)
         page.context.on("page", self._watch)
 
     def _watch(self, p):
         p.on("download", lambda d: self._downloads.append(d))
+        # Запросы страницы к серверу UZNEL: по ним понятно, что поиск ещё идёт.
+        # Счётчик на экране для этого не годится — во время загрузки он показывает 0 или старое число.
+        p.on("request", self._req_started)
+        p.on("requestfinished", self._req_done)
+        p.on("requestfailed", self._req_done)
+
+    def _req_started(self, req):
+        if req.resource_type in ("xhr", "fetch"):
+            self._pending.add(req)
+            self._last_net = time.time()
+
+    def _req_done(self, req):
+        self._pending.discard(req)
+        self._last_net = time.time()
+
+    def wait_idle(self, quiet_s=1.5, timeout=300):
+        """Ждёт, пока сайт закончит обмен с сервером: нет незавершённых запросов и тишина quiet_s секунд."""
+        page = self.page
+        start = time.time()
+        while time.time() - start < timeout:
+            if not self._pending and time.time() - self._last_net >= quiet_s:
+                return
+            page.wait_for_timeout(200)
+        raise RuntimeError("сайт слишком долго отвечает на запрос")
 
     def _download_after(self, action, timeout_s=600):
         """Выполняет action (клик по экспорту) и ждёт файл с любой вкладки. Лишние вкладки закрывает."""
@@ -257,6 +283,9 @@ class Uznel:
         leaf.dblclick()
         self.set_step("жду загрузку списка читателей")
         page.locator(sel.RESULT_COUNT).first.wait_for(state="visible", timeout=90_000)
+        # раздел при открытии сам загружает полный список читателей — дожидаемся конца загрузки
+        page.wait_for_timeout(500)
+        self.wait_idle()
         self.wait_count_stable(timeout=120)
 
     # -- мелкие действия --
@@ -376,6 +405,9 @@ class Uznel:
         self.set_step(f"размер страницы: {sel.PAGE_SIZE_MAX}")
         self.choose_combo(sel.PAGE_SIZE_COMBO, sel.PAGE_SIZE_INPUT, sel.PAGE_SIZE_DROP,
                           str(sel.PAGE_SIZE_MAX), "размер страницы")
+        # смена размера страницы может перезагрузить список
+        self.page.wait_for_timeout(500)
+        self.wait_idle()
 
     def search(self, criterion, d1, d2):
         """Ставит критерий и даты, нажимает «Поиск». Возвращает число найденных записей."""
@@ -383,8 +415,11 @@ class Uznel:
         self.choose_combo(sel.CRIT_COMBO, sel.CRIT_INPUT, sel.CRIT_DROP, criterion, "критерий поиска")
         self.type_into(sel.DATE_FROM, fmt(d1), "дату «от»")
         self.type_into(sel.DATE_TO, fmt(d2), "дату «до»")
+        self._last_net = time.time()
         page.locator(sel.SEARCH_BUTTON).first.click()
-        page.wait_for_timeout(1_500)
+        page.wait_for_timeout(700)
+        # сначала ждём ответ сервера, потом — пока счётчик на экране перестанет меняться
+        self.wait_idle()
         return self.wait_count_stable(timeout=180)
 
     def _select_all(self):
