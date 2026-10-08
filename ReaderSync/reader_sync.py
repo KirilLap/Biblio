@@ -411,7 +411,14 @@ class Uznel:
         page = self.page
         last_rows = None
         for attempt in (1, 2):
-            self._select_all()
+            # После «Выбрать все» сайт показывает в счётчике число выделенных строк: «268 (268)».
+            # Пока выделено не всё — повторяем выделение, а не скачиваем заведомо неполный файл.
+            for _ in range(3):
+                self._select_all()
+                sel_m = re.search(r"\((\d+)\)", self.counter_text())
+                if sel_m is None or int(sel_m.group(1)) >= min(expected, sel.PAGE_SIZE_MAX):
+                    break
+                log.info("    выделено %s из %s — повторяю «Выбрать все»", sel_m.group(1), expected)
 
             def click_toolbar():
                 page.locator(sel.EXPORT_BUTTON).click()
