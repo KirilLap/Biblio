@@ -74,3 +74,13 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+
+# ReaderSync — робот обновления базы читателей: окружение, браузер, пароль, рабочие файлы
+ReaderSync/venv/
+ReaderSync/browsers/
+ReaderSync/config.ini
+ReaderSync/state.json
+ReaderSync/logs/
+ReaderSync/downloads/
+ReaderSync/debug/
+ReaderSync/__pycache__/

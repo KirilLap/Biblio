@@ -38,6 +38,9 @@ namespace BibAdminWeb
         public string BackgroundFileName { get; set; } = "";
 
         public int Tariff { get; set; } = 3000;
+        // Шаг возврата при досрочном завершении сессии: остаток меньше шага не возвращается,
+        // больший округляется до ближайшего шага. 0 — возвращать точную сумму.
+        public int RefundStep { get; set; } = 500;
         public string AdminPasswordHash { get; set; } = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // SHA256 от "1234"
         public bool IsFirstRun { get; set; } = true;
         public int ServerPort { get; set; } = 8080;
@@ -78,9 +81,42 @@ namespace BibAdminWeb
         public bool RequireReaderId { get; set; } = true;
         public bool RequireUserName { get; set; } = false;
 
+        // Конец рабочего дня ("HH:MM", пусто = без ограничения)
+        public string WorkdayEnd { get; set; } = "";
+
+        // =====================
+        // Посещения читального зала (ручная отметка оператором)
+        // =====================
+        // Требовать читательский билет при отметке посещения (false = можно «Без билета»)
+        public bool RequireVisitReaderId { get; set; } = true;
+        // Показывать оператору цель визита и комментарий
+        public bool ShowVisitPurpose { get; set; } = false;
+        // Перерыв (мин), после которого новое событие того же читателя считается новым посещением
+        public int VisitGapMinutes { get; set; } = 30;
+        public List<VisitPurpose> VisitPurposes { get; set; } = new()
+        {
+            new VisitPurpose { Name = "Читальный зал", NameUz = "O‘quv zali" },
+            new VisitPurpose { Name = "Свой ноутбук", NameUz = "O‘z noutbuki" },
+        };
+
+        // ╔══════════════════════════════════════════════════════════════════════╗
+        // ║  ВАЖНО: путь к файлу настроек — НЕ МЕНЯТЬ без крайней необходимости ║
+        // ║                                                                      ║
+        // ║  Настройки хранятся в папке data\ рядом с exe:                        ║
+        // ║  C:\Program Files\Biblio\BibAdminWeb\data\global_settings.json       ║
+        // ║  Там же: readers.db, finance_history.json, service_history.json      ║
+        // ║                                                                      ║
+        // ║  Сервис запускается с правами администратора — запись туда работает. ║
+        // ║                                                                      ║
+        // ║  При обновлениях файл защищён:                                       ║
+        // ║  - zip (robocopy): /XF global_settings.json                          ║
+        // ║  - exe (Inno Setup): Flags: onlyifdoesntexist                        ║
+        // ║                                                                      ║
+        // ║  НЕ использовать %APPDATA% — у каждого пользователя и               ║
+        // ║  сервис-аккаунта своя папка, настройки теряются.                     ║
+        // ╚══════════════════════════════════════════════════════════════════════╝
         private static readonly string _path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "BibAdmin", "global_settings.json");
+            AppDomain.CurrentDomain.BaseDirectory, "data", "global_settings.json");
 
         public static GlobalSettings Load()
         {
@@ -89,8 +125,17 @@ namespace BibAdminWeb
                 MigrateIfNeeded();
                 if (File.Exists(_path))
                 {
+                    // Файл существует — читаем как есть, не трогаем
                     var json = File.ReadAllText(_path);
                     return JsonSerializer.Deserialize<GlobalSettings>(json) ?? new GlobalSettings();
+                }
+                else
+                {
+                    // Файл не существует — создаём с дефолтными значениями и сразу сохраняем
+                    var defaults = new GlobalSettings();
+                    defaults.Save();
+                    Logger.Info("📄 global_settings.json создан с дефолтными значениями");
+                    return defaults;
                 }
             }
             catch (Exception ex) { Logger.Error($"Ошибка загрузки GlobalSettings: {ex.Message}"); }
@@ -100,15 +145,33 @@ namespace BibAdminWeb
         private static void MigrateIfNeeded()
         {
             if (File.Exists(_path)) return;
-            var oldPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json");
-            if (!File.Exists(oldPath)) return;
-            try
+
+            // Миграция из старых путей если файл ещё не в data\.
+            // ВАЖНО: %APPDATA% проверяется РАНЬШЕ корневого файла рядом с exe,
+            // потому что Inno Setup может установить дефолтный global_settings.json
+            // в корень папки программы (IsFirstRun=true), и мы не должны его
+            // принять за реальные настройки пользователя.
+            var candidates = new[]
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                File.Move(oldPath, _path);
-                Logger.Info("GlobalSettings перенесены в %APPDATA%\\BibAdmin\\");
+                // Реальные пользовательские настройки из старых путей AppData
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),       "BibAdmin", "global_settings.json"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "BibAdmin", "global_settings.json"),
+                // В последнюю очередь — корневой файл рядом с exe (может быть дефолтным от installer)
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "global_settings.json"),
+            };
+
+            foreach (var src in candidates)
+            {
+                if (!File.Exists(src)) continue;
+                try
+                {
+                    File.Copy(src, _path);
+                    Logger.Info($"GlobalSettings перенесены в папку exe (из {src})");
+                    try { File.Delete(src); } catch { }
+                }
+                catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
+                return;
             }
-            catch (Exception ex) { Logger.Error($"Ошибка миграции GlobalSettings: {ex.Message}"); }
         }
 
         public void Save()
@@ -162,10 +225,21 @@ namespace BibAdminWeb
         }
     }
 
+    // Цель визита (для ручной отметки посещения)
+    public class VisitPurpose
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Name { get; set; } = "";
+        public string NameUz { get; set; } = "";
+        public bool IsActive { get; set; } = true;
+    }
+
     public class ServiceType
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; } = "";
+        // Название на узбекском — показывается оператору при выборе языка UZ (пусто = русское)
+        public string NameUz { get; set; } = "";
         public string Unit { get; set; } = "лист";
         public int Price { get; set; } = 0;
         public bool IsActive { get; set; } = true;
@@ -181,6 +255,7 @@ namespace BibAdminWeb
         // Права доступа: что оператор может просматривать
         public bool CanViewReaders { get; set; } = false;
         public bool CanViewFinance { get; set; } = false;
+        public bool CanViewStats   { get; set; } = false;
     }
 
     public class PendingCommand

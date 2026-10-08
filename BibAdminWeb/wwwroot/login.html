@@ -77,6 +77,7 @@
 </style>
 </head>
 <body>
+<div id="langSwitch" style="position:fixed;top:16px;right:16px"></div>
 <div class="card">
   <h1>BibOperator</h1>
   <div class="subtitle">Веб-интерфейс оператора</div>
@@ -91,6 +92,9 @@
   <button id="btn" onclick="doLogin()">Войти</button>
 </div>
 
+<script src="/i18n-uz.js"></script>
+<script src="/api/i18n/overrides.js"></script>
+<script src="/i18n.js"></script>
 <script>
   document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
@@ -101,12 +105,12 @@
     const err = document.getElementById('error');
 
     if (!login || !password) {
-      showError('Введите логин и пароль');
+      showError(t('Введите логин и пароль'));
       return;
     }
 
     btn.disabled = true;
-    btn.textContent = 'Вход...';
+    btn.textContent = t('Вход...');
     err.style.display = 'none';
 
     try {
@@ -119,13 +123,13 @@
       if (res.ok) {
         window.location.href = '/operator.html';
       } else {
-        showError(data.error || 'Ошибка входа');
+        showError(t(data.error || 'Ошибка входа'));
       }
     } catch (e) {
-      showError('Нет связи с сервером');
+      showError(t('Нет связи с сервером'));
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Войти';
+      btn.textContent = t('Войти');
     }
   }
 

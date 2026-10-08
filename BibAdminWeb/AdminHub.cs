@@ -998,8 +998,23 @@ namespace BibAdminWeb
 
             // Нормализуем тип сессии от клиента, но не перезаписываем при блокировке —
             // иначе клиент с устаревшим ActiveSessionType восстановит "призрачную" сессию.
+            // Также не перезаписываем если администратор только что сменил тип (SessionTypeLockedUntil),
+            // пока клиент не подтвердит новый тип своим heartbeat.
             if (status != "Заблокирован" && status != "Свободный" && !string.IsNullOrEmpty(sessionType))
-                client.SessionType = NormalizeSessionType(sessionType);
+            {
+                var normalized = NormalizeSessionType(sessionType);
+                if (client.SessionTypeLockedUntil.HasValue && DateTime.UtcNow < client.SessionTypeLockedUntil.Value)
+                {
+                    // Клиент подтвердил новый тип — снимаем блокировку
+                    if (normalized == client.SessionType)
+                        client.SessionTypeLockedUntil = null;
+                    // иначе игнорируем старый тип из heartbeat
+                }
+                else
+                {
+                    client.SessionType = normalized;
+                }
+            }
 
             if (status == "Пауза")
             {

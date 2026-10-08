@@ -51,7 +51,7 @@ namespace BibAdmin
             var settings = GlobalSettings.Load();
             var services = settings.Services.Where(s => s.IsActive).Select(s => new
             {
-                id = s.Id, name = s.Name, unit = s.Unit, price = s.Price
+                id = s.Id, name = s.Name, nameUz = s.NameUz, unit = s.Unit, price = s.Price
             }).ToList();
             _ = _ctx.Clients.All.SendAsync("serviceTypes", services);
         }

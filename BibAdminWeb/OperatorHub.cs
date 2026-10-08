@@ -20,7 +20,7 @@ namespace BibAdminWeb
             await Clients.Caller.SendAsync("stateSnapshot", all);
             var settings = GlobalSettings.Load();
             var services = settings.Services.Where(s => s.IsActive)
-                .Select(s => new { id = s.Id, name = s.Name, unit = s.Unit, price = s.Price }).ToList();
+                .Select(s => new { id = s.Id, name = s.Name, nameUz = s.NameUz, unit = s.Unit, price = s.Price }).ToList();
             await Clients.Caller.SendAsync("serviceTypes", services);
             await Clients.Caller.SendAsync("tariff", settings.Tariff);
             await Clients.Caller.SendAsync("readerCardPrefix", settings.ReaderCardPrefix);
@@ -34,7 +34,7 @@ namespace BibAdminWeb
             await Clients.Caller.SendAsync("stateSnapshot", all);
             var settings = GlobalSettings.Load();
             var services = settings.Services.Where(s => s.IsActive)
-                .Select(s => new { id = s.Id, name = s.Name, unit = s.Unit, price = s.Price }).ToList();
+                .Select(s => new { id = s.Id, name = s.Name, nameUz = s.NameUz, unit = s.Unit, price = s.Price }).ToList();
             await Clients.Caller.SendAsync("serviceTypes", services);
             await Clients.Caller.SendAsync("tariff", settings.Tariff);
             await Clients.Caller.SendAsync("readerCardPrefix", settings.ReaderCardPrefix);
@@ -46,12 +46,19 @@ namespace BibAdminWeb
             if (!IsAuthorized()) return;
             if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
             if (!client.IsOnline || client.IsSession) return;
+            // Один читательский билет — один ПК: вторую сессию по тому же билету не начинаем
+            if (OperatorBroadcaster.FindSessionByReader(readerId, pcNumber) != null)
+                throw new HubException("READER_BUSY");
+            // Читатель с неоплаченным долгом по услугам не может начать сессию
+            if (ServiceTransaction.ReaderDebt(readerId) > 0)
+                throw new HubException("READER_DEBT");
 
             var serverStart = DateTime.UtcNow;
             client.SessionType = sessionType;
             client.Status = sessionType;
             client.LimitSeconds = limitSeconds;
             client.PaidAmount = paidAmount;
+            client.PenaltyAmount = 0;
             client.ElapsedSeconds = 0;
             client.AccumulatedSeconds = 0;
             client.SessionStart = serverStart;
@@ -76,9 +83,38 @@ namespace BibAdminWeb
 
             string sessionType = string.IsNullOrEmpty(client.SessionType) ? client.Status : client.SessionType;
             int tariff = GlobalSettings.Load().Tariff;
-            int earned = (int)(tariff * client.ElapsedSeconds / 3600.0);
             int paidAmount = client.PaidAmount;
-            int refund = Math.Max(0, paidAmount - earned);
+            int earned;
+            int refund = 0;
+
+            if (client.OriginalLimitSeconds > 0) // Лимит → VIP: оплаченные секунды как кредит
+            {
+                if (client.ElapsedSeconds >= client.OriginalLimitSeconds)
+                {
+                    // Использовали больше оплаченного времени — доплата за сверхлимит по VIP-тарифу
+                    int vipExtra = (int)((client.ElapsedSeconds - client.OriginalLimitSeconds) * (double)tariff / 3600);
+                    earned = paidAmount + vipExtra + client.PenaltyAmount;
+                }
+                else
+                {
+                    // Завершили раньше оплаченного лимита — начисляем по VIP-тарифу, возврат разницы
+                    earned = Math.Min((int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount, paidAmount);
+                    refund = Math.Min(paidAmount, FinanceStore.RoundRefund(paidAmount - earned)); earned = paidAmount - refund;
+                }
+            }
+            else if (client.IsPostPay) // VIP → Лимит: постоплата как VIP
+            {
+                earned = (int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount;
+            }
+            else if (sessionType == "Лимит")
+            {
+                earned = Math.Min((int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount, paidAmount);
+                refund = Math.Min(paidAmount, FinanceStore.RoundRefund(paidAmount - earned)); earned = paidAmount - refund;
+            }
+            else
+            {
+                earned = (int)(tariff * client.ElapsedSeconds / 3600.0) + client.PenaltyAmount;
+            }
             int duration = client.ElapsedSeconds;
             var startTime = client.SessionStart ?? DateTime.Now;
 
@@ -92,7 +128,8 @@ namespace BibAdminWeb
                 ReaderId = client.ReaderId ?? "",
                 DurationSeconds = duration,
                 EarnedAmount = earned,
-                PaidAmount = paidAmount,
+                // Сессия закрыта — значит оплачена: при оплате по факту (VIP) «оплачено» = начислено
+                PaidAmount = Math.Max(paidAmount, earned),
                 RefundAmount = refund,
                 StartTime = startTime,
                 EndTime = DateTime.Now,
@@ -112,30 +149,39 @@ namespace BibAdminWeb
             client.ElapsedSeconds = 0;
             client.LimitSeconds = 0;
             client.PaidAmount = 0;
+            client.PenaltyAmount = 0;
             client.SessionStart = null;
             client.IsPaused = false;
             client.AccumulatedSeconds = 0;
             client.SessionId = "";
+            client.OriginalLimitSeconds = 0;
+            client.IsPostPay = false;
             AdminHub.KnownClients[pcNumber] = client;
             AdminHub.SaveActiveSessions();
             AdminHub.AddPendingCommand(pcNumber, "REMOTE_LOCK", "true");
             AdminHub.RaiseClientUpdated(client);
 
             string readerId = client.ReaderId ?? "";
-            var debts = ServiceTransaction.GetUnpaidForSession(pcNumber, readerId);
-            int totalDebt = debts.Sum(d => d.DebtAmount);
-            var debtItems = debts.Select(d => new {
-                id = d.Id,
-                name = d.ServiceName,
-                qty = d.Quantity,
-                unit = d.Unit,
-                debt = d.DebtAmount
-            }).ToList();
+            // Долги по услугам: взятые во время этой сессии и отдельно — прошлые долги читателя
+            var (sessDebts, prevDebts) = ServiceTransaction.GetDebtsForSessionEnd(readerId, startTime, duration);
+            object DebtDto(ServiceTransaction d) => new
+            {
+                id = d.Id, name = d.ServiceName, qty = d.Quantity, unit = d.Unit,
+                debt = d.DebtAmount, date = d.CreatedAt.ToString("o")
+            };
 
+            int additionalCharge = Math.Max(0, earned - paidAmount);
             await Clients.Caller.SendAsync("sessionSummary", new {
-                pcNumber, sessionType, duration, earned, paidAmount, refund,
-                readerId, serviceDebts = debtItems, totalServiceDebt = totalDebt
+                pcNumber, sessionType, duration, earned, paidAmount, refund, additionalCharge,
+                readerId = readerId,
+                serviceDebts = sessDebts.Select(DebtDto).ToList(), totalServiceDebt = sessDebts.Sum(d => d.DebtAmount),
+                previousDebts = prevDebts.Select(DebtDto).ToList(), totalPreviousDebt = prevDebts.Sum(d => d.DebtAmount)
             });
+
+            // Уведомить всех остальных о завершении сессии
+            string displayName = string.IsNullOrWhiteSpace(client.UserName) ? (client.ReaderId ?? "—") : client.UserName;
+            OperatorBroadcaster.Instance?.NotifySessionEndedByStaff(pcNumber, displayName, duration, earned);
+            AdminBroadcaster.Instance?.NotifySessionEndedByStaff(pcNumber, displayName, duration, earned);
         }
 
         public async Task TogglePause(string pcNumber)
@@ -186,6 +232,7 @@ namespace BibAdminWeb
             if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return Task.CompletedTask;
             var client = AdminHub.SetOfflineDecision(pcNumber, d);
             if (client != null) OperatorBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+            if (client != null) AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
             if (client != null) AdminHub.RaiseClientUpdated(client);
             return Task.CompletedTask;
         }
@@ -208,6 +255,9 @@ namespace BibAdminWeb
                 if (string.IsNullOrEmpty(resolvedReaderId)) resolvedReaderId = pcClient.ReaderId ?? "";
                 if (string.IsNullOrEmpty(resolvedReaderName)) resolvedReaderName = pcClient.UserName ?? "";
             }
+
+            // Анонимный посетитель и временный билет не могут брать услугу в долг
+            if (!ServiceTransaction.CanDefer(resolvedReaderId)) payNow = true;
 
             var tx = new ServiceTransaction
             {
@@ -240,6 +290,9 @@ namespace BibAdminWeb
                 if (string.IsNullOrEmpty(resolvedId))   resolvedId   = pc.ReaderId ?? "";
                 if (string.IsNullOrEmpty(resolvedName)) resolvedName = pc.UserName ?? "";
             }
+
+            // Анонимный посетитель и временный билет не могут брать услугу в долг
+            if (!ServiceTransaction.CanDefer(resolvedId)) payNow = true;
 
             var batchId  = Guid.NewGuid().ToString("N")[..8];
             int totalAll = 0;
@@ -342,6 +395,85 @@ namespace BibAdminWeb
             AdminHub.RaiseClientUpdated(client);
         }
 
+        // Убрать время с возвратом денег (только Лимит)
+        public async Task SubtractTime(string pcNumber, int subSeconds, int subAmount)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession || client.SessionType != "Лимит") return;
+            var actualSub = Math.Min(subSeconds, client.LimitSeconds - 60);
+            if (actualSub <= 0) return;
+            client.LimitSeconds -= actualSub;
+            client.PaidAmount = Math.Max(0, client.PaidAmount - subAmount);
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            var cmd = new { Type = "EXTEND_SESSION", Value = (-actualSub).ToString(), LimitSeconds = -actualSub };
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+            else
+                AdminHub.AddPendingCommand(pcNumber, "EXTEND_SESSION", (-actualSub).ToString());
+            AdminHub.RaiseClientUpdated(client);
+        }
+
+        // Штраф: для Лимит — убрать время без возврата; для VIP — добавить денежный штраф
+        public async Task ApplyPenalty(string pcNumber, int penaltySeconds, int penaltyAmount)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession) return;
+            client.PenaltyAmount += penaltyAmount;
+            if (client.SessionType == "Лимит" && penaltySeconds > 0)
+            {
+                var actualSub = Math.Min(penaltySeconds, client.LimitSeconds - 60);
+                if (actualSub > 0)
+                {
+                    client.LimitSeconds -= actualSub;
+                    var cmd = new { Type = "PENALTY_SESSION", Value = actualSub.ToString() };
+                    if (client.IsOnline)
+                        await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", JsonSerializer.Serialize(cmd));
+                    else
+                        AdminHub.AddPendingCommand(pcNumber, "PENALTY_SESSION", actualSub.ToString());
+                }
+            }
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            AdminHub.RaiseClientUpdated(client);
+        }
+
+        public async Task ChangeSessionType(string pcNumber, string newType, int remainingMinutes)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            if (!client.IsSession) return;
+            if (client.SessionType == newType) return;
+
+            string cmd;
+            if (newType == "VIP")
+            {
+                client.OriginalLimitSeconds = client.LimitSeconds;
+                client.SessionType = "VIP";
+                client.Status = "VIP";
+                client.LimitSeconds = 0;
+                cmd = JsonSerializer.Serialize(new { Type = "CHANGE_SESSION_TYPE", Value = "VIP", LimitSeconds = 0 });
+            }
+            else
+            {
+                int newLimit = client.ElapsedSeconds + remainingMinutes * 60;
+                client.IsPostPay = true;
+                client.SessionType = "Лимит";
+                client.Status = "Лимит";
+                client.LimitSeconds = newLimit;
+                cmd = JsonSerializer.Serialize(new { Type = "CHANGE_SESSION_TYPE", Value = "Лимит", LimitSeconds = newLimit });
+            }
+
+            client.SessionTypeLockedUntil = DateTime.UtcNow.AddSeconds(30);
+            AdminHub.KnownClients[pcNumber] = client;
+            AdminHub.SaveActiveSessions();
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", cmd);
+            AdminHub.RaiseClientUpdated(client);
+        }
+
         public Task<object[]> GetAllDebts()
         {
             if (!IsAuthorized()) return Task.FromResult(Array.Empty<object>());
@@ -363,12 +495,31 @@ namespace BibAdminWeb
             return Task.CompletedTask;
         }
 
-        public Task PaySessionDebts(string pcNumber, string readerId)
+        // Оплата конкретных долгов по услугам (из окна итога сессии)
+        public Task PayDebts(string[] ids)
         {
             if (!IsAuthorized()) return Task.CompletedTask;
-            if (!string.IsNullOrEmpty(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId);
-            if (!string.IsNullOrEmpty(pcNumber)) ServiceTransaction.MarkAllPaidForPc(pcNumber);
+            foreach (var id in ids ?? Array.Empty<string>()) ServiceTransaction.MarkAsPaid(id);
             return Task.CompletedTask;
+        }
+
+        // Оплата всех долгов читателя (перед началом сессии)
+        public Task PayReaderDebts(string readerId)
+        {
+            if (!IsAuthorized()) return Task.CompletedTask;
+            if (ServiceTransaction.IsPersonalId(readerId)) ServiceTransaction.MarkAllPaidForReader(readerId.Trim());
+            return Task.CompletedTask;
+        }
+
+        // Отправить текстовое сообщение на клиентский ПК (показывается по центру экрана клиента).
+        public async Task SendMessageToPc(string pcNumber, string text)
+        {
+            if (!IsAuthorized()) return;
+            if (string.IsNullOrWhiteSpace(text)) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            var json = JsonSerializer.Serialize(new { Type = "SHOW_MESSAGE", Value = text });
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
         }
 
         public async Task ShutdownAll()
@@ -377,10 +528,11 @@ namespace BibAdminWeb
             var json = JsonSerializer.Serialize(new { Type = "SHUTDOWN", Value = "true" });
             foreach (var c in AdminHub.KnownClients.Values)
             {
+                // SHUTDOWN — разовое действие "здесь и сейчас", а не состояние.
+                // Офлайн-ПК и так выключен, ставить команду в очередь не нужно —
+                // иначе она "выстрелит" и выключит ПК сразу после следующего включения.
                 if (c.IsOnline)
                     await _adminCtx.Clients.Client(c.ConnectionId).SendAsync("ReceiveCommand", json);
-                else
-                    AdminHub.AddPendingCommand(c.PcNumber, "SHUTDOWN", "true");
             }
         }
 
@@ -390,11 +542,21 @@ namespace BibAdminWeb
             var json = JsonSerializer.Serialize(new { Type = "RESTART", Value = "true" });
             foreach (var c in AdminHub.KnownClients.Values)
             {
+                // RESTART — так же, как SHUTDOWN, разовое действие, в очередь не ставим
                 if (c.IsOnline)
                     await _adminCtx.Clients.Client(c.ConnectionId).SendAsync("ReceiveCommand", json);
-                else
-                    AdminHub.AddPendingCommand(c.PcNumber, "RESTART", "true");
             }
+        }
+
+        // Перезагрузить один ПК (раньше метод отсутствовал — кнопка перезагрузки у оператора не работала).
+        public async Task RestartPc(string pcNumber)
+        {
+            if (!IsAuthorized()) return;
+            if (!AdminHub.KnownClients.TryGetValue(pcNumber, out var client)) return;
+            var json = JsonSerializer.Serialize(new { Type = "RESTART", Value = "true" });
+            // RESTART — разовое действие, применимо только к онлайн-ПК; в pending-очередь не ставим
+            if (client.IsOnline)
+                await _adminCtx.Clients.Client(client.ConnectionId).SendAsync("ReceiveCommand", json);
         }
 
         private bool IsAuthorized()
