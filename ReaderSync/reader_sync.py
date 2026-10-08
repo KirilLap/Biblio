@@ -174,6 +174,7 @@ class Uznel:
     def __init__(self, page):
         self.page = page
         self.step = "запуск"
+        self.trace = False      # снимки промежуточных шагов (включается при пробном запуске)
         # «Сохранить в Excel» открывает отдельную вкладку (about:blank), и файл скачивается в ней,
         # поэтому скачивания ловим на всех вкладках окна, а не только на основной.
         self._downloads = []
@@ -278,13 +279,41 @@ class Uznel:
         except Exception:
             return ""
 
-    def read_count(self):
+    def counter_text(self):
         try:
-            txt = self.page.locator(sel.RESULT_COUNT).first.inner_text(timeout=2_000)
+            return self.page.locator(sel.RESULT_COUNT).first.inner_text(timeout=2_000).strip()
         except Exception:
-            return None
-        d = digits(txt)
-        return int(d) if d else None
+            return ""
+
+    def read_count(self):
+        """Число найденных записей. Текст счётчика бывает «268» или «268 (0)» — берём первое число."""
+        m = re.search(r"\d+", self.counter_text())
+        return int(m.group()) if m else None
+
+    def trace_shot(self, name):
+        """Снимок экрана на промежуточном шаге (только при пробном запуске) — для отладки."""
+        if not self.trace:
+            return
+        try:
+            self.page.screenshot(path=os.path.join(DEBUG_DIR, f"{datetime.now():%Y%m%d_%H%M%S}_{name}.png"))
+        except Exception:
+            pass
+
+    def slow_click(self, locator, button="left"):
+        """Клик «как человек»: навести, подождать, нажать, отпустить. Меню сайта не всегда
+        реагирует на мгновенный клик."""
+        page = self.page
+        locator.wait_for(state="visible", timeout=5_000)
+        box = locator.bounding_box()
+        if not box:
+            raise RuntimeError("элемент не виден на странице")
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        page.mouse.move(x - 30, y - 6)
+        page.mouse.move(x, y, steps=6)
+        page.wait_for_timeout(250)
+        page.mouse.down(button=button)
+        page.wait_for_timeout(80)
+        page.mouse.up(button=button)
 
     def wait_count_stable(self, timeout=120):
         """Ждёт, пока счётчик результатов перестанет меняться. Возвращает число записей."""
@@ -363,13 +392,19 @@ class Uznel:
         page.keyboard.press("Escape")
         grid = page.locator(sel.GRID_BODY).first
         grid.wait_for(state="visible", timeout=15_000)
-        grid.click(button="right", position={"x": 200, "y": 40})
-        page.wait_for_timeout(400)
+        # левый клик по первой строке — таблица получает фокус; затем правый клик там же
+        grid.click(position={"x": 200, "y": 12})
+        page.wait_for_timeout(300)
+        grid.click(button="right", position={"x": 200, "y": 12})
+        page.wait_for_timeout(600)
+        self.trace_shot("1_menu")
         item = page.locator(sel.MENU_SELECT_ALL)
         if item.count() == 0:
             item = page.get_by_text(sel.MENU_SELECT_ALL_TEXT, exact=True)
-        item.last.click(timeout=5_000)
-        page.wait_for_timeout(1_000)
+        self.slow_click(item.last)
+        page.wait_for_timeout(1_200)
+        log.info("    после «Выбрать все» счётчик: «%s»", self.counter_text())
+        self.trace_shot("2_selected")
 
     def export(self, expected):
         """«Выбрать все» → «Сохранить в Excel». Возвращает путь к файлу, проверив число строк."""
@@ -517,6 +552,7 @@ def main():
                                       viewport={"width": 1600, "height": 900})
             page = ctx.new_page()
             uz = Uznel(page)
+            uz.trace = args.dry_run
             try:
                 uz.login(cfg["uznel_url"], cfg["uznel_login"], cfg["uznel_password"])
                 uz.open_readers()
