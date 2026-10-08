@@ -4,8 +4,12 @@ rem Установка робота ReaderSync. Запускать ОТ ИМЕН
 rem Создаёт отдельное окружение Python в этой папке (venv) — другие программы на Python не затрагивает.
 cd /d "%~dp0"
 
+rem «setup.cmd dev» — только окружение и браузер, без заданий Планировщика (для проверки на рабочем ПК)
+set "DEVMODE="
+if /i "%~1"=="dev" set "DEVMODE=1"
+
 net session >nul 2>&1
-if errorlevel 1 (
+if errorlevel 1 if not defined DEVMODE (
   echo [ОШИБКА] Запустите setup.cmd от имени администратора.
   pause
   exit /b 1
@@ -35,6 +39,15 @@ if not exist "config.ini" (
   echo Создан config.ini — впишите в него логин и пароль UZNEL и проверьте адрес сервера.
 ) else (
   echo config.ini уже есть — не трогаю.
+)
+
+if defined DEVMODE (
+  echo === 4/4  Режим проверки: задания Планировщика не создаются ===
+  echo.
+  echo Готово. Заполните config.ini и запустите:
+  echo   run_sync.cmd --headed --dry-run --from 01-10-2026
+  pause
+  exit /b 0
 )
 
 echo === 4/4  Задания Планировщика: 19:00 ежедневно и повтор в 08:00 ===
