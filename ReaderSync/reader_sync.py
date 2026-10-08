@@ -172,6 +172,38 @@ class Uznel:
     def __init__(self, page):
         self.page = page
         self.step = "запуск"
+        # «Сохранить в Excel» открывает отдельную вкладку (about:blank), и файл скачивается в ней,
+        # поэтому скачивания ловим на всех вкладках окна, а не только на основной.
+        self._downloads = []
+        self._watch(page)
+        page.context.on("page", self._watch)
+
+    def _watch(self, p):
+        p.on("download", lambda d: self._downloads.append(d))
+
+    def _download_after(self, action, timeout_s=600):
+        """Выполняет action (клик по экспорту) и ждёт файл с любой вкладки. Лишние вкладки закрывает."""
+        page = self.page
+        self._downloads.clear()
+        action()
+        start = time.time()
+        while not self._downloads:
+            if time.time() - start > timeout_s:
+                raise RuntimeError("сайт не отдал файл: скачивание не началось")
+            msg = self.dismiss_alert()
+            if msg:
+                raise RuntimeError(f"сайт не отдал файл: {msg}")
+            page.wait_for_timeout(300)
+        dl = self._downloads[0]
+        path = os.path.join(DOWNLOAD_DIR, f"{datetime.now():%Y%m%d_%H%M%S_%f}.xlsx")
+        dl.save_as(path)
+        for extra in page.context.pages:
+            if extra is not page:
+                try:
+                    extra.close()
+                except Exception:
+                    pass
+        return path
 
     def set_step(self, text):
         self.step = text
@@ -343,20 +375,20 @@ class Uznel:
         last_rows = None
         for attempt in (1, 2):
             self._select_all()
-            with page.expect_download(timeout=10 * 60_000) as dl_info:
-                if attempt == 1:
-                    page.locator(sel.EXPORT_BUTTON).click()
-                else:
-                    # запасной путь: пункт контекстного меню таблицы
-                    page.locator(sel.GRID_BODY).first.click(button="right", position={"x": 200, "y": 40})
-                    page.wait_for_timeout(400)
-                    item = page.locator(sel.MENU_SAVE_EXCEL)
-                    if item.count() == 0:
-                        item = page.get_by_text(sel.MENU_SAVE_EXCEL_TEXT, exact=True)
-                    item.last.click(timeout=5_000)
-            dl = dl_info.value
-            path = os.path.join(DOWNLOAD_DIR, f"{datetime.now():%Y%m%d_%H%M%S}_{attempt}.xlsx")
-            dl.save_as(path)
+
+            def click_toolbar():
+                page.locator(sel.EXPORT_BUTTON).click()
+
+            def click_menu():
+                # запасной путь: пункт контекстного меню таблицы
+                page.locator(sel.GRID_BODY).first.click(button="right", position={"x": 200, "y": 40})
+                page.wait_for_timeout(400)
+                item = page.locator(sel.MENU_SAVE_EXCEL)
+                if item.count() == 0:
+                    item = page.get_by_text(sel.MENU_SAVE_EXCEL_TEXT, exact=True)
+                item.last.click(timeout=5_000)
+
+            path = self._download_after(click_toolbar if attempt == 1 else click_menu)
             last_rows = count_rows_xlsx(path)
             # Число на экране может чуть вырасти, пока идёт выгрузка, — допускаем расхождение в 1 %
             if last_rows > 0 and abs(last_rows - expected) <= max(3, expected // 100):
