@@ -83,11 +83,18 @@ namespace BibAdminWeb
             return string.IsNullOrWhiteSpace(fallback) || fallback == "—" ? "" : fallback.Trim();
         }
 
-        private static Dictionary<string, Reader> LoadReaderMap()
+        /// <summary>
+        /// Заполняет карту «номер билета → читатель» только теми читателями, которые встречаются
+        /// в переданных сессиях и услугах и в ручных отметках посещений. Всю базу читателей
+        /// (десятки тысяч записей) для подсчёта посещений загружать не нужно.
+        /// </summary>
+        public static void FillReaderMap(Dictionary<string, Reader> readerMap,
+            IEnumerable<SessionRecord> sessions, IEnumerable<ServiceTransaction> services)
         {
-            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
-            return readerMap;
+            var ids = sessions.Select(s => (string?)s.ReaderId)
+                .Concat(services.Select(t => (string?)t.ReaderId))
+                .Concat(VisitStore.Snapshot().Select(v => (string?)v.ReaderId));
+            foreach (var rd in ReaderStore.GetByCardIds(ids)) readerMap[rd.CardId] = rd;
         }
 
         /// <summary>
@@ -116,7 +123,9 @@ namespace BibAdminWeb
                     });
             }
             sessions.AddRange(active);
-            return Build(from, to, LoadReaderMap(), sessions, allSvc, new HashSet<SessionRecord>(active));
+            var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
+            FillReaderMap(readerMap, sessions, allSvc);
+            return Build(from, to, readerMap, sessions, allSvc, new HashSet<SessionRecord>(active));
         }
 
         public static Result Build(DateTime from, DateTime to, Dictionary<string, Reader> readerMap,

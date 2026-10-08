@@ -467,13 +467,14 @@ namespace BibAdminWeb
             var (from, to) = ParsePeriod(period, dateStr);
 
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var r in ReaderStore.GetAll()) readerMap[r.CardId] = r;
 
             // Filter sources
             var sessions = FinanceStore.Sessions
                 .Where(s => s.EndTime >= from && s.EndTime < to).ToList();
             var services = ServiceTransaction.All
                 .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+            // берём из базы только читателей, встречающихся за период, а не всю таблицу
+            VisitCalc.FillReaderMap(readerMap, sessions, services);
 
             // Dynamic service columns — all service types that appear in period
             var serviceColumns = services
@@ -592,12 +593,13 @@ namespace BibAdminWeb
             var (from, to) = ParsePeriod(period, dateStr);
 
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var r in ReaderStore.GetAll()) readerMap[r.CardId] = r;
 
             var sessions = FinanceStore.Sessions
                 .Where(s => s.EndTime >= from && s.EndTime < to).ToList();
             var services = ServiceTransaction.All
                 .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+            // берём из базы только читателей, встречающихся за период, а не всю таблицу
+            VisitCalc.FillReaderMap(readerMap, sessions, services);
 
             var svcCols = services
                 .GroupBy(t => t.ServiceTypeId)
@@ -952,12 +954,13 @@ namespace BibAdminWeb
             var today      = DateTime.Today;
 
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
 
             var sessions = FinanceStore.Sessions
                 .Where(s => s.EndTime >= from && s.EndTime < to).ToList();
             var allSvc = ServiceTransaction.All
                 .Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+            // берём из базы только читателей, встречающихся за период, а не всю таблицу
+            VisitCalc.FillReaderMap(readerMap, sessions, allSvc);
 
             // Правила подсчёта посещений — в VisitCalc
             var calc = VisitCalc.Build(from, to, readerMap, sessions, allSvc);
@@ -1137,10 +1140,11 @@ namespace BibAdminWeb
             // Reuse BuildAnalytics to get structured data — simpler than duplicating logic
             // We call the raw aggregation again to get typed objects for Excel writing
             var readerMap = new Dictionary<string, Reader>(StringComparer.OrdinalIgnoreCase);
-            foreach (var rd in ReaderStore.GetAll()) readerMap[rd.CardId] = rd;
 
             var sessions = FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList();
             var allSvc   = ServiceTransaction.All.Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList();
+            // берём из базы только читателей, встречающихся за период, а не всю таблицу
+            VisitCalc.FillReaderMap(readerMap, sessions, allSvc);
 
             var visits = VisitCalc.Build(from, to, readerMap, sessions, allSvc).Visits;
 

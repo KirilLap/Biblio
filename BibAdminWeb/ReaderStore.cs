@@ -189,6 +189,47 @@ namespace BibAdminWeb
             return r.Read() ? Map(r) : null;
         }
 
+        /// <summary>
+        /// Читатели по списку номеров билетов — одним-двумя запросами по индексу.
+        /// Нужно статистике и вкладке «Посещения»: им достаточно тех читателей, что встречаются
+        /// в сессиях, услугах и отметках за период, а не всей базы.
+        /// </summary>
+        public static List<Reader> GetByCardIds(IEnumerable<string?> cardIds)
+        {
+            // Сравнение номеров в программе без учёта регистра, а индекс в базе — с учётом,
+            // поэтому ищем номер как есть и в верхнем регистре.
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var raw in cardIds)
+            {
+                var id = raw?.Trim();
+                if (string.IsNullOrEmpty(id)) continue;
+                ids.Add(id);
+                ids.Add(id.ToUpperInvariant());
+            }
+            var result = new List<Reader>();
+            if (ids.Count == 0) return result;
+
+            using var conn = Open();
+            var all = new List<string>(ids);
+            const int batch = 400;
+            for (int start = 0; start < all.Count; start += batch)
+            {
+                int n = Math.Min(batch, all.Count - start);
+                using var cmd = conn.CreateCommand();
+                var names = new string[n];
+                for (int i = 0; i < n; i++)
+                {
+                    names[i] = "@p" + i;
+                    cmd.Parameters.AddWithValue(names[i], all[start + i]);
+                }
+                cmd.CommandText = "SELECT id,card_id,full_name,birth_date,category,gender,registered_at,updated_at FROM readers WHERE card_id IN ("
+                    + string.Join(",", names) + ")";
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) result.Add(Map(r));
+            }
+            return result;
+        }
+
         public static int Count()
         {
             using var conn = Open();
