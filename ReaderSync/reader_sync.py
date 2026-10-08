@@ -132,8 +132,12 @@ def _post(cfg, token, path, body, content_type):
         with urllib.request.urlopen(req, timeout=300) as r:
             return json.loads(r.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")[:300]
-        raise RuntimeError(f"Сервер BibAdminWeb ответил {e.code}: {detail}") from None
+        detail = e.read().decode("utf-8", "replace")
+        try:
+            detail = json.loads(detail).get("error", detail)    # читаемый текст вместо \uXXXX
+        except Exception:
+            pass
+        raise RuntimeError(f"Сервер BibAdminWeb ответил {e.code}: {str(detail)[:300]}") from None
     except urllib.error.URLError as e:
         raise RuntimeError(f"Сервер BibAdminWeb недоступен ({cfg['bibadmin_url']}): {e.reason}") from None
 

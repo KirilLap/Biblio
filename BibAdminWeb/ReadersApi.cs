@@ -742,9 +742,15 @@ namespace BibAdminWeb
             int firstDataRow = 2;
             if (colCardId < 0 || colName < 0)
             {
+                // Признак выгрузки UZNEL: в A1 стоит порядковый номер строки (число), в B1 — ID без
+                // пробелов, колонок не меньше 16. ID бывает и без цифр (служебные записи вроде «ILCSam»).
+                var a1 = ws.Cell(1, 1);
                 var b1 = ws.Cell(1, 2).GetString().Trim();
-                bool looksLikeCardId = b1.Length >= 6 && b1.Any(char.IsDigit) && b1.Any(char.IsLetter) && !b1.Contains(' ');
-                if (looksLikeCardId)
+                bool a1IsRowNumber = a1.DataType == XLDataType.Number
+                    || double.TryParse(a1.GetString().Trim(), System.Globalization.NumberStyles.Any,
+                           System.Globalization.CultureInfo.InvariantCulture, out _);
+                int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+                if (a1IsRowNumber && b1.Length > 0 && !b1.Contains(' ') && lastCol >= 16)
                 {
                     colCardId = 2; colName = 3; colBirth = 5; colCategory = 8;
                     colRegDate = 11; colUpdatedAt = 12; colGender = 16;
