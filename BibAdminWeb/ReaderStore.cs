@@ -192,20 +192,28 @@ namespace BibAdminWeb
             {
                 if (string.IsNullOrWhiteSpace(r.CardId)) continue;
 
-                string? existUpdatedAt = null;
+                bool exists = false, same = false;
 
                 using (var check = conn.CreateCommand())
                 {
                     check.Transaction = tx;
-                    check.CommandText = "SELECT updated_at FROM readers WHERE card_id=@id";
+                    check.CommandText = "SELECT full_name,birth_date,category,gender,registered_at,updated_at FROM readers WHERE card_id=@id";
                     check.Parameters.AddWithValue("@id", r.CardId);
                     using var dr = check.ExecuteReader();
-                    if (dr.Read()) existUpdatedAt = dr.GetString(0);
+                    if (dr.Read())
+                    {
+                        exists = true;
+                        // Сравниваем все поля, а не только дату обновления: читатель, добавленный оператором
+                        // по одному номеру билета в день регистрации, имеет ту же дату, но пустые ФИО и данные.
+                        same = dr.GetString(0) == r.FullName && dr.GetString(1) == r.BirthDate
+                            && dr.GetString(2) == r.Category && dr.GetString(3) == r.Gender
+                            && dr.GetString(4) == r.RegisteredAt && dr.GetString(5) == r.UpdatedAt;
+                    }
                 }
 
-                if (existUpdatedAt != null)
+                if (exists)
                 {
-                    if (existUpdatedAt == r.UpdatedAt)
+                    if (same)
                     {
                         result.Skipped++;
                     }
