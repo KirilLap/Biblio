@@ -44,7 +44,7 @@ LOG_DIR = os.path.join(HERE, "logs")
 DOWNLOAD_DIR = os.path.join(HERE, "downloads")
 DEBUG_DIR = os.path.join(HERE, "debug")
 KEEP_DAYS = 14                       # сколько дней хранить журналы и снимки ошибок
-FULL_LOAD_FROM = date(1900, 1, 1)
+FULL_LOAD_FROM = date(2010, 1, 1)    # по умолчанию; первые записи в базе UZNEL — 2010 год
 RETRY_SKIP_HOURS = 18                # утренний повтор не нужен, если успех был не раньше стольких часов назад
 
 log = logging.getLogger("reader_sync")
@@ -65,6 +65,7 @@ def load_config():
         "bibadmin_url": cp.get("bibadmin", "url", fallback="http://127.0.0.1:8080").strip().rstrip("/"),
         "token_file": cp.get("bibadmin", "token_file", fallback="").strip(),
         "overlap_days": cp.getint("sync", "overlap_days", fallback=3),
+        "full_from": cp.get("sync", "full_from", fallback="").strip(),
         "show_browser": cp.getboolean("sync", "show_browser", fallback=False),
         "slow_ms": cp.getint("sync", "slow_ms", fallback=0),
     }
@@ -579,7 +580,9 @@ def main():
             plan = [(sel.CRIT_REGISTERED, d1, d2), (sel.CRIT_UPDATED, d1, d2)]
         elif args.full or not state.get("last_to"):
             mode = "полная загрузка"
-            plan = [(sel.CRIT_REGISTERED, FULL_LOAD_FROM, today)]
+            # с какой даты регистрации начинать полную загрузку (full_from в config.ini)
+            full_from = parse_date(cfg["full_from"]) if cfg["full_from"] else FULL_LOAD_FROM
+            plan = [(sel.CRIT_REGISTERED, full_from, today)]
         else:
             mode = "ежедневное"
             d1 = date.fromisoformat(state["last_to"]) - timedelta(days=cfg["overlap_days"])
