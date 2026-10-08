@@ -127,6 +127,21 @@ namespace BibAdminWeb
             return (list, total);
         }
 
+        // Номер постоянного билета: префикс из настроек (по умолчанию FAA) и ровно 9 цифр
+        public const int CardDigits = 9;
+
+        public static bool IsFullCardId(string? cardId)
+        {
+            var id = cardId?.Trim() ?? "";
+            var prefix = (GlobalSettings.Load().ReaderCardPrefix ?? "").Trim();
+            if (prefix.Length == 0) prefix = "FAA";
+            if (!id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+            var rest = id.Substring(prefix.Length);
+            if (rest.Length != CardDigits) return false;
+            foreach (var ch in rest) if (!char.IsDigit(ch)) return false;
+            return true;
+        }
+
         // Быстрое добавление нового читателя только по номеру билета (без полных данных)
         public static bool QuickAdd(string cardId)
         {

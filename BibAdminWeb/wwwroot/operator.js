@@ -8,6 +8,7 @@ let serviceTypes = [];
 let offlinePcNumber = null;  // ПК, по которому ждём решения оффлайн
 let connection = null;
 let readerCardPrefix = 'FAA';
+const READER_DIGITS = 9;   // в номере постоянного билета после префикса ровно столько цифр
 let sessionFields = { requireReaderId: true, requireUserName: false };
 let _readerLookupState = null;  // null | 'not_found' | 'expired' | 'valid'
 let _readerLookedUpId = '';
@@ -564,7 +565,9 @@ function onReaderInput() {
   _readerLookupState = null;
   clearTimeout(_readerLookupTimer);
   const nums = el.value;
-  if (nums.length >= 6) {
+  // постоянный билет ищем, только когда номер введён целиком; временный — как раньше
+  const isTempCard = document.querySelector('[name="cardType"]:checked')?.value === 'temp';
+  if (isTempCard ? nums.length >= 6 : nums.length === READER_DIGITS) {
     _readerLookupTimer = setTimeout(lookupReader, 500);
   } else {
     document.getElementById('dlgReaderInfo').style.display = 'none';
@@ -715,6 +718,7 @@ async function confirmStartSession() {
     if (!readerNums) { toast(t('Введите номер читательского билета'), 'warn'); return; }
     if (!isTemp) {
       if (_readerLookupState === null || _readerLookedUpId !== readerId) await lookupReader();
+      if (_readerLookupState === 'short')     { toast(t('В номере билета должно быть {n} цифр, введено {m}', { n: READER_DIGITS, m: readerNums.length }), 'warn'); return; }
       if (_readerLookupState === 'debt')      { toast(t('У читателя неоплаченный долг — сначала оплатите его'), 'warn'); return; }
       if (_readerLookupState === 'not_found') { toast(t('Читатель не найден в базе'), 'warn'); return; }
       if (_readerLookupState === 'expired')   { toast(t('Читательский билет просрочен'), 'warn'); return; }
@@ -791,6 +795,18 @@ async function _lookupReaderImpl() {
     infoEl.className = 'reader-info valid';
     infoEl.style.display = '';
     infoEl.textContent = '✓ ' + t('Временный билет №{num} — посещение будет зафиксировано', { num: nums });
+    return;
+  }
+
+  // Неполный номер не ищем и не даём добавить: иначе в базу попадают билеты с опечаткой
+  if (nums.length !== READER_DIGITS) {
+    _readerLookupState = 'short';
+    _readerLookedUpId = readerCardPrefix + nums;
+    document.getElementById('dlgUserName').value = '';
+    infoEl.className = 'reader-info invalid';
+    infoEl.style.cssText = '';
+    infoEl.style.display = 'block';
+    infoEl.textContent = '✗ ' + t('В номере билета должно быть {n} цифр, введено {m}', { n: READER_DIGITS, m: nums.length });
     return;
   }
 
@@ -2544,6 +2560,8 @@ function applyVisitSettings() {
   if (_visitCardType === 'regular') document.getElementById('visitReaderPrefix').textContent = readerCardPrefix;
 }
 
+function digitsOnly(s) { return String(s || '').replace(/\D/g, ''); }
+
 function onVisitCardType(type) {
   _visitCardType = type === 'temp' ? 'temp' : 'regular';
   const isTemp = _visitCardType === 'temp';
@@ -2562,7 +2580,7 @@ function onVisitReaderInput() {
   el.value = el.value.replace(/\D/g, '').slice(0, 9);
   _visitLookup = null;
   clearTimeout(_visitLookupTimer);
-  if (el.value.length >= 6 || (_visitCardType === 'temp' && el.value.length >= 1)) {
+  if (_visitCardType === 'temp' ? el.value.length >= 1 : el.value.length === READER_DIGITS) {
     _visitLookupTimer = setTimeout(lookupVisitReader, 500);
   } else {
     document.getElementById('visitReaderInfo').style.display = 'none';
@@ -2586,6 +2604,12 @@ async function lookupVisitReader() {
   if (_visitCardType === 'temp') {
     _visitLookup = { id: nums, state: 'valid', name: '' };
     _visitInfo('valid', '✓ ' + t('Временный билет №{num} — посещение будет зафиксировано', { num: nums }));
+    return _visitLookup;
+  }
+
+  if (nums.length !== READER_DIGITS) {
+    _visitLookup = { id: readerCardPrefix + nums, state: 'short', name: '' };
+    _visitInfo('invalid', '✗ ' + t('В номере билета должно быть {n} цифр, введено {m}', { n: READER_DIGITS, m: nums.length }));
     return _visitLookup;
   }
 
@@ -2650,6 +2674,7 @@ async function addVisit(anonymous, force) {
     if (!document.getElementById('visitReaderId').value.trim()) { toast(t('Введите номер читательского билета'), 'warn'); return; }
     const lk = await lookupVisitReader();
     if (!lk)                      { toast(t('Проверьте номер читательского билета'), 'warn'); return; }
+    if (lk.state === 'short')     { toast(t('В номере билета должно быть {n} цифр, введено {m}', { n: READER_DIGITS, m: digitsOnly(lk.id).length }), 'warn'); return; }
     if (lk.state === 'not_found') { toast(t('Читатель не найден в базе'), 'warn'); return; }
     if (lk.state === 'expired')   { toast(t('Читательский билет просрочен'), 'warn'); return; }
     readerId = lk.id;

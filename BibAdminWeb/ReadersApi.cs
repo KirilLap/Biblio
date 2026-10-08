@@ -185,6 +185,7 @@ namespace BibAdminWeb
                 string cardId = "";
                 try { using var doc = System.Text.Json.JsonDocument.Parse(body); cardId = doc.RootElement.GetProperty("cardId").GetString()?.Trim() ?? ""; } catch { }
                 if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан cardId\"}"); return; }
+                if (!ReaderStore.IsFullCardId(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"В номере билета должно быть 9 цифр после префикса\"}"); return; }
                 ReaderStore.QuickAdd(cardId);
                 await ctx.Response.WriteAsync("{\"ok\":true}");
                 return;

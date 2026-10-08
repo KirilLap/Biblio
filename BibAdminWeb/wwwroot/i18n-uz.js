@@ -75,6 +75,7 @@ const I18N_UZ_SECTIONS = [
     'Пересадить': 'Ko‘chirish',
   }],
   ['Диалог «Начать сессию»', {
+    'В номере билета должно быть {n} цифр, введено {m}': 'Bilet raqamida {n} ta raqam bo‘lishi kerak, {m} ta kiritildi',
     'Тип сессии': 'Seans turi',
     'безлимит': 'cheksiz',
     'Предустановки': 'Qayta o‘rnatish',

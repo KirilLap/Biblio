@@ -589,13 +589,16 @@ function ssOnCardTypeChanged() {
 }
 
 // Вызывается из oninput поля читательского билета — фильтрует цифры + debounce поиск
+const READER_DIGITS = 9;   // в номере постоянного билета после префикса ровно столько цифр
+
 function onSsReaderInput() {
   const el = document.getElementById('dlgSsReader');
   el.value = el.value.replace(/\D/g, '').slice(0, 9);
   _ssLookupState = null;
   clearTimeout(_ssLookupTimer);
   const nums = el.value;
-  if (nums.length >= 6) {
+  const isTempCard = document.querySelector('[name="ssCardType"]:checked')?.value === 'temp';
+  if (isTempCard ? nums.length >= 6 : nums.length === READER_DIGITS) {
     _ssLookupTimer = setTimeout(ssLookupReader, 500);
   } else {
     document.getElementById('dlgSsReaderInfo').className = 'reader-info';
@@ -653,6 +656,15 @@ async function _ssLookupReaderImpl() {
   }
 
   const prefix = settings.readerCardPrefix || 'FAA';
+  // Неполный номер не ищем и не даём добавить: иначе в базу попадают билеты с опечаткой
+  if (nums.length !== READER_DIGITS) {
+    _ssLookupState = 'short';
+    _ssLookedUpId = prefix + nums;
+    document.getElementById('dlgSsName').value = '';
+    infoEl.className = 'reader-info invalid';
+    infoEl.textContent = `✗ В номере билета должно быть ${READER_DIGITS} цифр, введено ${nums.length}`;
+    return;
+  }
   const cardId = prefix + nums;
   _ssLookedUpId = cardId;
   try {
@@ -894,6 +906,7 @@ async function confirmStartSession() {
     if (!nums) { toast('Введите номер читательского билета', 'warn'); return; }
     if (!isTemp) {
       if (_ssLookupState === null || _ssLookedUpId !== reader) await ssLookupReader();
+      if (_ssLookupState === 'short')     { toast(`В номере билета должно быть ${READER_DIGITS} цифр, введено ${nums.length}`, 'warn'); return; }
       if (_ssLookupState === 'debt')      { toast('У читателя неоплаченный долг — сначала оплатите его', 'warn'); return; }
       if (_ssLookupState === 'not_found') { toast('Читатель не найден в базе', 'warn'); return; }
       if (_ssLookupState === 'expired')   { toast('Читательский билет просрочен', 'warn'); return; }
