@@ -740,6 +740,9 @@ namespace BibAdminWeb
             // заголовков, колонки всегда в одном порядке: B — ID, C — имя, E — дата рождения,
             // H — категория, K — дата регистрации, L — дата обновления, P — пол.
             int firstDataRow = 2;
+            // В выгрузке UZNEL берём только настоящих читателей: префикс билета из настроек
+            // (по умолчанию FAA) и дальше цифры. Служебные и тестовые записи («ILCSam», «hyb») пропускаем.
+            System.Text.RegularExpressions.Regex? uznelCardFilter = null;
             if (colCardId < 0 || colName < 0)
             {
                 // Признак выгрузки UZNEL: в A1 стоит порядковый номер строки (число), в B1 — ID без
@@ -755,6 +758,11 @@ namespace BibAdminWeb
                     colCardId = 2; colName = 3; colBirth = 5; colCategory = 8;
                     colRegDate = 11; colUpdatedAt = 12; colGender = 16;
                     firstDataRow = 1;
+                    var prefix = (GlobalSettings.Load().ReaderCardPrefix ?? "").Trim();
+                    if (prefix.Length == 0) prefix = "FAA";
+                    uznelCardFilter = new System.Text.RegularExpressions.Regex(
+                        "^" + System.Text.RegularExpressions.Regex.Escape(prefix) + @"\d+$",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 }
             }
 
@@ -766,6 +774,7 @@ namespace BibAdminWeb
             {
                 var cardId = ws.Cell(row, colCardId).GetString().Trim();
                 if (string.IsNullOrWhiteSpace(cardId)) continue;
+                if (uznelCardFilter != null && !uznelCardFilter.IsMatch(cardId)) continue;
 
                 var registeredAt = colRegDate  > 0 ? NormalizeDate(ws.Cell(row, colRegDate))  : "";
                 var updatedAt    = colUpdatedAt > 0 ? NormalizeDate(ws.Cell(row, colUpdatedAt)) : "";
