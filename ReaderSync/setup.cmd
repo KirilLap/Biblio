@@ -42,7 +42,9 @@ if not exist "config.ini" (
 )
 
 if defined DEVMODE (
-  echo === 4/4  Режим проверки: задания Планировщика не создаются ===
+  rem На рабочем ПК включаем видимое окно браузера
+  powershell -NoProfile -Command "(Get-Content -Encoding UTF8 'config.ini') -replace '^show_browser\s*=.*','show_browser = yes' | Set-Content -Encoding UTF8 'config.ini'"
+  echo === 4/4  Режим проверки: задания Планировщика не создаются, окно браузера включено ===
   echo.
   echo Готово. Заполните config.ini и запустите:
   echo   run_sync.cmd --headed --dry-run --from 01-10-2026

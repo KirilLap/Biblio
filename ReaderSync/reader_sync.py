@@ -15,7 +15,7 @@ reader_sync.py — ежедневное обновление базы читат
   run_sync.cmd                 — обычный ежедневный запуск
   run_sync.cmd --retry         — утренний повтор: работает, только если вечерний запуск не удался
   run_sync.cmd --full          — загрузить всю базу заново
-  run_sync.cmd --headed        — с видимым окном браузера (для отладки)
+  run_sync.cmd --headed        — с видимым окном браузера (то же, что show_browser = yes в config.ini)
   run_sync.cmd --dry-run       — скачать, но не отправлять на сервер
   run_sync.cmd --from 01-01-2026 --to 30-06-2026   — за указанный период
 
@@ -65,6 +65,8 @@ def load_config():
         "bibadmin_url": cp.get("bibadmin", "url", fallback="http://127.0.0.1:8080").strip().rstrip("/"),
         "token_file": cp.get("bibadmin", "token_file", fallback="").strip(),
         "overlap_days": cp.getint("sync", "overlap_days", fallback=3),
+        "show_browser": cp.getboolean("sync", "show_browser", fallback=False),
+        "slow_ms": cp.getint("sync", "slow_ms", fallback=0),
     }
     missing = [k for k in ("uznel_url", "uznel_login", "uznel_password") if not cfg[k]]
     if missing:
@@ -507,7 +509,10 @@ def main():
 
         from playwright.sync_api import sync_playwright
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=not args.headed)
+            # Окно браузера видно, если так задано в config.ini (show_browser) или ключом --headed.
+            # slow_ms — пауза между действиями, чтобы за шагами можно было следить глазами.
+            show = args.headed or cfg["show_browser"]
+            browser = pw.chromium.launch(headless=not show, slow_mo=cfg["slow_ms"] if show else 0)
             ctx = browser.new_context(ignore_https_errors=True, accept_downloads=True,
                                       viewport={"width": 1600, "height": 900})
             page = ctx.new_page()
