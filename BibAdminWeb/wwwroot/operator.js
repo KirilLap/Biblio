@@ -145,6 +145,12 @@ function startSignalR() {
 
   connection.on('pcUpdated', pc => {
     pcs[pc.pcNumber] = pc;
+    // ПК вернулся на связь — окно «Потеря связи» больше не нужно (поздний ответ в нём ставил вечную паузу)
+    if (offlinePcNumber === pc.pcNumber && pc.isOnline) {
+      offlinePcNumber = null;
+      closeDlg('dlgOffline');
+      toast(t('{pc} снова на связи', { pc: pc.pcNumber }), 'good');
+    }
     renderCard(pc.pcNumber);
     updateStats();
     if (selectedPc === pc.pcNumber) renderActionBar();
@@ -313,7 +319,39 @@ function renderCard(pcNumber) {
   const isLow = pc.sessionType === 'Лимит' && pc.limitSeconds > 0 && Math.max(0, pc.limitSeconds - pc.elapsedSeconds) <= 300;
   card.className = 'pccard' + (isSelected ? ' is-selected' : '') + (!pc.isOnline ? ' is-offline' : '') + (isLow ? ' is-low' : '');
   card.style.setProperty('--st', getStatusColor(pc));
-  card.innerHTML = buildCardHtml(pc);
+  // Перерисовываем карточку, только если в ней поменялось что-то кроме бегущих цифр (время,
+  // остаток, сумма). Полная перерисовка на каждый сигнал от ПК сбрасывала наведение и «съедала» клики.
+  const html = buildCardHtml(pc);
+  const key = _cardKey(html);
+  if (card._key === key) _syncLiveText(card, html);
+  else { card.innerHTML = html; card._key = key; }
+}
+
+// Ключ карточки без бегущих значений: таймер, остаток, сумма VIP, время окончания, полоса прогресса
+function _cardKey(html) {
+  return html
+    .replace(/(data-pc-(?:clock|rem|cost|end)="[^"]*"[^>]*>)[^<]*/g, '$1')
+    .replace(/width:\d+%/g, '');
+}
+
+// Переносит в карточку только текст бегущих значений из новой разметки
+function _syncLiveText(card, html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  tmp.querySelectorAll('[data-pc-clock],[data-pc-rem],[data-pc-cost],[data-pc-end],[data-pc-prog]').forEach(src => {
+    const attr = ['data-pc-clock', 'data-pc-rem', 'data-pc-cost', 'data-pc-end', 'data-pc-prog'].find(a => src.hasAttribute(a));
+    const dst = card.querySelector(`[${attr}="${CSS.escape(src.getAttribute(attr))}"]`);
+    if (!dst) return;
+    if (attr === 'data-pc-prog') dst.style.width = src.style.width;
+    else if (dst.textContent !== src.textContent) dst.textContent = src.textContent;
+  });
+}
+
+// Меняет разметку элемента, только если она действительно другая
+function _setHtmlIfChanged(el, html) {
+  if (el._html === html) return;
+  el.innerHTML = html;
+  el._html = html;
 }
 
 function buildCardHtml(pc) {
@@ -535,7 +573,8 @@ function renderActionBar() {
     btns += `<button class="abtn abtn-danger" onclick="doEndSession()">${ico(stopSvg)}${t('Завершить')}</button>`;
   }
 
-  bar.innerHTML = `
+  // разметку панели меняем, только если она другая — иначе кнопки «прыгают» под мышью
+  _setHtmlIfChanged(bar, `
     <div class="bb-left">
       <div class="bb-stripe"></div>
       <div class="bb-id">
@@ -545,7 +584,7 @@ function renderActionBar() {
       <span class="badge" style="color:var(--${stKey});background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)"><span class="dot" style="background:var(--${stKey})"></span>${esc(badgeLabel)}</span>
     </div>
     <div class="bb-actions">${btns}</div>
-    <button class="bb-close" onclick="deselectPc()">${ico('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15)}</button>`;
+    <button class="bb-close" onclick="deselectPc()">${ico('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15)}</button>`);
   bar.style.display = 'flex';
 }
 

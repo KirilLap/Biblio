@@ -231,6 +231,7 @@ namespace BibAdminWeb
                     (client.IsPaused ? 0 : (int)(DateTime.UtcNow - (client.SessionStart ?? DateTime.UtcNow)).TotalSeconds);
                 elapsed = Math.Max(0, elapsed);
                 client.IsPaused = true;
+                client.PauseSentAt = DateTime.UtcNow;
                 client.AccumulatedSeconds = elapsed;
                 client.Status = "Пауза";
                 AdminHub.KnownClients[pcNumber] = client;
@@ -248,15 +249,27 @@ namespace BibAdminWeb
             AdminHub.RaiseClientUpdated(client);
         }
 
-        public Task ResolveOffline(string pcNumber, string decision)
+        public async Task ResolveOffline(string pcNumber, string decision)
         {
-            if (!IsAuthorized()) return Task.CompletedTask;
-            if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return Task.CompletedTask;
+            if (!IsAuthorized()) return;
+            if (!Enum.TryParse<OfflineDecision>(decision, out var d)) return;
+
+            // ПК уже снова на связи (окно «Потеря связи» ответили позже): решение «на время без связи»
+            // не храним. «Пауза» — обычная пауза на самом ПК, «Продолжить» ничего не меняет.
+            if (AdminHub.KnownClients.TryGetValue(pcNumber, out var live) && live.IsOnline)
+            {
+                live.OfflineDecision = OfflineDecision.None;
+                if (d == OfflineDecision.Pause && live.IsSession && !live.IsPaused) await TogglePause(pcNumber);
+                AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+                OperatorBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
+                AdminHub.RaiseClientUpdated(live);
+                return;
+            }
+
             var client = AdminHub.SetOfflineDecision(pcNumber, d);
             if (client != null) AdminBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
             if (client != null) OperatorBroadcaster.Instance?.NotifyOfflineResolved(pcNumber, decision);
             if (client != null) AdminHub.RaiseClientUpdated(client);
-            return Task.CompletedTask;
         }
 
         public Task ResolveNameConflict(string mac, bool accept, int pcNumberValue, string customName)

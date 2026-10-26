@@ -64,10 +64,17 @@ function connectHub() {
     renderPcGrid();
   });
   conn.on('pcUpdated', c => {
+    const prev = pcs[c.pcNumber];
     pcs[c.pcNumber] = c;
+    // ПК вернулся на связь — окно «Потеря связи» больше не нужно (поздний ответ в нём ставил вечную паузу)
+    if (pendingOfflinePc === c.pcNumber && c.isOnline) {
+      pendingOfflinePc = null;
+      closeDlg('dlgOffline');
+      toast(`${c.pcNumber} снова на связи`);
+    }
     renderPcGrid();
-    if (selectedAdminPc === c.pcNumber) renderAdminActionBar();
-    loadFinance(); // refresh finance when a session ends
+    // Финансы перечитываем, только когда сессия закончилась, а не на каждый сигнал от ПК
+    if (prev && prev.isSession && !c.isSession) loadFinance();
   });
   conn.on('allPcsUpdated', all => {
     pcs = {};
@@ -284,8 +291,27 @@ function renderPcGrid() {
   const pcStats = document.getElementById('pcStats');
   if (pcStats) pcStats.textContent = `Всего: ${list.length} | Сессий: ${sessions} | Свободных: ${free}`;
 
-  grid.innerHTML = '';
-  list.forEach(c => grid.appendChild(buildPcCard(c)));
+  // Перерисовываем только изменившиеся карточки. Раньше вся сетка строилась заново на каждый
+  // сигнал от любого ПК — карточки «дёргались» под мышью и клики по кнопкам терялись.
+  const existing = new Map([...grid.children].map(el => [el.dataset.pcnumber, el]));
+  const order = [];
+  list.forEach(c => {
+    const fresh = buildPcCard(c);
+    const key = _pcCardKey(fresh);
+    const old = existing.get(c.pcNumber);
+    existing.delete(c.pcNumber);
+    if (old && old._key === key) {
+      _pcCardSyncLive(old, fresh);
+      order.push(old);
+    } else {
+      fresh._key = key;
+      if (old) old.replaceWith(fresh);
+      order.push(fresh);
+    }
+  });
+  existing.forEach(el => el.remove());
+  const cur = [...grid.children];
+  if (cur.length !== order.length || cur.some((el, i) => el !== order[i])) order.forEach(el => grid.appendChild(el));
 
   filterPcGrid();
   renderUpdatePanel(list);
@@ -337,6 +363,29 @@ function getStatusKey(c) {
   if (c.isSession) return 'limit';
   if (c.isFree) return 'free';
   return 'locked';
+}
+
+// Ключ карточки без бегущих значений (таймер и «К оплате»)
+function _pcCardKey(el) {
+  return el.outerHTML
+    .replace(/(id="timer-[^"]*"[^>]*>)[^<]*/, '$1')
+    .replace(/К оплате: [^<]*/, 'К оплате');
+}
+
+// Переносит в существующую карточку только изменившийся текст (структура у них одинаковая)
+function _pcCardSyncLive(old, fresh) {
+  const a = old.querySelectorAll('*'), b = fresh.querySelectorAll('*');
+  if (a.length !== b.length) return;
+  for (let i = 0; i < b.length; i++) {
+    if (b[i].children.length === 0 && a[i].textContent !== b[i].textContent) a[i].textContent = b[i].textContent;
+  }
+}
+
+// Меняет разметку элемента, только если она действительно другая
+function _setHtmlIfChanged(el, html) {
+  if (el._html === html) return;
+  el.innerHTML = html;
+  el._html = html;
 }
 
 function buildPcCard(c) {
@@ -526,7 +575,8 @@ function renderAdminActionBar() {
   }
 
   ab.style.setProperty('--st', `var(--${stKey})`);
-  ab.innerHTML = `
+  // разметку панели меняем, только если она другая — иначе кнопки «прыгают» под мышью
+  _setHtmlIfChanged(ab, `
     <div class="bb-left">
       <div class="bb-stripe"></div>
       <div class="bb-id">
@@ -536,7 +586,7 @@ function renderAdminActionBar() {
       <span class="badge" style="color:var(--${stKey});background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)"><span class="dot" style="background:var(--${stKey})"></span>${esc(badgeLabel)}</span>
     </div>
     <div class="bb-actions">${btns}</div>
-    <button class="bb-close" onclick="selectAdminPc(null)">${ico('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15)}</button>`;
+    <button class="bb-close" onclick="selectAdminPc(null)">${ico('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 15)}</button>`);
   ab.style.display = 'flex';
 }
 

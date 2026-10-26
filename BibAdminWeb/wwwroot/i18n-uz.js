@@ -162,6 +162,7 @@ const I18N_UZ_SECTIONS = [
     'Закрыть': 'Chiqish',
   }],
   ['Потеря связи и пересадка', {
+    '{pc} снова на связи': '{pc} yana aloqada',
     'Потеря связи с ПК': 'Kompyuter bilan aloqa uzildi',
     'Выберите, что сделать с сессией': 'Seans bilan nima qilishni tanlang',
     'Поставить на паузу': 'Pauzaga qo‘yish',

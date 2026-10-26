@@ -68,6 +68,9 @@ namespace BibAdminWeb
         public string StartedByOperatorName { get; set; } = "";
 
         public bool IsPaused { get; set; } = false;
+        // Когда сервер последний раз поставил паузу (не сохраняется). Пока ПК не успел её применить,
+        // его сообщения «сессия идёт» не должны снимать паузу на сервере.
+        public DateTime? PauseSentAt { get; set; }
         public int AccumulatedSeconds { get; set; } = 0;
         public int PenaltyAmount { get; set; } = 0;
 
