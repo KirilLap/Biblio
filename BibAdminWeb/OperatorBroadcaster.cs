@@ -29,6 +29,10 @@ namespace BibAdminWeb
         public void NotifyOfflineResolved(string pcNumber, string decision)
             => _ = _ctx.Clients.All.SendAsync("offlineResolved", new { pcNumber, decision });
 
+        public void NotifySessionEndedByStaff(string pcNumber, string userName, int durationSeconds, int earned)
+            => _ = _ctx.Clients.All.SendAsync("sessionEndedByStaff",
+                new { pcNumber, userName, durationSeconds, earned });
+
         public Task NotifyServerRestartingAsync(string reason)
             => _ctx.Clients.All.SendAsync("serverRestarting", new { reason });
 
@@ -44,8 +48,38 @@ namespace BibAdminWeb
         {
             var settings = GlobalSettings.Load();
             var services = settings.Services.Where(s => s.IsActive)
-                .Select(s => new { id = s.Id, name = s.Name, unit = s.Unit, price = s.Price }).ToList();
+                .Select(s => new { id = s.Id, name = s.Name, nameUz = s.NameUz, unit = s.Unit, price = s.Price }).ToList();
             _ = _ctx.Clients.All.SendAsync("serviceTypes", services);
+        }
+
+        public void PushSessionFields()
+        {
+            var settings = GlobalSettings.Load();
+            _ = _ctx.Clients.All.SendAsync("sessionFields", SessionFieldsDto(settings));
+        }
+
+        /// <summary>Настройки, нужные панели оператора: поля сессии и отметка посещений.</summary>
+        public static object SessionFieldsDto(GlobalSettings settings) => new
+        {
+            requireReaderId = settings.RequireReaderId,
+            requireUserName = settings.RequireUserName,
+            workdayEnd = settings.WorkdayEnd,
+            requireVisitReaderId = settings.RequireVisitReaderId,
+            showVisitPurpose = settings.ShowVisitPurpose,
+            visitPurposes = settings.VisitPurposes.Where(p => p.IsActive && !string.IsNullOrWhiteSpace(p.Name))
+                .Select(p => new { id = p.Id, name = p.Name, nameUz = p.NameUz }).ToList()
+        };
+
+        /// <summary>
+        /// ПК, за которым сейчас идёт сессия по этому читательскому билету (кроме exceptPc), или null.
+        /// Билет без цифр (пустой или один префикс) не проверяется — это сессия без билета.
+        /// </summary>
+        public static ClientState? FindSessionByReader(string? readerId, string exceptPc)
+        {
+            var id = readerId?.Trim() ?? "";
+            if (!id.Any(char.IsDigit)) return null;
+            return AdminHub.KnownClients.Values.FirstOrDefault(c => c.IsSession && c.PcNumber != exceptPc
+                && string.Equals(c.ReaderId, id, StringComparison.OrdinalIgnoreCase));
         }
 
         public static object ClientDto(ClientState cs) => new
@@ -53,7 +87,11 @@ namespace BibAdminWeb
             pcNumber = cs.PcNumber, pcNumberValue = cs.PcNumberValue, status = cs.Status,
             sessionType = cs.SessionType, isOnline = cs.IsOnline, isSession = cs.IsSession,
             isPaused = cs.IsPaused, isLocked = cs.IsLocked, isFree = cs.IsFree,
-            elapsedSeconds = cs.ElapsedSeconds, limitSeconds = cs.LimitSeconds, paidAmount = cs.PaidAmount,
+            // Для offline+Continue считаем elapsed с учётом времени с момента обрыва
+            elapsedSeconds = (!cs.IsOnline && cs.IsSession && !cs.IsPaused && cs.DisconnectedAt.HasValue)
+                ? cs.ElapsedAtDisconnect + (int)(System.DateTime.UtcNow - cs.DisconnectedAt.Value).TotalSeconds
+                : cs.ElapsedSeconds,
+            limitSeconds = cs.LimitSeconds, paidAmount = cs.PaidAmount,
             accumulatedSeconds = cs.AccumulatedSeconds, sessionStart = cs.SessionStart?.ToString("o"),
             userName = cs.UserName, readerId = cs.ReaderId, ip = cs.Ip,
             disconnectedAt = cs.DisconnectedAt?.ToString("o"), elapsedAtDisconnect = cs.ElapsedAtDisconnect

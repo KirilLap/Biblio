@@ -50,7 +50,8 @@ namespace BibAdminWeb
                 });
                 await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
                     id = op.Id, displayName = op.DisplayName, login = op.Login,
-                    canViewReaders = op.CanViewReaders, canViewFinance = op.CanViewFinance
+                    canViewReaders = op.CanViewReaders, canViewFinance = op.CanViewFinance,
+                    canViewStats = op.CanViewStats
                 }));
             }
             catch (Exception ex)
@@ -84,7 +85,8 @@ namespace BibAdminWeb
             if (op == null) { ctx.Response.StatusCode = 401; await ctx.Response.WriteAsync("{}"); return; }
             await ctx.Response.WriteAsync(JsonSerializer.Serialize(new {
                 id = op.Id, displayName = op.DisplayName, login = op.Login,
-                canViewReaders = op.CanViewReaders, canViewFinance = op.CanViewFinance
+                canViewReaders = op.CanViewReaders, canViewFinance = op.CanViewFinance,
+                canViewStats = op.CanViewStats
             }));
         }
 

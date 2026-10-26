@@ -56,9 +56,9 @@ function startSignalR() {
     offlinePcNumber = data.pcNumber;
     const pc = pcs[data.pcNumber] || {};
     document.getElementById('dlgOfflineBody').innerHTML =
-      `<div class="summary-row"><span>ПК</span><span class="val">${esc(data.pcNumber)}</span></div>
-       <div class="summary-row"><span>Тип</span><span class="val">${esc(data.sessionType)}</span></div>
-       <div class="summary-row"><span>Время в сессии</span><span class="val">${fmtTime(data.elapsed)}</span></div>`;
+      `<div class="summary-row"><span>${t('ПК')}</span><span class="val">${esc(data.pcNumber)}</span></div>
+       <div class="summary-row"><span>${t('Тип')}</span><span class="val">${esc(t(data.sessionType))}</span></div>
+       <div class="summary-row"><span>${t('Время в сессии')}</span><span class="val">${fmtTime(data.elapsed)}</span></div>`;
     openDlg('dlgOffline');
   });
 
@@ -66,7 +66,7 @@ function startSignalR() {
     if (offlinePcNumber === data.pcNumber) {
       offlinePcNumber = null;
       closeDlg('dlgOffline');
-      toast(`Решение по ${data.pcNumber}: ${data.decision === 'Pause' ? 'пауза' : 'продолжить'}`, 'good');
+      toast(t('Решение по {pc}: {decision}', { pc: data.pcNumber, decision: t(data.decision === 'Pause' ? 'пауза' : 'продолжить') }), 'good');
     }
   });
 
@@ -75,21 +75,21 @@ function startSignalR() {
   });
 
   connection.on('serviceCreated', s => {
-    toast(`Услуга "${s.serviceName}" создана. Сумма: ${fmt(s.total)} сум${s.isPaid ? '' : ' (отложено)'}`, 'good');
+    toast(t('Услуга "{name}" создана. Сумма: {sum} сум', { name: tServer(svcName(s.serviceName)), sum: fmt(s.total) }) + (s.isPaid ? '' : ' ' + t('(отложено)')), 'good');
   });
 
   connection.onreconnecting(() => {
     setDot(false);
-    toast('Переподключение к серверу...', '');
+    toast(t('Переподключение к серверу...'), '');
   });
   connection.onreconnected(async () => {
     setDot(true);
-    toast('Связь восстановлена', 'good');
+    toast(t('Связь восстановлена'), 'good');
     try { await connection.invoke('RequestSnapshot'); } catch (e) { console.warn('snapshot error', e); }
   });
   connection.onclose(() => {
     setDot(false);
-    toast('Соединение потеряно. Ожидание сервера...', 'warn');
+    toast(t('Соединение потеряно. Ожидание сервера...'), 'warn');
   });
 
   connection.start()
@@ -100,7 +100,7 @@ function startSignalR() {
 function setDot(online) {
   const d = document.getElementById('connDot');
   d.className = 'conn-dot ' + (online ? 'online' : 'offline');
-  d.title = online ? 'Подключено' : 'Нет связи с сервером';
+  d.title = t(online ? 'Подключено' : 'Нет связи с сервером');
 }
 
 // ── Рендер грида ──────────────────────────────────────────────────────────────
@@ -199,14 +199,14 @@ function renderActionBar() {
   const btns = [];
 
   if (pc.isOnline && pc.isLocked && !pc.isSession) {
-    btns.push(`<button class="ab-btn green" onclick="openSessionDlg()">▶ Начать сессию</button>`);
+    btns.push(`<button class="ab-btn green" onclick="openSessionDlg()">▶ ${t('Начать сессию')}</button>`);
   }
   if (pc.isSession) {
-    const pauseLabel = pc.isPaused ? '▶ Продолжить' : '⏸ Пауза';
+    const pauseLabel = pc.isPaused ? '▶ ' + t('Продолжить') : '⏸ ' + t('Пауза');
     const pauseCls = pc.isPaused ? 'green' : 'amber';
     btns.push(`<button class="ab-btn ${pauseCls}" onclick="doTogglePause()">${pauseLabel}</button>`);
-    btns.push(`<button class="ab-btn blue" onclick="openTransferDlg()">↔ Пересадить</button>`);
-    btns.push(`<button class="ab-btn red" onclick="doEndSession()">⏹ Завершить</button>`);
+    btns.push(`<button class="ab-btn blue" onclick="openTransferDlg()">↔ ${t('Пересадить')}</button>`);
+    btns.push(`<button class="ab-btn red" onclick="doEndSession()">⏹ ${t('Завершить')}</button>`);
   }
 
   document.getElementById('abActions').innerHTML = btns.join('');
@@ -258,21 +258,21 @@ async function confirmStartSession() {
       sessionType === 'Лимит' ? limitMin * 60 : 0,
       sessionType === 'Лимит' ? paidAmount : 0,
       userName, readerId);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 async function doEndSession() {
   if (!selectedPc) return;
   try {
     await connection.invoke('EndSession', selectedPc);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 async function doTogglePause() {
   if (!selectedPc) return;
   try {
     await connection.invoke('TogglePause', selectedPc);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 async function resolveOffline(decision) {
@@ -280,7 +280,7 @@ async function resolveOffline(decision) {
   closeDlg('dlgOffline');
   try {
     await connection.invoke('ResolveOffline', offlinePcNumber, decision);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
   offlinePcNumber = null;
 }
 
@@ -292,14 +292,14 @@ async function openTransferDlg() {
   let targets;
   try {
     targets = await connection.invoke('GetTransferTargets', selectedPc);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); return; }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); return; }
 
   if (!targets || targets.length === 0) {
-    toast('Нет доступных ПК для пересадки (нужен свободный онлайн-ПК)', 'warn');
+    toast(t('Нет доступных ПК для пересадки (нужен свободный онлайн-ПК)'), 'warn');
     return;
   }
 
-  document.getElementById('dlgTransferFrom').textContent = `Сессия с: ${selectedPc}`;
+  document.getElementById('dlgTransferFrom').textContent = t('Сессия с: {pc}', { pc: selectedPc });
   const sel = document.getElementById('dlgTransferTarget');
   sel.innerHTML = targets
     .sort((a, b) => a.pcNumberValue - b.pcNumberValue)
@@ -316,21 +316,21 @@ async function confirmTransfer() {
     const result = await connection.invoke('TransferSession', selectedPc, toPc);
     if (result === 'OK') {
       closeDlg('dlgTransfer');
-      toast(`Сессия перенесена на ${toPc}`, 'good');
+      toast(t('Сессия перенесена на {pc}', { pc: toPc }), 'good');
       selectedPc = null;
       document.getElementById('actionBar').classList.add('hidden');
     } else {
-      errEl.textContent = result;
+      errEl.textContent = tServer(result);
       errEl.style.display = 'block';
     }
   } catch (e) { errEl.textContent = String(e); errEl.style.display = 'block'; }
 }
 
 function openServiceDlg() {
-  if (serviceTypes.length === 0) { toast('Нет доступных услуг', 'warn'); return; }
+  if (serviceTypes.length === 0) { toast(t('Нет доступных услуг'), 'warn'); return; }
   const sel = document.getElementById('dlgSvcType');
   sel.innerHTML = serviceTypes.map(s =>
-    `<option value="${esc(s.id)}" data-price="${s.price}" data-unit="${esc(s.unit)}">${esc(s.name)} — ${fmt(s.price)} сум/${esc(s.unit)}</option>`
+    `<option value="${esc(s.id)}" data-price="${s.price}" data-unit="${esc(s.unit)}">${esc(svcName(s.name))} — ${fmt(s.price)} ${t('сум')}/${esc(tUnit(s.unit))}</option>`
   ).join('');
   document.getElementById('dlgSvcQty').value = 1;
   document.getElementById('dlgSvcReader').value = '';
@@ -345,7 +345,7 @@ function updateSvcTotal() {
   if (!opt) return;
   const price = parseInt(opt.dataset.price) || 0;
   const qty = parseInt(document.getElementById('dlgSvcQty').value) || 1;
-  document.getElementById('dlgSvcTotal').textContent = fmt(price * qty) + ' сум';
+  document.getElementById('dlgSvcTotal').textContent = fmt(price * qty) + ' ' + t('сум');
 }
 
 async function confirmService() {
@@ -357,18 +357,18 @@ async function confirmService() {
   closeDlg('dlgService');
   try {
     await connection.invoke('CreateService', id, qty, reader, reader, payNow);
-  } catch (e) { toast('Ошибка: ' + e, 'warn'); }
+  } catch (e) { toast(t('Ошибка: ') + e, 'warn'); }
 }
 
 function showSessionSummary(s) {
   let html = `
-    <div class="summary-row"><span>ПК</span><span class="val">${esc(s.pcNumber)}</span></div>
-    <div class="summary-row"><span>Тип</span><span class="val">${esc(s.sessionType)}</span></div>
-    <div class="summary-row"><span>Время</span><span class="val">${fmtTime(s.duration)}</span></div>
-    <div class="summary-row"><span>Оплачено</span><span class="val">${fmt(s.paidAmount)} сум</span></div>
-    <div class="summary-row"><span>Начислено</span><span class="val">${fmt(s.earned)} сум</span></div>`;
+    <div class="summary-row"><span>${t('ПК')}</span><span class="val">${esc(s.pcNumber)}</span></div>
+    <div class="summary-row"><span>${t('Тип')}</span><span class="val">${esc(t(s.sessionType))}</span></div>
+    <div class="summary-row"><span>${t('Время')}</span><span class="val">${fmtTime(s.duration)}</span></div>
+    <div class="summary-row"><span>${t('Оплачено')}</span><span class="val">${fmt(s.paidAmount)} ${t('сум')}</span></div>
+    <div class="summary-row"><span>${t('Начислено')}</span><span class="val">${fmt(s.earned)} ${t('сум')}</span></div>`;
   if (s.refund > 0)
-    html += `<div class="refund-highlight">💵 Возврат: ${fmt(s.refund)} сум</div>`;
+    html += `<div class="refund-highlight">💵 ${t('Возврат')}: ${fmt(s.refund)} ${t('сум')}</div>`;
   document.getElementById('dlgSummaryBody').innerHTML = html;
   openDlg('dlgSummary');
 }
@@ -410,13 +410,13 @@ function getStatusClass(pc) {
 }
 
 function getStatusLabel(pc) {
-  if (!pc.isOnline && pc.isSession) return '🔴 Оффлайн (сессия)';
-  if (!pc.isOnline) return 'Оффлайн';
-  if (pc.isPaused) return '⏸ Пауза';
+  if (!pc.isOnline && pc.isSession) return '🔴 ' + t('Оффлайн (сессия)');
+  if (!pc.isOnline) return t('Оффлайн');
+  if (pc.isPaused) return '⏸ ' + t('Пауза');
   if (pc.sessionType === 'VIP') return '⭐ VIP';
-  if (pc.isSession) return '⏱ Лимит';
-  if (pc.isFree) return '🔓 Свободен';
-  return '🔒 Заблокирован';
+  if (pc.isSession) return '⏱ ' + t('Лимит');
+  if (pc.isFree) return '🔓 ' + t('Свободен');
+  return '🔒 ' + t('Заблокирован');
 }
 
 function getDisplayTime(pc) {

@@ -52,6 +52,56 @@ namespace BibAdminWeb
                 return;
             }
 
+            // ─── Тексты интерфейса оператора: /api/admin/i18n/ru и /api/admin/i18n/uz ──
+            if (path.StartsWith("/api/admin/i18n/"))
+            {
+                var lang = path.Substring("/api/admin/i18n/".Length);
+                if (!TranslationStore.IsKnownLang(lang))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Неизвестный язык\"}");
+                    return;
+                }
+                if (method == "GET")
+                {
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(TranslationStore.Load(lang)));
+                    return;
+                }
+                if (method == "POST")
+                {
+                    var body = await ReadBody(ctx);
+                    var map = JsonSerializer.Deserialize<Dictionary<string, string>>(body) ?? new();
+                    TranslationStore.Save(lang, map);
+                    await ctx.Response.WriteAsync("{\"ok\":true}");
+                    return;
+                }
+            }
+
+            // ─── Посещения, отмеченные оператором вручную ─────────────────────
+            if (path == "/api/admin/visits" && method == "GET")
+            {
+                if (!TryDateRange(ctx, out var vFrom, out var vTo)) { vFrom = DateTime.Today; vTo = vFrom.AddDays(1); }
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(VisitCalc.BuildLive(vFrom, vTo).Rows, _json));
+                return;
+            }
+            if (path == "/api/admin/visits/export" && method == "GET")
+            {
+                if (!TryDateRange(ctx, out var eFrom, out var eTo)) { eFrom = DateTime.Today; eTo = eFrom.AddDays(1); }
+                await WriteVisitsExcel(ctx, eFrom, eTo);
+                return;
+            }
+            if (path.StartsWith("/api/admin/visits/") && method == "DELETE")
+            {
+                if (!long.TryParse(path.Substring("/api/admin/visits/".Length), out var visitId) || !VisitStore.Delete(visitId))
+                {
+                    ctx.Response.StatusCode = 404;
+                    await ctx.Response.WriteAsync("{\"error\":\"Отметка не найдена\"}");
+                    return;
+                }
+                await ctx.Response.WriteAsync("{\"ok\":true}");
+                return;
+            }
+
             // ─── Finance: sessions ────────────────────────────────────────────
             if (path == "/api/admin/finance/sessions" && method == "GET")
             {
@@ -60,8 +110,7 @@ namespace BibAdminWeb
             }
             if (path == "/api/admin/finance/sessions" && method == "DELETE")
             {
-                FinanceStore.Sessions.Clear();
-                FinanceStore.SaveHistory();
+                FinanceStore.ClearAll();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
                 return;
             }
@@ -204,11 +253,12 @@ namespace BibAdminWeb
                 }
                 var canReaders = data.TryGetProperty("canViewReaders", out var rvr) && rvr.GetBoolean();
                 var canFinance = data.TryGetProperty("canViewFinance", out var rvf) && rvf.GetBoolean();
+                var canStats   = data.TryGetProperty("canViewStats",   out var rvs) && rvs.GetBoolean();
                 s.Operators.Add(new OperatorAccount
                 {
                     Login = login, DisplayName = displayName,
                     PasswordHash = HashPassword(password), IsActive = true,
-                    CanViewReaders = canReaders, CanViewFinance = canFinance
+                    CanViewReaders = canReaders, CanViewFinance = canFinance, CanViewStats = canStats
                 });
                 s.Save();
                 await ctx.Response.WriteAsync("{\"ok\":true}");
@@ -252,6 +302,7 @@ namespace BibAdminWeb
                     {
                         if (data.TryGetProperty("canViewReaders", out var rvr)) op.CanViewReaders = rvr.GetBoolean();
                         if (data.TryGetProperty("canViewFinance", out var rvf)) op.CanViewFinance = rvf.GetBoolean();
+                        if (data.TryGetProperty("canViewStats",   out var rvs)) op.CanViewStats   = rvs.GetBoolean();
                         s.Save();
                         // Уведомляем оператора в реальном времени — его браузер обновит вкладки
                         if (OperatorBroadcaster.Instance != null)
@@ -401,12 +452,12 @@ namespace BibAdminWeb
                     // Исключаем все файлы настроек и runtime-данных, чтобы обновление
                     // не перезаписало порт, пароль, реестр ПК и историю финансов.
                     $"robocopy \"{sourcePath}\" \"{appDir}\" /E /IS /IT" +
-                    // Настройки — самое важное
-                    $" /XF global_settings.json" +
-                    // Прочие конфиги
+                    // Папка с данными (настройки, БД, история) — никогда не перезаписывать
+                    $" /XD data" +
+                    // Прочие runtime-файлы рядом с exe
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
-                    // Runtime JSON-данные (реестр ПК, сессии, история)
-                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     // Папка с загруженными фоновыми изображениями
                     $" /XD Files" +
@@ -487,16 +538,20 @@ namespace BibAdminWeb
                 var exePath  = Path.Combine(appDir, "BibAdminWeb.exe");
                 var flagPath = Path.Combine(appDir, "update_restart.flag");
                 var scriptPath = Path.Combine(Path.GetTempPath(), "bib_selfupdate_zip.bat");
+                var logPath = Path.Combine(appDir, "update_log.txt");
                 var script = string.Join("\r\n",
                     "@echo off",
+                    $"echo Update started %DATE% %TIME% > \"{logPath}\"",
                     "timeout /t 5 /nobreak >nul",
                     $"robocopy \"{tempDir}\" \"{appDir}\" /E /IS /IT" +
                     $" /XF global_settings.json" +
                     $" /XF *.db /XF settings.json /XF appsettings.json" +
-                    $" /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF clients.json /XF registry.json /XF active_sessions.json /XF deleted_pcs.json" +
+                    $" /XF pending_commands.json /XF auth_tokens.json /XF update_log.txt" +
                     $" /XF *_history.json /XF server_heartbeat.json /XF readers.json" +
                     $" /XD Files" +
-                    $" /NFL /NDL /NJH /NJS /NC /NS /NP",
+                    $" /LOG+:\"{logPath}\"",
+                    $"echo Robocopy exit code: %ERRORLEVEL% >> \"{logPath}\"",
                     $"rmdir /s /q \"{tempDir}\"",
                     $"echo.> \"{flagPath}\"",
                     $"start \"\" \"{exePath}\""
@@ -671,7 +726,8 @@ namespace BibAdminWeb
             var path   = ctx.Request.Path.Value ?? "";
             var method = ctx.Request.Method;
 
-            if (!path.StartsWith("/api/op/readers") && !path.StartsWith("/api/op/finance"))
+            if (!path.StartsWith("/api/op/readers") && !path.StartsWith("/api/op/finance")
+                && !path.StartsWith("/api/op/visits"))
             {
                 await next(ctx);
                 return;
@@ -693,6 +749,101 @@ namespace BibAdminWeb
             {
                 ctx.Response.StatusCode = 401;
                 await ctx.Response.WriteAsync("{\"error\":\"Оператор не найден\"}");
+                return;
+            }
+
+            // ─── Operator: посещения читального зала (ручная отметка) ────────
+            // Посещения: счётчики за сегодня и месяц + список за выбранный диапазон дат (по умолчанию сегодня)
+            if (path == "/api/op/visits" && method == "GET")
+            {
+                var day = DateTime.Today;
+                var monthStart = new DateTime(day.Year, day.Month, 1);
+                if (!TryDateRange(ctx, out var vFrom, out var vTo)) { vFrom = day; vTo = day.AddDays(1); }
+                var rangeRes = VisitCalc.BuildLive(vFrom, vTo);
+                bool isToday = vFrom == day && vTo == day.AddDays(1);
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
+                {
+                    visitsToday = isToday ? rangeRes.Visits.Count : VisitCalc.BuildLive(day, day.AddDays(1)).Visits.Count,
+                    visitsMonth = VisitCalc.BuildLive(monthStart, monthStart.AddMonths(1)).Visits.Count,
+                    rows = rangeRes.Rows
+                }, _json));
+                return;
+            }
+            if (path == "/api/op/visits/export" && method == "GET")
+            {
+                if (!TryDateRange(ctx, out var eFrom, out var eTo)) { eFrom = DateTime.Today; eTo = eFrom.AddDays(1); }
+                await WriteVisitsExcel(ctx, eFrom, eTo);
+                return;
+            }
+            if (path == "/api/op/visits" && method == "POST")
+            {
+                string vReader = "", vName = "", vPurpose = "", vComment = "";
+                bool vForce = false;
+                try
+                {
+                    using var doc = JsonDocument.Parse(await ReadBody(ctx));
+                    var root = doc.RootElement;
+                    string Str(string n) => root.TryGetProperty(n, out var p) && p.ValueKind == JsonValueKind.String
+                        ? (p.GetString() ?? "").Trim() : "";
+                    vReader = Str("readerId"); vName = Str("readerName");
+                    vPurpose = Str("purpose"); vComment = Str("comment");
+                    vForce = root.TryGetProperty("force", out var f) && f.ValueKind == JsonValueKind.True;
+                }
+                catch { }
+
+                if (vReader.Length == 0 && settings.RequireVisitReaderId)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync("{\"error\":\"Введите номер читательского билета\"}");
+                    return;
+                }
+
+                if (vReader.Length > 0)
+                {
+                    // Читатель сейчас за ПК — его посещение уже учитывается сессией
+                    var atPc = OperatorBroadcaster.FindSessionByReader(vReader, "");
+                    if (atPc != null)
+                    {
+                        ctx.Response.StatusCode = 409;
+                        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { code = "atPc", pcNumber = atPc.PcNumber }));
+                        return;
+                    }
+                    // Уже отмечен сегодня — оператор должен подтвердить, что это повторное посещение
+                    var prev = VisitStore.ForLocalDay(DateTime.Today)
+                        .LastOrDefault(v => string.Equals(v.ReaderId, vReader, StringComparison.OrdinalIgnoreCase));
+                    if (prev != null && !vForce)
+                    {
+                        ctx.Response.StatusCode = 409;
+                        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new
+                        { code = "already", time = prev.CreatedAt.ToLocalTime().ToString("HH:mm") }));
+                        return;
+                    }
+                    var known = ReaderStore.GetByCardId(vReader);
+                    if (known != null && !string.IsNullOrWhiteSpace(known.FullName)) vName = known.FullName;
+                }
+
+                if (!settings.ShowVisitPurpose) { vPurpose = ""; vComment = ""; }
+                if (vComment.Length > 200) vComment = vComment[..200];
+
+                var visit = VisitStore.Add(new ManualVisit
+                {
+                    ReaderId = vReader, ReaderName = vName, Purpose = vPurpose,
+                    Comment = vComment, OperatorName = op.DisplayName
+                });
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { ok = true, visit }, _json));
+                return;
+            }
+
+            // ─── Operator: быстрое добавление читателя по номеру билета ──────
+            if (path == "/api/op/readers/quick-add" && method == "POST")
+            {
+                string body = await ReadBody(ctx);
+                string cardId = "";
+                try { using var doc = JsonDocument.Parse(body); cardId = doc.RootElement.GetProperty("cardId").GetString()?.Trim() ?? ""; } catch { }
+                if (string.IsNullOrWhiteSpace(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"Не указан cardId\"}"); return; }
+                if (!ReaderStore.IsFullCardId(cardId)) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("{\"error\":\"В номере билета должно быть 9 цифр после префикса\"}"); return; }
+                ReaderStore.QuickAdd(cardId);
+                await ctx.Response.WriteAsync("{\"ok\":true}");
                 return;
             }
 
@@ -720,7 +871,7 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
                     return;
                 }
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(FinanceStore.Sessions, _json));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(SessionsInRange(ctx), _json));
                 return;
             }
 
@@ -733,7 +884,7 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
                     return;
                 }
-                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ServiceTransaction.All, _json));
+                await ctx.Response.WriteAsync(JsonSerializer.Serialize(ServicesInRange(ctx), _json));
                 return;
             }
 
@@ -746,10 +897,61 @@ namespace BibAdminWeb
                     await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к истории финансов\"}");
                     return;
                 }
-                var bytes = BuildFinanceExcel(FinanceStore.Sessions, ServiceTransaction.All);
+                var bytes = BuildFinanceExcel(SessionsInRange(ctx), ServicesInRange(ctx));
                 ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
                 ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=finance_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
                 await ctx.Response.Body.WriteAsync(bytes);
+                return;
+            }
+
+            // ─── Operator: аналитика посещений ────────────────────────────────
+            if (path == "/api/op/readers/analytics" && method == "GET")
+            {
+                if (!op.CanViewStats)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к статистике\"}");
+                    return;
+                }
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var result = ReadersApi.BuildAnalyticsPublic(period, dateStr);
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result, _json));
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
+                return;
+            }
+
+            // ─── Operator: экспорт аналитики ──────────────────────────────────
+            if (path == "/api/op/readers/analytics/export" && method == "GET")
+            {
+                if (!op.CanViewStats)
+                {
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("{\"error\":\"Нет доступа к статистике\"}");
+                    return;
+                }
+                var period  = ctx.Request.Query["period"].ToString();
+                var dateStr = ctx.Request.Query["date"].ToString();
+                try
+                {
+                    var bytes = ReadersApi.BuildAnalyticsExcelPublic(period, dateStr);
+                    ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    ctx.Response.Headers["Content-Disposition"] =
+                        $"attachment; filename=analytics_{dateStr.Replace("-", "")}.xlsx";
+                    await ctx.Response.Body.WriteAsync(bytes);
+                }
+                catch (Exception ex)
+                {
+                    ctx.Response.StatusCode = 400;
+                    await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = ex.Message }, _json));
+                }
                 return;
             }
 
@@ -784,7 +986,7 @@ namespace BibAdminWeb
                 wsS.Cell(row, 4).Value = s.UserName;
                 wsS.Cell(row, 5).Value = $"{h:D2}:{m:D2}:{sec:D2}";
                 wsS.Cell(row, 6).Value = s.EarnedAmount;
-                wsS.Cell(row, 7).Value = s.PaidAmount;
+                wsS.Cell(row, 7).Value = Math.Max(s.PaidAmount, s.EarnedAmount);
                 wsS.Cell(row, 8).Value = s.RefundAmount;
                 wsS.Cell(row, 9).Value = s.OperatorName;
                 wsS.Cell(row, 10).Value = s.StartTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
@@ -830,6 +1032,96 @@ namespace BibAdminWeb
             if (!string.IsNullOrWhiteSpace(s.UpdatesPath))
                 return s.UpdatesPath.TrimEnd('\\', '/');
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updates");
+        }
+
+        // Диапазон дат из запроса: ?from=yyyy-MM-dd&to=yyyy-MM-dd, обе даты включительно.
+        // false — если from не задан. На выходе to — исключающая граница (начало следующего дня).
+        private static bool TryDateRange(HttpContext ctx, out DateTime from, out DateTime to)
+        {
+            from = to = default;
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var none = System.Globalization.DateTimeStyles.None;
+            if (!DateTime.TryParseExact(ctx.Request.Query["from"].ToString(), "yyyy-MM-dd", inv, none, out var f)) return false;
+            if (!DateTime.TryParseExact(ctx.Request.Query["to"].ToString(), "yyyy-MM-dd", inv, none, out var t)) t = f;
+            if (t < f) (f, t) = (t, f);
+            from = f.Date; to = t.Date.AddDays(1);
+            return true;
+        }
+
+        // История сессий и услуг за диапазон из запроса (без диапазона — вся история)
+        private static List<SessionRecord> SessionsInRange(HttpContext ctx)
+            => TryDateRange(ctx, out var from, out var to)
+                ? FinanceStore.Sessions.Where(s => s.EndTime >= from && s.EndTime < to).ToList()
+                : FinanceStore.Sessions.ToList();
+
+        private static List<ServiceTransaction> ServicesInRange(HttpContext ctx)
+            => TryDateRange(ctx, out var from, out var to)
+                ? ServiceTransaction.All.Where(t => { var ts = t.CreatedAt.ToLocalTime(); return ts >= from && ts < to; }).ToList()
+                : ServiceTransaction.All.ToList();
+
+        // ── XLSX-отчёт по посещениям за период ────────────────────────────────
+        private static async Task WriteVisitsExcel(HttpContext ctx, DateTime from, DateTime toExclusive)
+        {
+            var rows = VisitCalc.BuildLive(from, toExclusive).Rows.OrderBy(r => r.At).ToList();
+            var lastDay = toExclusive.AddDays(-1);
+            string period = from.Date == lastDay.Date ? $"{from:dd.MM.yyyy}" : $"{from:dd.MM.yyyy} — {lastDay:dd.MM.yyyy}";
+
+            using var wb = new XLWorkbook();
+            var ws = wb.AddWorksheet("Посещения");
+            ws.Cell(1, 1).Value = $"Посещения за {period}";
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 14;
+            ws.Cell(2, 1).Value = "Всего посещений:";
+            ws.Cell(2, 2).Value = rows.Count;
+            ws.Cell(2, 2).Style.Font.Bold = true;
+
+            string[] hdr = { "Дата", "Время", "№ билета", "ФИО", "Тип", "Цель визита", "Комментарий", "Оператор" };
+            for (int i = 0; i < hdr.Length; i++)
+            {
+                var c = ws.Cell(4, i + 1);
+                c.Value = hdr[i];
+                c.Style.Font.Bold = true;
+                c.Style.Fill.BackgroundColor = XLColor.FromArgb(0x2D, 0x2D, 0x5B);
+                c.Style.Font.FontColor = XLColor.White;
+            }
+            int row = 5;
+            foreach (var r in rows)
+            {
+                var kind = new List<string>();
+                if (r.HasMark) kind.Add("Посещение");
+                if (r.HasSession) kind.Add(string.IsNullOrEmpty(r.PcNumber) ? "ПК" : r.PcNumber);
+                if (r.HasService) kind.Add("Услуга");
+                ws.Cell(row, 1).Value = r.At.ToString("dd.MM.yyyy");
+                ws.Cell(row, 2).Value = r.At.ToString("HH:mm");
+                ws.Cell(row, 3).Value = r.ReaderId;
+                ws.Cell(row, 4).Value = string.IsNullOrEmpty(r.ReaderName) && string.IsNullOrEmpty(r.ReaderId) ? "Без билета" : r.ReaderName;
+                ws.Cell(row, 5).Value = string.Join(" + ", kind) + (r.Active ? " (сейчас за ПК)" : "");
+                ws.Cell(row, 6).Value = r.Purpose;
+                ws.Cell(row, 7).Value = r.Comment;
+                ws.Cell(row, 8).Value = r.OperatorName;
+                row++;
+            }
+            ws.Columns().AdjustToContents();
+
+            var wsD = wb.AddWorksheet("По дням");
+            wsD.Cell(1, 1).Value = "Дата"; wsD.Cell(1, 2).Value = "Посещений";
+            wsD.Row(1).Style.Font.Bold = true;
+            int dr = 2;
+            foreach (var g in rows.GroupBy(r => r.At.Date).OrderBy(g => g.Key))
+            {
+                wsD.Cell(dr, 1).Value = g.Key.ToString("dd.MM.yyyy");
+                wsD.Cell(dr, 2).Value = g.Count();
+                dr++;
+            }
+            wsD.Cell(dr, 1).Value = "Итого"; wsD.Cell(dr, 2).Value = rows.Count;
+            wsD.Row(dr).Style.Font.Bold = true;
+            wsD.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            ctx.Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            ctx.Response.Headers["Content-Disposition"] = $"attachment; filename=visits_{from:yyyyMMdd}_{lastDay:yyyyMMdd}.xlsx";
+            await ctx.Response.Body.WriteAsync(ms.ToArray());
         }
 
         private static async Task<string> ReadBody(HttpContext ctx)

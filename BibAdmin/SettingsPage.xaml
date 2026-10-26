@@ -646,15 +646,17 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="80"/>
                                     <ColumnDefinition Width="110"/>
                                     <ColumnDefinition Width="70"/>
                                     <ColumnDefinition Width="36"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Название" Foreground="#888" FontSize="12" FontWeight="Medium"/>
-                                <TextBlock Grid.Column="1" Text="Единица" Foreground="#888" FontSize="12" FontWeight="Medium"/>
-                                <TextBlock Grid.Column="2" Text="Цена (сум)" Foreground="#888" FontSize="12" FontWeight="Medium"/>
-                                <TextBlock Grid.Column="3" Text="Активна" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="1" Text="Название (UZ)" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="2" Text="Единица" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="3" Text="Цена (сум)" Foreground="#888" FontSize="12" FontWeight="Medium"/>
+                                <TextBlock Grid.Column="4" Text="Активна" Foreground="#888" FontSize="12" FontWeight="Medium"/>
                             </Grid>
                         </Border>
 
@@ -669,6 +671,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="80"/>
                                     <ColumnDefinition Width="110"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -677,8 +680,14 @@
                                          Padding="8,6" FontSize="12"
                                          BorderBrush="#CCCCCC"
                                          Margin="0,0,6,0"/>
+                                <TextBox x:Name="TxtNewServiceNameUz"
+                                         Grid.Column="1"
+                                         Padding="8,6" FontSize="12"
+                                         BorderBrush="#CCCCCC"
+                                         Margin="0,0,6,0"
+                                         ToolTip="Название на узбекском — показывается оператору при выборе языка UZ (необязательно)"/>
                                 <ComboBox x:Name="CmbNewServiceUnit"
-                                          Grid.Column="1"
+                                          Grid.Column="2"
                                           FontSize="12" Padding="6,5"
                                           Margin="0,0,6,0">
                                     <ComboBoxItem Content="лист" IsSelected="True"/>
@@ -688,11 +697,11 @@
                                     <ComboBoxItem Content="шт"/>
                                 </ComboBox>
                                 <TextBox x:Name="TxtNewServicePrice"
-                                         Grid.Column="2"
+                                         Grid.Column="3"
                                          Padding="8,6" FontSize="12"
                                          BorderBrush="#CCCCCC"
                                          Margin="0,0,6,0"/>
-                                <Button Grid.Column="3"
+                                <Button Grid.Column="4"
                                         Content="+ Добавить"
                                         Style="{StaticResource SettingsBtn}"
                                         Background="#1D9E75"

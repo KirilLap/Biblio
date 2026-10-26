@@ -68,7 +68,11 @@ namespace BibAdminWeb
         public string StartedByOperatorName { get; set; } = "";
 
         public bool IsPaused { get; set; } = false;
+        // Когда сервер последний раз поставил паузу (не сохраняется). Пока ПК не успел её применить,
+        // его сообщения «сессия идёт» не должны снимать паузу на сервере.
+        public DateTime? PauseSentAt { get; set; }
         public int AccumulatedSeconds { get; set; } = 0;
+        public int PenaltyAmount { get; set; } = 0;
 
         public string BackgroundFileName { get; set; } = "";
         public string SessionId { get; set; } = "";
@@ -100,6 +104,17 @@ namespace BibAdminWeb
             Status == "Лимит" || Status == "VIP" || Status == "Пауза" ||
             (!IsOnline && !string.IsNullOrEmpty(SessionType) &&
              SessionType != "Заблокирован" && SessionType != "Свободный" && SessionStart.HasValue);
+
+        // Биллинг при конвертации типа сессии
+        // Лимит→VIP: OriginalLimitSeconds = LimitSeconds на момент конвертации (оплаченные секунды)
+        public int OriginalLimitSeconds { get; set; } = 0;
+        // VIP→Лимит: IsPostPay = true, оплата по тарифу в конце (как VIP)
+        public bool IsPostPay { get; set; } = false;
+
+        // Защита от перезаписи SessionType из клиентского heartbeat после смены типа администратором.
+        // Устанавливается в ChangeSessionType, обнуляется когда клиент подтверждает новый тип.
+        [System.Text.Json.Serialization.JsonIgnore]
+        public DateTime? SessionTypeLockedUntil { get; set; }
 
         public int RemainingSeconds => LimitSeconds > 0 ? Math.Max(0, LimitSeconds - ElapsedSeconds) : -1;
 

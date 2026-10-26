@@ -110,6 +110,7 @@ namespace BibAdmin
 
                 var grid = new Grid();
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
@@ -128,6 +129,27 @@ namespace BibAdmin
                 Grid.SetColumn(nameText, 0);
                 grid.Children.Add(nameText);
 
+                var nameUzBox = new TextBox
+                {
+                    Text = svc.NameUz,
+                    FontSize = 13,
+                    Padding = new Thickness(6, 3, 6, 3),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    BorderBrush = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(204, 204, 204)),
+                    ToolTip = "Название на узбекском — показывается оператору при выборе языка UZ"
+                };
+                nameUzBox.LostFocus += (s, e) =>
+                {
+                    string uz = nameUzBox.Text.Trim();
+                    if (uz == captured.NameUz) return;
+                    captured.NameUz = uz;
+                    SaveServices();
+                };
+                Grid.SetColumn(nameUzBox, 1);
+                grid.Children.Add(nameUzBox);
+
                 var unitText = new TextBlock
                 {
                     Text = svc.Unit,
@@ -136,7 +158,7 @@ namespace BibAdmin
                     Foreground = new System.Windows.Media.SolidColorBrush(
                         System.Windows.Media.Color.FromRgb(100, 100, 100))
                 };
-                Grid.SetColumn(unitText, 1);
+                Grid.SetColumn(unitText, 2);
                 grid.Children.Add(unitText);
 
                 var priceText = new TextBlock
@@ -147,7 +169,7 @@ namespace BibAdmin
                     Foreground = new System.Windows.Media.SolidColorBrush(
                         System.Windows.Media.Color.FromRgb(15, 110, 86))
                 };
-                Grid.SetColumn(priceText, 2);
+                Grid.SetColumn(priceText, 3);
                 grid.Children.Add(priceText);
 
                 var chk = new CheckBox
@@ -158,7 +180,7 @@ namespace BibAdmin
                 };
                 chk.Checked += (s, e) => { captured.IsActive = true; SaveServices(); };
                 chk.Unchecked += (s, e) => { captured.IsActive = false; SaveServices(); };
-                Grid.SetColumn(chk, 3);
+                Grid.SetColumn(chk, 4);
                 grid.Children.Add(chk);
 
                 var delBtn = new Button
@@ -178,7 +200,7 @@ namespace BibAdmin
                     SaveServices();
                     RenderServicesPanel();
                 };
-                Grid.SetColumn(delBtn, 4);
+                Grid.SetColumn(delBtn, 5);
                 grid.Children.Add(delBtn);
 
                 row.Child = grid;
@@ -209,6 +231,7 @@ namespace BibAdmin
             _global.Services.Add(new ServiceType
             {
                 Name = name,
+                NameUz = TxtNewServiceNameUz.Text.Trim(),
                 Unit = unit,
                 Price = price,
                 IsActive = true
@@ -218,6 +241,7 @@ namespace BibAdmin
             RenderServicesPanel();
 
             TxtNewServiceName.Text = "";
+            TxtNewServiceNameUz.Text = "";
             TxtNewServicePrice.Text = "";
         }
 

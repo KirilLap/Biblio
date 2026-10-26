@@ -1,0 +1,199 @@
+/* themes.css — цветовые темы. Применяются через :root[data-theme="…"].
+   Базовая (светлая) тема живёт в :root внутри operator.css. Здесь — переопределения. */
+
+/* ===================== ТЁМНАЯ ===================== */
+:root[data-theme="dark"] {
+  --bg: #0b0f17;
+  --bg-grad-a: #121826;
+  --bg-grad-b: #0a0e16;
+  --topbar: #0a0e15;
+  --topbar-2: #121826;
+
+  --card: #161d2b;
+  --card-muted: #1c2433;
+  --surface: #232c3d;
+  --surface-hover: #2b3547;
+  --line: #2a3344;
+  --line-strong: #3b465a;
+
+  --ink: #e9eef7;
+  --ink-2: #aab6c8;
+  --ink-3: #6f7d92;
+  --ink-on-dark: #eef2f8;
+  --ink-on-dark-2: #97a3b6;
+  --toolbar-bg: rgba(18,24,38,.82);
+
+  --free: #34d399;      --free-bg: rgba(16,185,129,.15);   --free-ring: rgba(16,185,129,.34);
+  --locked: #f87171;    --locked-bg: rgba(239,68,68,.16);  --locked-ring: rgba(239,68,68,.36);
+  --limit: #60a5fa;     --limit-bg: rgba(59,130,246,.17);  --limit-ring: rgba(59,130,246,.36);
+  --vip: #e6b13e;       --vip-bg: rgba(217,160,30,.16);    --vip-ring: rgba(217,160,30,.36);
+  --pause: #fbbf24;     --pause-bg: rgba(251,191,36,.16);  --pause-ring: rgba(251,191,36,.36);
+  --offline: #7e8ca0;   --offline-bg: rgba(125,139,158,.16); --offline-ring: rgba(125,139,158,.3);
+  --warn: #fbbf24;      --warn-bg: rgba(217,119,6,.16);
+
+  --accent: #3b82f6;
+  --accent-soft: rgba(59,130,246,.22);
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 6px 18px rgba(0,0,0,.4);
+  --shadow-card-hover: 0 2px 8px rgba(0,0,0,.45), 0 16px 36px rgba(0,0,0,.5);
+  --shadow-pop: 0 24px 70px rgba(0,0,0,.6);
+}
+:root[data-theme="dark"] .sex-f { background:rgba(236,64,122,.18); color:#f48fb1; }
+
+/* ===================== ТИФФАНИ (светлая, бирюзовый акцент) ===================== */
+:root[data-theme="tiffany"] {
+  --bg: #aaded6;
+  --bg-grad-a: #c6ebe5;
+  --bg-grad-b: #9bd6cd;
+  --topbar: #0a2725;
+  --topbar-2: #103a36;
+
+  --card: #ffffff;
+  --card-muted: #e7f6f3;
+  --surface: #ffffff;
+  --surface-hover: #d4efea;
+  --line: #c4e6e0;
+  --line-strong: #a9ded6;
+
+  --ink: #102f2c;
+  --ink-2: #3c5d58;
+  --ink-3: #7a9a94;
+  --ink-on-dark: #eafaf7;
+  --ink-on-dark-2: #8fc4bd;
+  --toolbar-bg: rgba(198,235,229,.84);
+
+  --free: #0f9d77;      --free-bg: #d9f3eb;   --free-ring: #aee3d3;
+  --locked: #e0413b;    --locked-bg: #fdeceb; --locked-ring: #f5c4c1;
+  --limit: #0aa89f;     --limit-bg: #d6f2ef;  --limit-ring: #aae2dd;
+  --vip: #b8860b;       --vip-bg: #fbf3df;    --vip-ring: #ecdba6;
+  --pause: #d97706;     --pause-bg: #fef3c7;  --pause-ring: #fde68a;
+  --offline: #87a39d;   --offline-bg: #e7f0ee; --offline-ring: #d2e4e0;
+  --warn: #c2790a;      --warn-bg: #fbf0db;
+
+  --accent: #0aa89f;
+  --accent-soft: #d6f2ef;
+  --accent-ink: #ffffff;
+
+  --shadow-card: 0 1px 2px rgba(13,60,55,.06), 0 4px 14px rgba(13,60,55,.08);
+  --shadow-card-hover: 0 2px 6px rgba(13,60,55,.1), 0 12px 30px rgba(13,60,55,.16);
+  --shadow-pop: 0 18px 60px rgba(8,38,35,.32);
+}
+
+/* ===================== НОЧЬ (тёмная, бирюзовый акцент) ===================== */
+:root[data-theme="night"] {
+  --bg: #08120f;
+  --bg-grad-a: #0e201b;
+  --bg-grad-b: #07110e;
+  --topbar: #071512;
+  --topbar-2: #0e231e;
+
+  --card: #102019;
+  --card-muted: #15271f;
+  --surface: #1d3329;
+  --surface-hover: #244035;
+  --line: #233a31;
+  --line-strong: #345043;
+
+  --ink: #e7f3ef;
+  --ink-2: #a2bbb3;
+  --ink-3: #688077;
+  --ink-on-dark: #ebf6f2;
+  --ink-on-dark-2: #8aaaa1;
+  --toolbar-bg: rgba(14,32,27,.82);
+
+  --free: #34d399;      --free-bg: rgba(16,185,129,.15);   --free-ring: rgba(16,185,129,.34);
+  --locked: #f87171;    --locked-bg: rgba(239,68,68,.16);  --locked-ring: rgba(239,68,68,.36);
+  --limit: #2dd4bf;     --limit-bg: rgba(45,212,191,.16);  --limit-ring: rgba(45,212,191,.36);
+  --vip: #e6b13e;       --vip-bg: rgba(217,160,30,.16);    --vip-ring: rgba(217,160,30,.36);
+  --pause: #fbbf24;     --pause-bg: rgba(251,191,36,.16);  --pause-ring: rgba(251,191,36,.36);
+  --offline: #7e9a90;   --offline-bg: rgba(125,158,144,.16); --offline-ring: rgba(125,158,144,.3);
+  --warn: #fbbf24;      --warn-bg: rgba(217,119,6,.16);
+
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45,212,191,.2);
+  --accent-ink: #04201b;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.45);
+  --shadow-card-hover: 0 2px 8px rgba(0,0,0,.5), 0 16px 36px rgba(0,0,0,.55);
+  --shadow-pop: 0 24px 70px rgba(0,0,0,.65);
+}
+:root[data-theme="night"] .sex-f { background:rgba(236,64,122,.18); color:#f48fb1; }
+
+/* ===================== СЕПИЯ (тёплая светлая, терракотовый акцент) ===================== */
+:root[data-theme="sepia"] {
+  --bg: #e7dac2;
+  --bg-grad-a: #f1e7d2;
+  --bg-grad-b: #ddceb1;
+  --topbar: #2a2114;
+  --topbar-2: #3a2f1d;
+
+  --card: #fffdf7;
+  --card-muted: #f6efe0;
+  --surface: #fffdf7;
+  --surface-hover: #efe5d1;
+  --line: #e4d8bf;
+  --line-strong: #d3c4a3;
+
+  --ink: #2e2616;
+  --ink-2: #5f5440;
+  --ink-3: #998b6f;
+  --ink-on-dark: #f5edda;
+  --ink-on-dark-2: #c4b491;
+  --toolbar-bg: rgba(241,231,210,.86);
+
+  --free: #5d8a2c;      --free-bg: #e7f0d6;   --free-ring: #c7dca0;
+  --locked: #bb4430;    --locked-bg: #f7e3dd; --locked-ring: #e9bfb4;
+  --limit: #2f6f9e;     --limit-bg: #dde9f2;  --limit-ring: #b6cfe2;
+  --vip: #b07d12;       --vip-bg: #f6ead0;    --vip-ring: #e6cf9c;
+  --pause: #b5710c;     --pause-bg: #f7ead2;  --pause-ring: #e9c990;
+  --offline: #9c8e72;   --offline-bg: #ece3d2; --offline-ring: #dacdb1;
+  --warn: #b5710c;      --warn-bg: #f7ead2;
+
+  --accent: #c2691f;
+  --accent-soft: #f2e1cb;
+  --accent-ink: #ffffff;
+
+  --shadow-card: 0 1px 2px rgba(60,45,20,.07), 0 4px 14px rgba(60,45,20,.1);
+  --shadow-card-hover: 0 2px 6px rgba(60,45,20,.12), 0 12px 30px rgba(60,45,20,.18);
+  --shadow-pop: 0 18px 60px rgba(40,30,12,.34);
+}
+
+/* ===================== АМЕТИСТ (тёмная, фиолетовый акцент) ===================== */
+:root[data-theme="amethyst"] {
+  --bg: #130f1e;
+  --bg-grad-a: #1d1531;
+  --bg-grad-b: #100b1a;
+  --topbar: #100b1b;
+  --topbar-2: #1b1430;
+
+  --card: #1d1730;
+  --card-muted: #241d3a;
+  --surface: #2d2549;
+  --surface-hover: #352c55;
+  --line: #332a4d;
+  --line-strong: #483c68;
+
+  --ink: #efeaf8;
+  --ink-2: #b9afce;
+  --ink-3: #7e7297;
+  --ink-on-dark: #efeaf8;
+  --ink-on-dark-2: #a99fc4;
+  --toolbar-bg: rgba(29,21,49,.82);
+
+  --free: #34d399;      --free-bg: rgba(16,185,129,.15);   --free-ring: rgba(16,185,129,.34);
+  --locked: #f87171;    --locked-bg: rgba(239,68,68,.16);  --locked-ring: rgba(239,68,68,.36);
+  --limit: #b794f6;     --limit-bg: rgba(167,139,250,.18); --limit-ring: rgba(167,139,250,.4);
+  --vip: #e6b13e;       --vip-bg: rgba(217,160,30,.16);    --vip-ring: rgba(217,160,30,.36);
+  --pause: #fbbf24;     --pause-bg: rgba(251,191,36,.16);  --pause-ring: rgba(251,191,36,.36);
+  --offline: #8d83a6;   --offline-bg: rgba(141,131,166,.16); --offline-ring: rgba(141,131,166,.3);
+  --warn: #fbbf24;      --warn-bg: rgba(217,119,6,.16);
+
+  --accent: #a78bfa;
+  --accent-soft: rgba(167,139,250,.22);
+  --accent-ink: #1a1030;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.45);
+  --shadow-card-hover: 0 2px 8px rgba(0,0,0,.5), 0 16px 36px rgba(0,0,0,.55);
+  --shadow-pop: 0 24px 70px rgba(0,0,0,.65);
+}
+:root[data-theme="amethyst"] .sex-f { background:rgba(236,64,122,.2); color:#f48fb1; }

@@ -46,13 +46,19 @@ namespace BibClient
         public static event Action<string, int, int, int>? StartSessionRequested;
         public static event Action<bool>? SessionPaused;
         public static event Action<int>? ExtendSessionRequested;
+        public static event Action<int>? PenaltySessionRequested;
         public static event Action? EndSessionRequested;
         public static event Action<int>? UpdateSessionElapsedTime;
+        // (newSessionType, newLimitSeconds)
+        public static event Action<string, int>? ChangeSessionTypeRequested;
 
         // Фаза 4: дрейф системных часов — offsetSeconds > 0 → клиент отстаёт
         public static event Action<double>? ClockMismatchDetected;
         /// <summary>Вызывается с содержимым лог-файла когда сервер запрашивает GET_LOGS.</summary>
         public static event Action<string>? LogsReady;
+
+        /// <summary>Показать текстовое сообщение от администратора по центру экрана клиента.</summary>
+        public static event Action<string>? ShowMessageRequested;
 
         public static async Task HandleCommand(string json)
         {
@@ -108,8 +114,13 @@ namespace BibClient
                         break;
 
                     case "EXTEND_SESSION":
-                        if (int.TryParse(value, out int extSecs) && extSecs > 0)
+                        if (int.TryParse(value, out int extSecs) && extSecs != 0)
                             ExtendSessionRequested?.Invoke(extSecs);
+                        break;
+
+                    case "PENALTY_SESSION":
+                        if (int.TryParse(value, out int penSecs) && penSecs > 0)
+                            PenaltySessionRequested?.Invoke(penSecs);
                         break;
 
                     case "END_SESSION":
@@ -123,6 +134,13 @@ namespace BibClient
                         ActiveSessionType = "";
                         ActiveElapsedSeconds = 0;
                         EndSessionRequested?.Invoke();
+                        break;
+
+                    case "CHANGE_SESSION_TYPE":
+                        var newSType = root.TryGetProperty("Value", out var nstp) ? nstp.GetString() ?? "" : "";
+                        var newLimit = root.TryGetProperty("LimitSeconds", out var nlp) ? nlp.GetInt32() : 0;
+                        ActiveSessionType = newSType;
+                        ChangeSessionTypeRequested?.Invoke(newSType, newLimit);
                         break;
 
                     case "SESSION_TIME_SYNC":
@@ -160,6 +178,12 @@ namespace BibClient
                             ClockMismatchDetected?.Invoke(drift);
                             Logger.Warn($"⚠️ Расхождение часов с сервером: {drift:F1}с");
                         }
+                        break;
+
+                    // ── Сообщение от администратора/оператора ─────────────────────────────
+                    case "SHOW_MESSAGE":
+                        if (!string.IsNullOrWhiteSpace(value))
+                            ShowMessageRequested?.Invoke(value);
                         break;
 
                     // ── Настройки отображения экрана блокировки ───────────────────────────

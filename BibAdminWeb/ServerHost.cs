@@ -148,15 +148,22 @@ namespace BibAdminWeb
                             if (method == "GET" && path == "/api/op/me")
                             { await OperatorApi.HandleMe(ctx); return; }
 
+                            // Публичный эндпоинт: правки текста RU/UZ из админки (нужен и на странице входа оператора)
+                            if (method == "GET" && path == "/api/i18n/overrides.js")
+                            {
+                                ctx.Response.ContentType = "application/javascript; charset=utf-8";
+                                ctx.Response.Headers["Cache-Control"] = "no-store";
+                                await ctx.Response.WriteAsync(TranslationStore.AsScript());
+                                return;
+                            }
+
                             // Публичный эндпоинт: настройки полей сессии (для панели оператора)
                             if (method == "GET" && path == "/api/session-fields")
                             {
                                 var sf = GlobalSettings.Load();
                                 ctx.Response.ContentType = "application/json";
                                 await ctx.Response.WriteAsync(
-                                    System.Text.Json.JsonSerializer.Serialize(
-                                        new { requireReaderId = sf.RequireReaderId, requireUserName = sf.RequireUserName },
-                                        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                                    System.Text.Json.JsonSerializer.Serialize(OperatorBroadcaster.SessionFieldsDto(sf)));
                                 return;
                             }
 

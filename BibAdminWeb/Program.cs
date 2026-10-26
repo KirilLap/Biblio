@@ -29,9 +29,11 @@ namespace BibAdminWeb
             AdminHub.LoadRegistry();
             AdminHub.LoadActiveSessions();
             AdminHub.LoadDeletedPcs();
+            ReaderStore.Init();
             FinanceStore.LoadHistory();
             ServiceTransaction.LoadHistory();
-            ReaderStore.Init();
+            VisitStore.Load();
+            _ = ReaderSyncState.Token;   // создаёт ключ для робота автообновления читателей, если его ещё нет
 
             var server = new ServerHost();
             try

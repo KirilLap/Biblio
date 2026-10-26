@@ -28,6 +28,30 @@ git push origin dev
 
 Оба проекта должны быть функционально идентичны. Если добавляешь фичу в одном — сразу добавляй в другом.
 
+## Защищённые части кода — НЕ ТРОГАТЬ
+
+Следующие части кода нельзя изменять без явного запроса от пользователя:
+
+### `BibAdminWeb/GlobalSettings.cs` и другие хранилища — папка `data\`
+
+Все данные хранятся в `C:\Program Files\Biblio\BibAdminWeb\data\`:
+- `global_settings.json` — настройки сервера
+- `readers.db` — база читателей
+- `finance_history.json` — история финансов
+- `service_history.json` — история услуг
+
+**Нельзя менять на `%APPDATA%`** — у каждого пользователя и сервис-аккаунта своя папка, данные теряются.
+
+При обновлениях папка `data\` защищена: robocopy (`/XD data`) и Inno Setup (`onlyifdoesntexist`) её не трогают. Не менять пути без явного запроса.
+
+### `BibAdminWeb/AdminApi.cs` — исключения robocopy при zip-обновлении
+
+В bat-скрипте self-update обязательно исключаются `/XF global_settings.json *.db ...` — без этого обновление затрёт пользовательские данные.
+
+### `installer/bibadminweb-setup.iss` — Inno Setup
+
+Строка `Flags: onlyifdoesntexist` для `global_settings.json` обязательна — без неё установщик затрёт настройки при обновлении.
+
 ## Документация
 
 - [README.md](README.md) — описание проекта

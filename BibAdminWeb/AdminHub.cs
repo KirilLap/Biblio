@@ -474,6 +474,7 @@ namespace BibAdminWeb
             if (decision == OfflineDecision.Pause)
             {
                 client.IsPaused = true;
+                client.PauseSentAt = DateTime.UtcNow;
                 client.AccumulatedSeconds = client.ElapsedAtDisconnect;
                 client.ElapsedSeconds = client.ElapsedAtDisconnect;
                 client.Status = "Пауза";
@@ -730,6 +731,7 @@ namespace BibAdminWeb
 
                     client.Status = "Пауза";
                     client.IsPaused = true;
+                    client.PauseSentAt = DateTime.UtcNow;
                     KnownClients[finalName] = client;
                     ClientUpdated?.Invoke(client);
                     Logger.Info($"✅ {finalName}: применяем решение ПАУЗА, elapsed={elapsedToSend}с");
@@ -998,21 +1000,47 @@ namespace BibAdminWeb
 
             // Нормализуем тип сессии от клиента, но не перезаписываем при блокировке —
             // иначе клиент с устаревшим ActiveSessionType восстановит "призрачную" сессию.
+            // Также не перезаписываем если администратор только что сменил тип (SessionTypeLockedUntil),
+            // пока клиент не подтвердит новый тип своим heartbeat.
             if (status != "Заблокирован" && status != "Свободный" && !string.IsNullOrEmpty(sessionType))
-                client.SessionType = NormalizeSessionType(sessionType);
+            {
+                var normalized = NormalizeSessionType(sessionType);
+                if (client.SessionTypeLockedUntil.HasValue && DateTime.UtcNow < client.SessionTypeLockedUntil.Value)
+                {
+                    // Клиент подтвердил новый тип — снимаем блокировку
+                    if (normalized == client.SessionType)
+                        client.SessionTypeLockedUntil = null;
+                    // иначе игнорируем старый тип из heartbeat
+                }
+                else
+                {
+                    client.SessionType = normalized;
+                }
+            }
 
             if (status == "Пауза")
             {
                 client.IsPaused = true;
                 client.AccumulatedSeconds = elapsedSeconds;
             }
-
-            // 🔑 🔥 ГЛАВНАЯ ЗАЩИТА: ЕСЛИ ЕСТЬ OFFLINE_DECISION = PAUSE, ИГНОРИРУЕМ СТАТУС ОТ КЛИЕНТА
-            if (client.OfflineDecision == OfflineDecision.Pause && !client.IsPaused)
+            else if (client.IsPaused && elapsedSeconds > 0
+                     && (!client.PauseSentAt.HasValue || (DateTime.UtcNow - client.PauseSentAt.Value).TotalSeconds > 20))
             {
-                client.IsPaused = true;
-                client.AccumulatedSeconds = client.ElapsedAtDisconnect;
-                Logger.Info($"🛡️ {pcNumber}: принудительная пауза по OfflineDecision");
+                // ПК не на паузе и продолжает считать время, а сервер держит «Пауза» (и сам не ставил её
+                // только что). Верим ПК: иначе у операторов карточка показывает паузу, а время идёт.
+                client.IsPaused = false;
+                client.AccumulatedSeconds = 0;
+                Logger.Warn($"⚠️ {pcNumber}: ПК продолжает сессию ({elapsedSeconds}с), а на сервере стояла пауза — пауза снята");
+            }
+
+            // Решение из окна «Потеря связи» нужно только на время, пока ПК без связи: при возвращении
+            // ПК его применяет RegisterClient. Если ПК уже на связи и шлёт статус, решение устарело.
+            // Раньше здесь сервер при каждом сигнале ПК снова ставил «Пауза» — навсегда, пока ПК работал.
+            if (client.OfflineDecision != OfflineDecision.None)
+            {
+                Logger.Info($"🧹 {pcNumber}: устаревшее решение «{client.OfflineDecision}» из окна потери связи сброшено");
+                client.OfflineDecision = OfflineDecision.None;
+                client.DisconnectedAt = null;
             }
 
             // ── Строгая цепочка приоритетов визуального статуса ──────────────────────
